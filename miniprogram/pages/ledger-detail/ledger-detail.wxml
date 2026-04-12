@@ -1,0 +1,10 @@
+<view class="page">
+  <view wx:if="{{!ledgerId}}" class="hint">缺少账本参数</view>
+  <ledger-detail-view
+    wx:else
+    ledger-id="{{ledgerId}}"
+    invite-code="{{inviteCode}}"
+    bind:deleted="onDetailDeleted"
+    bind:ready="onDetailReady"
+  />
+</view>

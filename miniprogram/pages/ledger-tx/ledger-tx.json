@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "记账",
+  "usingComponents": {
+    "ledger-tx-form": "/components/ledger-tx-form/ledger-tx-form"
+  }
+}

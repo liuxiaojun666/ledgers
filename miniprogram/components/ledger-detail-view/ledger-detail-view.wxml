@@ -1,0 +1,87 @@
+<view class="ledger-detail-view {{!loading && !pendingApproval && !recordInline ? 'ledger-detail-view--fab' : ''}}">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:else>
+    <view wx:if="{{pendingApproval}}" class="pending-box card">
+      <view class="pending-title">等待创建人审批</view>
+      <view class="share-tip">{{pendingApprovalMsg || "已提交加入申请，请稍后再试"}}</view>
+      <button class="btn-secondary" bindtap="refreshAccessStatus">刷新状态</button>
+    </view>
+    <block wx:else>
+      <view class="header">
+        <view class="title-row">
+          <view class="title">账本： {{ledgerName}}</view>
+          <text wx:if="{{isCreator}}" class="link-manage" bindtap="goLedgerManage">管理</text>
+        </view>
+      </view>
+      <view class="summary-row">
+        <view class="summary-item summary-item--income">
+          <view class="summary-stripe summary-stripe--income"></view>
+          <view class="summary-item-inner">
+            <view class="summary-label summary-label--income">本月收入</view>
+            <view class="summary-value summary-value--income">¥{{monthIncomeYuan}}</view>
+          </view>
+        </view>
+        <view class="summary-item summary-item--expense">
+          <view class="summary-stripe summary-stripe--expense"></view>
+          <view class="summary-item-inner">
+            <view class="summary-label summary-label--expense">本月支出</view>
+            <view class="summary-value summary-value--expense">¥{{monthExpenseYuan}}</view>
+          </view>
+        </view>
+      </view>
+      <view wx:if="{{showBudgetStrip}}" class="detail-budget-card">
+        <view class="detail-budget-head">
+          <text class="detail-budget-label">本月预算</text>
+          <text class="detail-budget-amt">¥{{budgetYuanDisplay}}</text>
+        </view>
+        <view class="detail-budget-track">
+          <view class="detail-budget-track-bg">
+            <view class="detail-budget-fill {{budgetFillClass}}" style="width: {{budgetBarWidth}}%;"></view>
+          </view>
+        </view>
+        <view class="detail-budget-foot">{{budgetFootText}}</view>
+      </view>
+      <view wx:elif="{{showBudgetUnsetHint}}" class="detail-budget-hint card">
+        <view class="detail-budget-hint-text">{{budgetUnsetHintText}}</view>
+        <button wx:if="{{isCreator}}" class="detail-budget-hint-btn" bindtap="goLedgerManage">
+          去设置预算
+        </button>
+      </view>
+      <view class="section-head">
+        <view class="section-title">最近流水</view>
+        <button
+          wx:if="{{recordInline}}"
+          class="btn-inline-record"
+          bindtap="goRecordTx"
+        >
+          + 记一笔
+        </button>
+      </view>
+      <view wx:if="{{!transactions.length}}" class="empty">暂无记录，记一笔或等好友添加。</view>
+      <view wx:else class="tx-list">
+        <view
+          class="tx-row {{item.canEdit ? 'tx-tap' : ''}}"
+          wx:for="{{transactions}}"
+          wx:key="_id"
+          data-id="{{item._id}}"
+          data-editable="{{item.canEdit}}"
+          bindtap="onTxTap"
+        >
+          <view class="tx-main">
+            <text class="tx-line-left">{{item.lineLeft}}</text>
+            <view class="tx-meta">
+              <text wx:if="{{item.timeText}}" class="tx-meta-item">{{item.timeText}}</text>
+              <text wx:if="{{item.payerName && item.payerName !== '未知'}}" class="tx-meta-item">
+                {{item.payerName}}
+              </text>
+            </view>
+          </view>
+          <text class="tx-amt {{item.flow === 'income' ? 'tx-amt-income' : 'tx-amt-expense'}}">
+            {{item.amountDisplay}}
+          </text>
+        </view>
+      </view>
+      <button wx:if="{{!recordInline}}" class="btn-primary-record" bindtap="goRecordTx">+ 记一笔</button>
+    </block>
+  </block>
+</view>

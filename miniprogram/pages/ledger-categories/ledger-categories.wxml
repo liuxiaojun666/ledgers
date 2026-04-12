@@ -1,0 +1,35 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:else>
+    <view class="tip">添加/删除会同步到您参与的全部账本。每账本最多 24 个分类，名称最多 16 字；至少保留 1 个。若某账本仅剩该分类则无法删除。删除后新记账需改用其他分类。</view>
+
+    <view class="add card">
+      <input
+        class="input"
+        placeholder="输入新分类名称"
+        maxlength="16"
+        value="{{newName}}"
+        bindinput="onNewName"
+      />
+      <button class="btn-primary" bindtap="add" loading="{{saving}}">添加分类</button>
+    </view>
+
+    <view class="section-title">当前分类</view>
+    <view wx:if="{{!categories.length}}" class="hint">暂无分类</view>
+    <view wx:else class="list">
+      <view class="row card" wx:for="{{categories}}" wx:key="*this">
+        <text class="name">{{item}}</text>
+        <button
+          class="btn-del"
+          size="mini"
+          type="warn"
+          data-name="{{item}}"
+          bindtap="remove"
+        >
+          删除
+        </button>
+      </view>
+    </view>
+  </block>
+</view>

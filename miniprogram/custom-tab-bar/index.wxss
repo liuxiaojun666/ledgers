@@ -1,0 +1,52 @@
+/* 与 design-exports-v2/jizhang.pen Tab 区域对齐 */
+/* 使用 cover-view，避免原生 canvas 等盖住 Tab（原生组件层级高于普通 view） */
+
+.tabbar-wrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99999;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 24rpx 40rpx calc(40rpx + env(safe-area-inset-bottom));
+  background: transparent;
+}
+
+.tabbar-pill {
+  height: 124rpx;
+  border-radius: 72rpx;
+  border: 1rpx solid #e5e5e5;
+  background: #ffffff;
+  padding: 8rpx;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.tab-item {
+  flex: 1;
+  height: 100%;
+  border-radius: 52rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-item-active {
+  background: #0066ff;
+}
+
+.tab-label {
+  font-size: 20rpx;
+  line-height: 1;
+  letter-spacing: 1rpx;
+  font-weight: 600;
+  color: #999999;
+}
+
+.tab-label-active {
+  color: #ffffff;
+  font-weight: 600;
+}

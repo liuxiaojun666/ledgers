@@ -1,0 +1,53 @@
+{
+  "pages": [
+    "pages/ledgers/ledgers",
+    "pages/mine/mine",
+    "pages/ledger-detail/ledger-detail",
+    "pages/ledger-manage/ledger-manage",
+    "pages/ledger-categories/ledger-categories",
+    "pages/ledger-analytics/ledger-analytics",
+    "pages/ledger-analytics-drill/ledger-analytics-drill",
+    "pages/ledger-tx/ledger-tx",
+    "pages/ledger-schedules/ledger-schedules",
+    "pages/ledger-schedule-edit/ledger-schedule-edit",
+    "pages/index/index",
+    "pages/example/index"
+  ],
+  "window": {
+    "backgroundColor": "#F6F6F6",
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#F6F6F6",
+    "navigationBarTitleText": "协同记账",
+    "navigationBarTextStyle": "black"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#888888",
+    "selectedColor": "#07c160",
+    "backgroundColor": "#fcfcfc",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/ledgers/ledgers",
+        "text": "账本",
+        "iconPath": "images/tab/bill.png",
+        "selectedIconPath": "images/tab/bill-active.png"
+      },
+      {
+        "pagePath": "pages/ledger-analytics/ledger-analytics",
+        "text": "统计",
+        "iconPath": "images/tab/bill.png",
+        "selectedIconPath": "images/tab/bill-active.png"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的",
+        "iconPath": "images/tab/mine.png",
+        "selectedIconPath": "images/tab/mine-active.png"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents"
+}

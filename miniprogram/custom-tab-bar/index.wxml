@@ -1,0 +1,14 @@
+<!-- cover-view 层级高于原生 canvas，避免统计页图表盖住 Tab -->
+<cover-view class="tabbar-wrap">
+  <cover-view class="tabbar-pill">
+    <cover-view
+      wx:for="{{list}}"
+      wx:key="pagePath"
+      class="tab-item {{selected === index ? 'tab-item-active' : ''}}"
+      data-index="{{index}}"
+      bindtap="onTabTap"
+    >
+      <cover-view class="tab-label {{selected === index ? 'tab-label-active' : ''}}">{{item.text}}</cover-view>
+    </cover-view>
+  </cover-view>
+</cover-view>

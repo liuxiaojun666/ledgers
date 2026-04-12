@@ -1,0 +1,79 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:else>
+    <view class="header">
+      <view class="title">账本管理</view>
+      <view class="sub">{{ledgerName || "账本管理"}}</view>
+    </view>
+    <view wx:if="{{!isCreator}}" class="card card-lite">
+      <view class="tip">仅账本创建者可管理协作者与月度预算。</view>
+    </view>
+    <block wx:else>
+      <view class="hero-card">
+        <view class="hero-lead">通过微信将邀请链接发给好友，对方打开即可申请加入。</view>
+        <button class="hero-btn hero-btn-block" open-type="share">微信邀请</button>
+      </view>
+      <view class="section section-after-hero">
+        <view class="card card-compact">
+          <view class="rename-row">
+            <view class="rename-row-main">
+              <text class="rename-kicker">账本名称</text>
+              <text class="rename-value">{{ledgerName || "当前账本"}}</text>
+            </view>
+            <button class="btn-pill btn-pill-outline" bindtap="onEditLedgerName" loading="{{updatingLedgerName}}">改账本名</button>
+          </view>
+        </view>
+      </view>
+      <view class="section">
+        <view class="section-title">月度预算</view>
+        <view class="card budget-card">
+          <view class="budget-row">
+            <view class="budget-meta">
+              <view class="budget-label">本月支出预算</view>
+              <view class="budget-value">{{monthlyBudgetLabel}}</view>
+            </view>
+            <button class="btn-pill btn-pill-outline" bindtap="onEditMonthlyBudget" loading="{{updatingMonthlyBudget}}">设置</button>
+          </view>
+          <view class="tip budget-tip">按自然月汇总支出时可作参考；留空保存可清除预算。</view>
+        </view>
+      </view>
+      <view class="section">
+        <view class="section-title">成员（{{collaborators.length + 1}}）</view>
+        <view class="card">
+          <view class="member-card owner-row">
+            <view class="member-name">{{ledgerName || "当前账本"}} · 创建者</view>
+            <view class="owner-tag">我</view>
+          </view>
+          <view class="member-card" wx:for="{{collaborators}}" wx:key="openid">
+            <view class="member-name">{{item.displayName}}</view>
+            <view class="member-actions">
+              <button class="btn-pill btn-pill-weak" data-openid="{{item.openid}}" bindtap="onRemoveCollaborator" loading="{{memberOpLoading}}">移除</button>
+            </view>
+          </view>
+        </view>
+      </view>
+      <view class="section">
+        <view class="section-title">待审批申请</view>
+        <view wx:if="{{!pendingRequests.length}}" class="card card-empty card-empty-muted">
+          <view class="empty">暂无待审批申请</view>
+        </view>
+        <view wx:else class="card">
+          <view class="req-card" wx:for="{{pendingRequests}}" wx:key="openid">
+            <view class="req-name">{{item.displayName}}</view>
+            <view class="member-actions req-actions">
+              <button class="btn-pill btn-pill-primary" data-openid="{{item.openid}}" bindtap="onApproveRequest" loading="{{memberOpLoading}}">同意</button>
+              <button class="btn-pill btn-pill-muted" data-openid="{{item.openid}}" bindtap="onRejectRequest" loading="{{memberOpLoading}}">拒绝</button>
+            </view>
+          </view>
+        </view>
+      </view>
+      <view class="section section-danger">
+        <view class="section-title danger-title">危险操作</view>
+        <button class="btn-delete-ledger" bindtap="onDeleteLedger" loading="{{deletingLedger}}">
+          删除账本
+        </button>
+        <view class="tip danger-tip">仅创建人可见。删除后全部流水不可恢复。</view>
+      </view>
+    </block>
+  </block>
+</view>

@@ -1,0 +1,17 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:else>
+    <ledger-tx-form
+      id="txUnifiedForm"
+      mode="{{formMode}}"
+      ledger-id="{{ledgerId}}"
+      tx-id="{{txId}}"
+      categories="{{categories}}"
+      bind:added="onAdded"
+      bind:saved="onSaved"
+      bind:deleted="onDeleted"
+      bind:categoriesupdated="onCategoriesUpdated"
+    />
+  </block>
+</view>

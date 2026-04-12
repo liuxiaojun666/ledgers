@@ -1,0 +1,47 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:else>
+    <view class="header-row">
+      <view class="title">定时记账</view>
+      <view class="btn-add-inline" bindtap="onAdd">+ 新建</view>
+    </view>
+
+    <view class="hero-card">
+      <view class="hero-main">自动记账</view>
+      <view class="hero-sub">省心不漏账</view>
+      <view class="hero-icon">🗓</view>
+    </view>
+
+    <view wx:if="{{!list.length}}" class="empty">暂无定时任务，可添加「一次性」或按日/周/月重复。</view>
+
+    <view
+      wx:for="{{list}}"
+      wx:key="_id"
+      class="card card-tap"
+      data-id="{{item._id}}"
+      bindtap="onEdit"
+    >
+      <view class="row-top">
+        <view>
+          <view class="item-title">{{item.ledgerName}} · {{item.category}}</view>
+          <view class="meta">
+            <view class="meta-line">{{item.recurrenceText}} · 下次 {{item.nextRunAtText}}</view>
+            <view class="meta-line" wx:if="{{item.note}}">备注 {{item.note}}</view>
+            <view class="meta-line err" wx:if="{{item.lastError}}">{{item.lastError}}</view>
+          </view>
+        </view>
+        <text class="amt {{item.flow === 'income' ? 'income' : ''}}">{{item.flow === 'income' ? '+' : '-'}}¥{{item.amountYuan}}</text>
+      </view>
+      <view class="switch-row" catchtap="noop">
+        <text>{{item.enabled ? "启用中" : "已暂停"}}</text>
+        <switch
+          checked="{{item.enabled}}"
+          disabled="{{item.status === 'completed'}}"
+          data-id="{{item._id}}"
+          bindchange="onToggleEnabled"
+        />
+      </view>
+    </view>
+  </block>
+</view>

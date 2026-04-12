@@ -1,0 +1,83 @@
+<view class="form">
+  <view class="seg-wrap">
+    <picker mode="selector" range="{{flowLabels}}" value="{{flowIndex}}" bindchange="onFlowChange">
+      <view class="seg-pill">
+        <view class="seg-item {{flowIndex === 0 ? 'seg-item-active' : ''}}">支出</view>
+        <view class="seg-item {{flowIndex === 1 ? 'seg-item-active' : ''}}">收入</view>
+      </view>
+    </picker>
+  </view>
+
+  <view class="field amount-field">
+    <text class="label">金额</text>
+    <input
+      class="amount-input"
+      type="digit"
+      placeholder="¥ 0.00"
+      value="{{amountInput}}"
+      bindinput="onAmountInput"
+    />
+  </view>
+
+  <view class="field category-block">
+    <view class="category-field-header">
+      <view class="label-with-icon">
+        <text class="field-icon">🏷</text>
+        <text class="label-row">分类</text>
+      </view>
+      <picker
+        mode="selector"
+        range="{{categories}}"
+        value="{{categoryIndex}}"
+        bindchange="onCategoryChange"
+      >
+        <view class="picker-value">{{categories[categoryIndex] || "请选择"}} ></view>
+      </picker>
+    </view>
+    <view class="add-cat-toggle-row">
+      <text class="link-add" bindtap="toggleAddCategory">{{showAddCategory ? "收起" : "新增分类"}}</text>
+    </view>
+    <view wx:if="{{showAddCategory}}" class="add-cat-row">
+      <input
+        class="input add-cat-input"
+        type="text"
+        maxlength="{{categoryNameMaxLen}}"
+        placeholder="新分类名称"
+        value="{{newCategoryName}}"
+        bindinput="onNewCategoryInput"
+      />
+      <button
+        class="btn-inline-add"
+        size="mini"
+        bindtap="onAddCategory"
+        loading="{{addingCategory}}"
+        disabled="{{addingCategory}}"
+      >
+        添加
+      </button>
+    </view>
+  </view>
+
+  <view class="field row field-select">
+    <view class="label-with-icon">
+      <text class="field-icon">📅</text>
+      <text class="label-row">记账日期</text>
+    </view>
+    <picker mode="date" value="{{bookDate}}" bindchange="onBookDateChange">
+      <view class="picker-value">{{bookDate || "选择日期"}} ></view>
+    </picker>
+  </view>
+
+  <view class="field">
+    <text class="label">备注</text>
+    <input class="input" placeholder="可选" value="{{note}}" bindinput="onNoteInput" />
+  </view>
+
+  <button class="btn-primary" bindtap="onSubmit" loading="{{saving}}">
+    {{mode === "edit" ? "保存修改" : "确认记账"}}
+  </button>
+  <block wx:if="{{mode === 'edit'}}">
+    <button class="btn-danger" bindtap="onDelete" loading="{{deleting}}">删除本条</button>
+    <view class="tip">账本内成员均可修改、删除流水；删除后不可恢复。</view>
+  </block>
+</view>

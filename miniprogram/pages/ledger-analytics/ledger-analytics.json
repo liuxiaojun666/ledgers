@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "统计",
+  "usingComponents": {
+    "ff-canvas": "/miniprogram_npm/@antv/f2-canvas/index"
+  }
+}

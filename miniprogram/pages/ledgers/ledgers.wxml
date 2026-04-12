@@ -1,0 +1,66 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:elif="{{showDetailView && embeddedLedgerId}}">
+    <ledger-detail-view
+      ledger-id="{{embeddedLedgerId}}"
+      record-inline="{{true}}"
+      bind:deleted="onEmbeddedDetailDeleted"
+      bind:ready="onEmbeddedDetailReady"
+    />
+  </block>
+
+  <view wx:elif="{{!list.length}}" class="empty">暂无账本，先新建一个，再在详情里分享给微信好友一起记。</view>
+
+  <view wx:else class="content">
+    <view class="header-row">
+      <view class="page-title">我的账本</view>
+      <button class="btn-new" bindtap="createLedger">+ 新建</button>
+    </view>
+
+    <view class="filter-seg">
+      <view
+        class="seg-item {{activeFilter === 'all' ? 'seg-item-active' : ''}}"
+        data-filter="all"
+        bindtap="onFilterTap"
+      >全部</view>
+      <view
+        class="seg-item {{activeFilter === 'created' ? 'seg-item-active' : ''}}"
+        data-filter="created"
+        bindtap="onFilterTap"
+      >我创建的</view>
+      <view
+        class="seg-item {{activeFilter === 'joined' ? 'seg-item-active' : ''}}"
+        data-filter="joined"
+        bindtap="onFilterTap"
+      >我加入的</view>
+    </view>
+
+    <view wx:if="{{!displayList.length}}" class="empty-inline">当前筛选下暂无账本</view>
+    <view wx:else class="list">
+      <view class="card" wx:for="{{displayList}}" wx:key="_id">
+        <view
+          class="card-main"
+          data-id="{{item._id}}"
+          bindtap="openDetail"
+        >
+          <view class="card-title">{{item.name}}</view>
+          <view class="card-meta">
+            <text>成员 {{item.memberCount}} 人</text>
+            <text class="dot">·</text>
+            <text>{{item.isCreator ? "我创建" : "我加入"}}</text>
+          </view>
+        </view>
+        <view class="card-actions">
+          <button
+            class="btn-record"
+            data-id="{{item._id}}"
+            catchtap="openRecordTx"
+          >
+            记一笔
+          </button>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

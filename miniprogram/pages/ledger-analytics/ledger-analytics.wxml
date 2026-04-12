@@ -1,0 +1,143 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:else>
+    <view wx:if="{{!ledgers.length}}" class="empty">暂无可统计账本，请先在「账本」创建或加入账本。</view>
+    <block wx:else>
+      <view class="page-title-row">
+        <view class="page-title">收支与排行</view>
+      </view>
+      <view class="ledger-picker-wrap">
+        <picker mode="selector" range="{{ledgerNameList}}" value="{{ledgerIndex}}" bindchange="onLedgerChange">
+          <view class="ledger-picker-label">
+            <text class="ledger-picker-text">统计账本：{{ledgerName || "请选择账本"}}</text>
+            <text class="ledger-picker-caret">▼</text>
+          </view>
+        </picker>
+      </view>
+      <view class="tabs">
+        <view class="tab {{range === 'week' ? 'active' : ''}}" data-range="week" bindtap="onRangeTap">
+          周
+        </view>
+        <view class="tab {{range === 'month' ? 'active' : ''}}" data-range="month" bindtap="onRangeTap">
+          月
+        </view>
+        <view class="tab {{range === 'year' ? 'active' : ''}}" data-range="year" bindtap="onRangeTap">
+          年
+        </view>
+      </view>
+      <view wx:if="{{range === 'month' || range === 'week' || range === 'year'}}" class="period-section">
+        <view class="period-section-title">
+          选择{{range === 'week' ? '周' : range === 'month' ? '月' : '年'}}度（共 {{periodChipCount}} 期）
+        </view>
+        <scroll-view class="period-chip-scroll" scroll-x="{{true}}" show-scrollbar="{{false}}">
+          <view class="period-chip-row">
+            <view wx:for="{{periodChips}}" wx:key="key" class="period-chip {{item.active ? 'period-chip-active' : ''}}" data-kind="{{item.kind}}" data-year="{{item.year}}" data-month="{{item.month}}" data-monday="{{item.weekMondayYmd}}" bindtap="onPeriodChipTap">
+              {{item.label}}
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+      <view class="summary">
+        <view class="summary-range">{{rangeLabel}}</view>
+        <view class="summary-net-label">净额（收入为正、支出为负）</view>
+        <view class="summary-total {{netTone}}">{{netAmountDisplay}}</view>
+        <view class="summary-flows">
+          <text class="flow-expense">支出 ¥{{totalExpenseYuan}}</text>
+          <text class="flow-sep">·</text>
+          <text class="flow-income">收入 ¥{{totalIncomeYuan}}</text>
+        </view>
+        <view class="summary-meta">净额已含收支 · 共 {{txCount}} 笔 · 下方排行仅统计支出流水</view>
+      </view>
+      <view wx:if="{{showBudgetVs}}" class="budget-vs-card">
+        <view class="budget-vs-head">
+          <text class="budget-vs-title">本月支出 vs 预算</text>
+          <text class="budget-vs-pct {{budgetPctTone}}">{{budgetUsedPercentDisplay}}%</text>
+        </view>
+        <view class="budget-vs-meta">
+          <text>已用 ¥{{totalExpenseYuan}}</text>
+          <text>预算 ¥{{budgetYuan}}</text>
+        </view>
+        <view class="budget-vs-track">
+          <view class="budget-vs-track-bg">
+            <view class="budget-vs-fill {{budgetFillClass}}" style="width: {{budgetBarWidth}}%;"></view>
+          </view>
+        </view>
+        <view class="budget-vs-foot">{{budgetFootText}}</view>
+      </view>
+      <view class="insight-card">
+        <view class="insight-text">{{insightText}}</view>
+        <view class="insight-icon">✦</view>
+      </view>
+      <view wx:if="{{showLineChart}}" class="chart-card">
+        <view class="chart-head chart-head-line">
+          <text class="chart-title">收支趋势</text>
+          <view class="trend-kind-seg">
+            <view class="trend-kind-item {{trendKind === 'expense' ? 'active' : ''}}" data-kind="expense" bindtap="onTrendKindTap">
+              支出
+            </view>
+            <view class="trend-kind-item {{trendKind === 'income' ? 'active' : ''}}" data-kind="income" bindtap="onTrendKindTap">
+              收入
+            </view>
+          </view>
+        </view>
+        <view class="chart-canvas-wrap">
+          <ff-canvas id="ff-line" canvas-id="ledgerAlLine" opts="{{chartOpts}}"></ff-canvas>
+        </view>
+      </view>
+      <view wx:if="{{showPieChart}}" class="chart-card">
+        <view class="chart-head chart-head-line">
+          <text class="chart-title">金额占比</text>
+          <view class="trend-kind-seg">
+            <view class="trend-kind-item {{trendKind === 'expense' ? 'active' : ''}}" data-kind="expense" bindtap="onTrendKindTap">
+              支出
+            </view>
+            <view class="trend-kind-item {{trendKind === 'income' ? 'active' : ''}}" data-kind="income" bindtap="onTrendKindTap">
+              收入
+            </view>
+          </view>
+        </view>
+        <view wx:if="{{pieChartCurrentEmpty}}" class="chart-empty-hint">
+          <text wx:if="{{trendKind === 'income'}}">该时段暂无收入分类数据</text>
+          <text wx:else>该时段暂无支出分类数据</text>
+        </view>
+        <view wx:else class="chart-canvas-wrap">
+          <ff-canvas id="ff-pie" canvas-id="ledgerAlPie" opts="{{chartOpts}}"></ff-canvas>
+        </view>
+      </view>
+      <view wx:if="{{!groupsCategory.length && !groupsPerson.length}}" class="empty">该时段暂无流水。</view>
+      <block wx:else>
+        <view wx:if="{{listLoading}}" class="list-loading">列表刷新中…</view>
+        <view class="list-section">
+          <view class="list-section-title">支出排行榜</view>
+          <view class="list">
+            <view class="row row-tap" wx:for="{{groupsCategory}}" wx:key="key" data-key="{{item.key}}" data-dim="category" bindtap="onGroupRowTap">
+              <view class="row-top">
+                <text class="row-label">{{item.label}}</text>
+                <text class="row-amt {{item.amtTone}}">{{item.rowAmtDisplay}}</text>
+              </view>
+              <view class="row-meta">{{item.count}} 笔 · 占 {{item.percent}}%</view>
+              <view class="bar-bg">
+                <view class="bar-fill" style="width: {{item.barWidth}}%;"></view>
+              </view>
+            </view>
+          </view>
+        </view>
+        <view class="list-section">
+          <view class="list-section-title">成员支出排行</view>
+          <view class="list">
+            <view class="row row-tap" wx:for="{{groupsPerson}}" wx:key="key" data-key="{{item.key}}" data-dim="person" bindtap="onGroupRowTap">
+              <view class="row-top">
+                <text class="row-label">{{item.label}}</text>
+                <text class="row-amt {{item.amtTone}}">{{item.rowAmtDisplay}}</text>
+              </view>
+              <view class="row-meta">{{item.count}} 笔 · 占 {{item.percent}}%</view>
+              <view class="bar-bg">
+                <view class="bar-fill" style="width: {{item.barWidth}}%;"></view>
+              </view>
+            </view>
+          </view>
+        </view>
+      </block>
+    </block>
+  </block>
+</view>

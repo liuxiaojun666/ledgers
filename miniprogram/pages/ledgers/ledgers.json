@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "账本",
+  "usingComponents": {
+    "ledger-detail-view": "/components/ledger-detail-view/ledger-detail-view"
+  }
+}
