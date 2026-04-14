@@ -15,11 +15,7 @@ Page({
     profileSyncing: false,
     profileNickName: "",
     profileAvatarUrl: "",
-    defaultAnalyzeLedgerLoading: false,
-    defaultAnalyzeLedgerId: "",
-    defaultAnalyzeLedgerName: "",
-    defaultAnalyzeLedgerCount: 0,
-    showSingleLedgerPromo: false,
+    joinedLedgerCount: 0,
     showEmptyLedgerCreate: false,
   },
 
@@ -27,11 +23,22 @@ Page({
     if (typeof this.getTabBar === "function") {
       const tabBar = this.getTabBar();
       if (tabBar && typeof tabBar.setData === "function") {
-        tabBar.setData({ selected: 2 });
+        tabBar.setData({ selected: 2, hidden: false });
       }
     }
     this.loadMyProfile();
-    this.refreshDefaultAnalyzeLedger();
+    this.refreshLedgerOverview();
+  },
+
+  setCustomTabBarHidden(hidden) {
+    if (typeof this.getTabBar !== "function") {
+      return;
+    }
+    const tabBar = this.getTabBar();
+    if (!tabBar || typeof tabBar.setData !== "function") {
+      return;
+    }
+    tabBar.setData({ hidden: !!hidden });
   },
 
   isPlaceholderWechatNick(nick) {
@@ -61,7 +68,7 @@ Page({
       .then((resp) => {
         const r = resp.result || {};
         if (r.success) {
-          wx.showToast({ title: "昵称已同步" });
+          wx.showToast({ title: "资料已保存" });
           const profile = r.profile || {};
           this.setData({
             profileNickName: String(profile.nickName || name).trim(),
@@ -69,7 +76,7 @@ Page({
           });
           this.loadMyProfile();
         } else {
-          wx.showToast({ title: r.errMsg || "同步失败", icon: "none" });
+          wx.showToast({ title: r.errMsg || "保存失败", icon: "none" });
         }
       })
       .catch(() => {
@@ -80,17 +87,40 @@ Page({
       });
   },
 
-  askCustomNicknameThenSave(avatarUrl) {
+  onChooseAvatar(e) {
+    const avatarUrl = normalizeAvatarUrl(e && e.detail ? e.detail.avatarUrl : "");
+    if (!avatarUrl) {
+      wx.showToast({ title: "请选择头像", icon: "none" });
+      return;
+    }
+    const nickName = String(this.data.profileNickName || "").trim().slice(0, 32);
+    if (!nickName || this.isPlaceholderWechatNick(nickName)) {
+      this.setData({ profileAvatarUrl: avatarUrl });
+      wx.showToast({ title: "已选头像，请再点昵称设置名字", icon: "none" });
+      return;
+    }
+    this.saveProfileNickname(nickName, avatarUrl);
+  },
+
+  promptProfileNickname() {
+    if (!this.ensureEnv() || this.data.profileSyncing) {
+      return;
+    }
+    this.setCustomTabBarHidden(true);
     wx.showModal({
       title: "设置展示昵称",
       editable: true,
-      placeholderText: "请输入在账本里显示的昵称",
+      placeholderText: "请输入展示昵称",
       success: (res) => {
         if (!res.confirm) {
           return;
         }
-        const customName = String(res.content || "").trim();
-        this.saveProfileNickname(customName, avatarUrl);
+        const nickName = String(res.content || "").trim();
+        const avatarUrl = normalizeAvatarUrl(this.data.profileAvatarUrl || "");
+        this.saveProfileNickname(nickName, avatarUrl);
+      },
+      complete: () => {
+        this.setCustomTabBarHidden(false);
       },
     });
   },
@@ -172,22 +202,20 @@ Page({
           return;
         }
         const profile = r.profile || {};
+        const nickName = String(profile.nickName || "").trim();
+        const avatarUrl = normalizeAvatarUrl(profile.avatarUrl);
         this.setData({
-          profileNickName: String(profile.nickName || "").trim(),
-          profileAvatarUrl: normalizeAvatarUrl(profile.avatarUrl),
+          profileNickName: nickName,
+          profileAvatarUrl: avatarUrl,
         });
       })
       .catch(() => {});
   },
 
-  refreshDefaultAnalyzeLedger() {
+  refreshLedgerOverview() {
     if (!this.ensureEnv()) {
       return;
     }
-    if (this.data.defaultAnalyzeLedgerLoading) {
-      return;
-    }
-    this.setData({ defaultAnalyzeLedgerLoading: true });
     this.fetchLedgers()
       .then((r) => {
         if (!r.success) {
@@ -195,16 +223,8 @@ Page({
           return;
         }
         const list = r.list || [];
-        const fromServer = String(r.defaultAnalyzeLedgerId || "").trim();
-        let picked = list.find((x) => x._id === fromServer) || null;
-        if (!picked && list.length) {
-          picked = list[0];
-        }
         this.setData({
-          defaultAnalyzeLedgerCount: list.length,
-          defaultAnalyzeLedgerId: picked ? String(picked._id || "") : "",
-          defaultAnalyzeLedgerName: picked ? String(picked.name || "") : "",
-          showSingleLedgerPromo: list.length === 1,
+          joinedLedgerCount: list.length,
           showEmptyLedgerCreate: list.length === 0,
         });
       })
@@ -213,80 +233,6 @@ Page({
           title: "请上传并部署云函数 ledgerFunctions",
           icon: "none",
         });
-      })
-      .finally(() => {
-        this.setData({ defaultAnalyzeLedgerLoading: false });
-      });
-  },
-
-  manageDefaultAnalyzeLedger() {
-    if (!this.ensureEnv()) {
-      return;
-    }
-    if (this.data.defaultAnalyzeLedgerLoading) {
-      return;
-    }
-    this.setData({ defaultAnalyzeLedgerLoading: true });
-    this.fetchLedgers()
-      .then((r) => {
-        if (!r.success) {
-          wx.showToast({ title: r.errMsg || "加载失败", icon: "none" });
-          return;
-        }
-        const list = r.list || [];
-        if (!list.length) {
-          wx.showToast({ title: "暂无账本", icon: "none" });
-          return;
-        }
-        const currentId = String(r.defaultAnalyzeLedgerId || "").trim();
-        const itemList = list.map((x) =>
-          x._id === currentId ? `默认：${x.name || "未命名账本"}` : x.name || "未命名账本"
-        );
-        wx.showActionSheet({
-          itemList,
-          success: (sheetRes) => {
-            const idx = Number(sheetRes.tapIndex);
-            if (!Number.isFinite(idx) || idx < 0 || idx >= list.length) {
-              return;
-            }
-            const picked = list[idx];
-            if (!picked || !picked._id) {
-              return;
-            }
-            wx.cloud
-              .callFunction({
-                name: "ledgerFunctions",
-                data: {
-                  type: "setDefaultAnalyzeLedger",
-                  ledgerId: picked._id,
-                },
-              })
-              .then((saveResp) => {
-                const saveResult = saveResp.result || {};
-                if (!saveResult.success) {
-                  wx.showToast({ title: saveResult.errMsg || "设置失败", icon: "none" });
-                  return;
-                }
-                wx.showToast({ title: "默认统计账本已更新" });
-                this.setData({
-                  defaultAnalyzeLedgerId: String(picked._id || ""),
-                  defaultAnalyzeLedgerName: String(picked.name || ""),
-                });
-              })
-              .catch(() => {
-                wx.showToast({ title: "云函数调用失败", icon: "none" });
-              });
-          },
-        });
-      })
-      .catch(() => {
-        wx.showToast({
-          title: "请上传并部署云函数 ledgerFunctions",
-          icon: "none",
-        });
-      })
-      .finally(() => {
-        this.setData({ defaultAnalyzeLedgerLoading: false });
       });
   },
 
@@ -294,6 +240,7 @@ Page({
     if (!this.ensureEnv()) {
       return;
     }
+    this.setCustomTabBarHidden(true);
     wx.showModal({
       title: "新建账本",
       editable: true,
@@ -312,7 +259,7 @@ Page({
             const r = resp.result || {};
             if (r.success) {
               wx.showToast({ title: "已创建" });
-              this.refreshDefaultAnalyzeLedger();
+              this.refreshLedgerOverview();
             } else {
               wx.showToast({ title: r.errMsg || "失败", icon: "none" });
             }
@@ -321,28 +268,10 @@ Page({
             wx.showToast({ title: "云函数调用失败", icon: "none" });
           });
       },
+      complete: () => {
+        this.setCustomTabBarHidden(false);
+      },
     });
   },
 
-  syncWechatNickname() {
-    if (!this.ensureEnv() || this.data.profileSyncing) {
-      return;
-    }
-    wx.getUserProfile({
-      desc: "用于按人统计时展示您的微信昵称",
-      success: (res) => {
-        const info = (res && res.userInfo) || {};
-        const nickName = String(info.nickName || "").trim();
-        const avatarUrl = normalizeAvatarUrl(info.avatarUrl);
-        if (this.isPlaceholderWechatNick(nickName)) {
-          this.askCustomNicknameThenSave(avatarUrl);
-          return;
-        }
-        this.saveProfileNickname(nickName, avatarUrl);
-      },
-      fail: () => {
-        wx.showToast({ title: "未授权微信昵称", icon: "none" });
-      },
-    });
-  },
 });

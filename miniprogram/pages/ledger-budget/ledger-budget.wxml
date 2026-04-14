@@ -1,0 +1,24 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:else>
+    <view class="header">
+      <view class="title">{{ledgerName || "当前账本"}}</view>
+    </view>
+    <view class="card">
+      <view class="label">本月支出预算</view>
+      <view class="value">{{monthlyBudgetLabel}}</view>
+      <view class="tip">预算按自然月统计，主要用于首页与统计页对比提示。</view>
+    </view>
+    <view wx:if="{{isCreator}}" class="actions">
+      <button class="btn-primary" bindtap="onEditMonthlyBudget" loading="{{updatingMonthlyBudget}}">
+        {{monthlyBudgetCents ? "修改预算" : "设置预算"}}
+      </button>
+      <button wx:if="{{monthlyBudgetCents}}" class="btn-secondary" bindtap="onClearBudget" loading="{{updatingMonthlyBudget}}">
+        清除预算
+      </button>
+    </view>
+    <view wx:else class="card card-lite">
+      <view class="tip">仅账本创建者可设置预算。</view>
+    </view>
+  </block>
+</view>

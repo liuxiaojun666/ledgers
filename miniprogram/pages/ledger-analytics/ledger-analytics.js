@@ -28,6 +28,7 @@ const INSIGHT_POLICY = {
     default: "较上期",
   },
 };
+const LAST_ANALYZE_LEDGER_STORAGE_KEY = "lastAnalyzeLedgerId";
 
 function pickLedgerId(...queryObjs) {
   for (let i = 0; i < queryObjs.length; i += 1) {
@@ -674,7 +675,7 @@ Page({
     ledgers: [],
     ledgerNameList: [],
     ledgerIndex: -1,
-    range: "week",
+    range: "month",
     selectedYear: 0,
     selectedMonth: 0,
     weekAnchorDate: "",
@@ -683,6 +684,7 @@ Page({
     yearPickerValue: "",
     periodChips: [],
     periodChipCount: 0,
+    periodScrollIntoView: "",
     weekQuick: "current",
     monthQuick: "current",
     rangeLabel: "",
@@ -726,13 +728,14 @@ Page({
     const launchQ = safeEnterQuery(wx.getLaunchOptionsSync);
     const ledgerId = pickLedgerId(options, launchQ);
     this._preferredLedgerId = ledgerId || "";
+    this._lastAnalyzeLedgerId = this.readLastAnalyzeLedgerId();
   },
 
   onShow() {
     if (typeof this.getTabBar === "function") {
       const tabBar = this.getTabBar();
       if (tabBar && typeof tabBar.setData === "function") {
-        tabBar.setData({ selected: 1 });
+        tabBar.setData({ selected: 1, hidden: false });
       }
     }
     if (!this.ensureEnv()) {
@@ -798,10 +801,10 @@ Page({
           return;
         }
         const preferredId = String(this._preferredLedgerId || "").trim();
+        const lastPickedId = String(this._lastAnalyzeLedgerId || "").trim();
         const currentId = String(this.data.ledgerId || "").trim();
-        const defaultAnalyzeLedgerId = String(r.defaultAnalyzeLedgerId || "").trim();
         let pickedId =
-          preferredId || currentId || defaultAnalyzeLedgerId || String(ledgers[0]._id || "");
+          preferredId || currentId || lastPickedId || String(ledgers[0]._id || "");
         if (!ledgers.some((x) => x._id === pickedId)) {
           pickedId = String(ledgers[0]._id || "");
         }
@@ -810,6 +813,7 @@ Page({
         const nextLedgerId = picked ? String(picked._id || "") : "";
         const nextLedgerName = picked ? String(picked.name || "") : "";
         this._preferredLedgerId = "";
+        this.writeLastAnalyzeLedgerId(nextLedgerId);
         this.setData(
           {
             ledgers,
@@ -833,7 +837,27 @@ Page({
       });
   },
 
+  setCustomTabBarHidden(hidden) {
+    if (typeof this.getTabBar !== "function") {
+      return;
+    }
+    const tabBar = this.getTabBar();
+    if (!tabBar || typeof tabBar.setData !== "function") {
+      return;
+    }
+    tabBar.setData({ hidden: !!hidden });
+  },
+
+  onLedgerPickerOpen() {
+    this.setCustomTabBarHidden(true);
+  },
+
+  onLedgerPickerClose() {
+    this.setCustomTabBarHidden(false);
+  },
+
   onLedgerChange(e) {
+    this.setCustomTabBarHidden(false);
     const nextIndex = Number(e && e.detail ? e.detail.value : -1);
     if (!Number.isFinite(nextIndex) || nextIndex < 0) {
       return;
@@ -846,6 +870,7 @@ Page({
     if (!nextLedgerId || nextLedgerId === this.data.ledgerId) {
       return;
     }
+    this.writeLastAnalyzeLedgerId(nextLedgerId);
     this.setData(
       {
         ledgerIndex: nextIndex,
@@ -889,10 +914,14 @@ Page({
     const baseYmd = todayYmd || formatYmd(new Date());
     const weekQuick = weekQuickState(baseYmd, sel.weekAnchorDate);
     const monthQuick = monthQuickState(baseYmd, sel.selectedYear, sel.selectedMonth);
+    const periodScrollIntoView = marked.length
+      ? `period-chip-${marked[marked.length - 1].key}`
+      : "";
     this.setData(
       {
         periodChips: marked,
         periodChipCount: marked.length,
+        periodScrollIntoView,
         selectedYear: sel.selectedYear,
         selectedMonth: sel.selectedMonth,
         weekAnchorDate: sel.weekAnchorDate,
@@ -936,6 +965,11 @@ Page({
       .then((resp) => {
         const r = resp.result || {};
         if (!r.success) {
+          const errMsg = String(r.errMsg || "");
+          if (/账本不存在|无权访问/.test(errMsg)) {
+            this.refreshLedgersAndLoad();
+            return;
+          }
           wx.showToast({ title: r.errMsg || "加载失败", icon: "none" });
           this.destroyF2Charts();
           this.setData({
@@ -1272,5 +1306,27 @@ Page({
 
   onUnload() {
     this.destroyF2Charts();
+  },
+
+  readLastAnalyzeLedgerId() {
+    try {
+      return String(wx.getStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY) || "").trim();
+    } catch (e) {
+      return "";
+    }
+  },
+
+  writeLastAnalyzeLedgerId(ledgerId) {
+    const normalized = String(ledgerId || "").trim();
+    this._lastAnalyzeLedgerId = normalized;
+    try {
+      if (normalized) {
+        wx.setStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY, normalized);
+      } else {
+        wx.removeStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY);
+      }
+    } catch (e) {
+      // ignore
+    }
   },
 });

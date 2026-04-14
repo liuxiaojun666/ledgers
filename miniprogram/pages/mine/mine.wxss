@@ -36,12 +36,43 @@
 
 .profile-card {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 24rpx;
+  gap: 10rpx;
   padding: 28rpx;
   border-radius: 28rpx;
   background: linear-gradient(120deg, #2a68ff, #5a92ff);
   margin-bottom: 16rpx;
+}
+
+.avatar-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 64rpx;
+  width: 64rpx;
+  min-width: 64rpx;
+  max-width: 64rpx;
+  height: 64rpx;
+  min-height: 64rpx;
+  padding: 0;
+  padding-left: 0;
+  padding-right: 0;
+  margin: 0;
+  border: none;
+  border-radius: 32rpx;
+  background: transparent;
+  flex-shrink: 0;
+  line-height: 64rpx;
+  font-size: 0;
+  overflow: hidden;
+}
+
+.chip-btn-on-gradient {
+  margin: 0;
+  background: rgba(255, 255, 255, 0.96);
+  border: none;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.12);
 }
 
 .avatar {
@@ -63,12 +94,18 @@
 .profile-meta {
   flex: 1;
   min-width: 0;
+  margin-left: 30rpx;
 }
 
 .profile-name {
   font-size: 36rpx;
   color: #fff;
   font-weight: 700;
+}
+
+.profile-name-clickable {
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.65);
 }
 
 .profile-desc {
@@ -135,6 +172,16 @@
   padding: 0 20rpx;
 }
 
+.chip-btn.profile-sync-btn {
+  flex-shrink: 0;
+  align-self: center;
+  margin: 0;
+  padding: 0 10rpx;
+  min-width: unset;
+  width: fit-content;
+  box-sizing: border-box;
+}
+
 .btn-create {
   width: 100%;
   margin-top: 8rpx;
@@ -147,24 +194,9 @@
   box-shadow: 0 8rpx 20rpx rgba(0, 102, 255, 0.22);
 }
 
-.promo-multi-ledger .block-desc {
-  margin-bottom: 4rpx;
-}
-
-.btn-create-inline {
-  margin-top: 20rpx;
-  width: 100%;
-  border-radius: 24rpx;
-  background: #0066ff;
-  color: #fff;
-  font-size: 30rpx;
-  font-weight: 700;
-  padding: 20rpx 0;
-  box-shadow: 0 8rpx 20rpx rgba(0, 102, 255, 0.22);
-}
-
+.chip-btn-on-gradient::after,
+.avatar-picker::after,
 .chip-btn::after,
-.btn-create::after,
-.btn-create-inline::after {
+.btn-create::after {
   border: none;
 }

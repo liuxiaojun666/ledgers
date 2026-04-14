@@ -1,0 +1,109 @@
+.page {
+  min-height: 100vh;
+  padding: 24rpx 32rpx calc(40rpx + env(safe-area-inset-bottom));
+  background: #f6f8fc;
+}
+
+.hint {
+  color: #6e778a;
+  font-size: 28rpx;
+  margin-top: 24rpx;
+}
+
+.header {
+  margin-bottom: 28rpx;
+}
+
+.title {
+  font-size: 56rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.sub {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #6b7280;
+}
+
+.card {
+  background: #fff;
+  border-radius: 36rpx;
+  padding: 36rpx;
+  border: 1rpx solid #dce7ff;
+  box-shadow: 0 12rpx 40rpx rgba(31, 99, 255, 0.07);
+}
+
+.card-lite {
+  border-style: dashed;
+}
+
+.card-empty {
+  padding: 44rpx 36rpx;
+}
+
+.section-title {
+  font-size: 28rpx;
+  color: #3d4a63;
+  margin: 0 0 16rpx;
+  font-weight: 600;
+}
+
+.req-card {
+  padding: 16rpx 0;
+}
+
+.req-card + .req-card {
+  border-top: 1rpx solid #eef2fa;
+}
+
+.req-name {
+  font-size: 28rpx;
+  color: #25324c;
+  font-weight: 500;
+}
+
+.req-actions {
+  margin-top: 12rpx;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.btn-pill {
+  margin: 0;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 56rpx;
+  padding: 0 28rpx;
+  line-height: 1;
+  font-size: 24rpx;
+  font-weight: 500;
+  border-radius: 999rpx;
+}
+
+.btn-pill::after {
+  border: none;
+}
+
+.btn-pill-primary {
+  background: linear-gradient(120deg, #1f63ff, #3f89ff);
+  color: #fff;
+  border: none;
+}
+
+.btn-pill-muted {
+  background: #f2f5fb;
+  color: #6b778f;
+  border: 1rpx solid #d9e2f5;
+}
+
+.empty {
+  color: #8b95a8;
+  font-size: 26rpx;
+  text-align: center;
+  line-height: 1.5;
+}

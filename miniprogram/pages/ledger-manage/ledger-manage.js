@@ -28,25 +28,13 @@ function pickLedgerName(options) {
   }
 }
 
-function formatMonthlyBudgetLabel(cents) {
-  const n = Number(cents);
-  if (!Number.isFinite(n) || n <= 0) {
-    return "未设置";
-  }
-  const yuan = (n / 100).toFixed(2);
-  return `¥${yuan}`;
-}
-
 Page({
   data: {
     ledgerId: "",
     ledgerName: "",
-    monthlyBudgetCents: null,
-    monthlyBudgetLabel: "未设置",
     loading: true,
     isCreator: false,
     updatingLedgerName: false,
-    updatingMonthlyBudget: false,
     deletingLedger: false,
     memberOpLoading: false,
     shareInviteCode: "",
@@ -106,13 +94,7 @@ Page({
       }
       const ledgerName = detail.ledger && detail.ledger.name ? detail.ledger.name : "";
       const isCreator = !!(detail.ledger && detail.ledger.isCreator);
-      const rawBudget = detail.ledger && detail.ledger.monthlyBudgetCents;
-      const monthlyBudgetCents =
-        rawBudget != null && Number.isFinite(Number(rawBudget)) && Number(rawBudget) > 0
-          ? Math.floor(Number(rawBudget))
-          : null;
-      const monthlyBudgetLabel = formatMonthlyBudgetLabel(monthlyBudgetCents);
-      this.setData({ ledgerName, isCreator, monthlyBudgetCents, monthlyBudgetLabel });
+      this.setData({ ledgerName, isCreator });
       if (!isCreator) {
         this.setData({
           loading: false,
@@ -181,100 +163,6 @@ Page({
       .catch(() => {
         wx.showToast({ title: "成员信息加载失败", icon: "none" });
       });
-  },
-
-  onEditMonthlyBudget() {
-    const ledgerId = String(this.data.ledgerId || "").trim();
-    if (!ledgerId || this.data.updatingMonthlyBudget) {
-      return;
-    }
-    const cur = this.data.monthlyBudgetCents;
-    const defaultContent =
-      cur != null && Number.isFinite(Number(cur)) && Number(cur) > 0
-        ? String((Number(cur) / 100).toFixed(2))
-        : "";
-    wx.showModal({
-      title: "月度支出预算（元）",
-      editable: true,
-      placeholderText: "例：3000，留空则清除",
-      content: defaultContent,
-      success: (res) => {
-        if (!res.confirm) {
-          return;
-        }
-        const text = String(res.content || "").trim();
-        if (!text) {
-          this.setData({ updatingMonthlyBudget: true });
-          wx.cloud
-            .callFunction({
-              name: "ledgerFunctions",
-              data: {
-                type: "updateLedgerMonthlyBudget",
-                ledgerId,
-                clearBudget: true,
-              },
-            })
-            .then((resp) => {
-              const r = resp.result || {};
-              if (!r.success) {
-                wx.showToast({ title: r.errMsg || "保存失败", icon: "none" });
-                return;
-              }
-              this.setData({
-                monthlyBudgetCents: null,
-                monthlyBudgetLabel: "未设置",
-              });
-              wx.showToast({ title: "已清除预算" });
-            })
-            .catch(() => {
-              wx.showToast({ title: "保存失败", icon: "none" });
-            })
-            .finally(() => {
-              this.setData({ updatingMonthlyBudget: false });
-            });
-          return;
-        }
-        const yuan = Number(text);
-        if (!Number.isFinite(yuan) || yuan <= 0) {
-          wx.showToast({ title: "请输入有效金额", icon: "none" });
-          return;
-        }
-        const monthlyBudgetCents = Math.round(yuan * 100);
-        if (!Number.isFinite(monthlyBudgetCents) || monthlyBudgetCents <= 0) {
-          wx.showToast({ title: "金额无效", icon: "none" });
-          return;
-        }
-        this.setData({ updatingMonthlyBudget: true });
-        wx.cloud
-          .callFunction({
-            name: "ledgerFunctions",
-            data: {
-              type: "updateLedgerMonthlyBudget",
-              ledgerId,
-              monthlyBudgetCents,
-            },
-          })
-          .then((resp) => {
-            const r = resp.result || {};
-            if (!r.success) {
-              wx.showToast({ title: r.errMsg || "保存失败", icon: "none" });
-              return;
-            }
-            const next = r.monthlyBudgetCents != null ? Math.floor(Number(r.monthlyBudgetCents)) : null;
-            this.setData({
-              monthlyBudgetCents: next,
-              monthlyBudgetLabel: formatMonthlyBudgetLabel(next),
-            });
-            wx.showToast({ title: "已保存" });
-          })
-          .catch(() => {
-            wx.showToast({ title: "保存失败", icon: "none" });
-          })
-          .finally(() => {
-            this.setData({ updatingMonthlyBudget: false });
-          });
-      },
-    });
   },
 
   onEditLedgerName() {

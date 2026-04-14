@@ -21,10 +21,21 @@ Page({
     if (typeof this.getTabBar === "function") {
       const tabBar = this.getTabBar();
       if (tabBar && typeof tabBar.setData === "function") {
-        tabBar.setData({ selected: 0 });
+        tabBar.setData({ selected: 0, hidden: false });
       }
     }
     this.refresh();
+  },
+
+  setCustomTabBarHidden(hidden) {
+    if (typeof this.getTabBar !== "function") {
+      return;
+    }
+    const tabBar = this.getTabBar();
+    if (!tabBar || typeof tabBar.setData !== "function") {
+      return;
+    }
+    tabBar.setData({ hidden: !!hidden });
   },
 
   refresh() {
@@ -110,6 +121,7 @@ Page({
   },
 
   createLedger() {
+    this.setCustomTabBarHidden(true);
     wx.showModal({
       title: "新建账本",
       editable: true,
@@ -136,6 +148,9 @@ Page({
           .catch(() => {
             wx.showToast({ title: "云函数调用失败", icon: "none" });
           });
+      },
+      complete: () => {
+        this.setCustomTabBarHidden(false);
       },
     });
   },
@@ -176,6 +191,19 @@ Page({
     }
     wx.navigateTo({
       url: `/pages/ledger-tx/ledger-tx?ledgerId=${id}`,
+    });
+  },
+
+  openPendingPage(e) {
+    const id = String((e.currentTarget.dataset || {}).id || "").trim();
+    const name = String((e.currentTarget.dataset || {}).name || "").trim();
+    if (!id) {
+      return;
+    }
+    wx.navigateTo({
+      url: `/pages/ledger-pending/ledger-pending?ledgerId=${encodeURIComponent(
+        id
+      )}&name=${encodeURIComponent(name)}`,
     });
   },
 });

@@ -1,11 +1,14 @@
 <view class="page">
-  <view class="page-head">我的</view>
   <view class="profile-card">
-    <image wx:if="{{profileAvatarUrl}}" class="avatar avatar-image" src="{{profileAvatarUrl}}" mode="aspectFill" />
-    <view wx:else class="avatar">👤</view>
+    <button class="avatar-picker" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+      <image wx:if="{{profileAvatarUrl}}" class="avatar avatar-image" src="{{profileAvatarUrl}}" mode="aspectFill" />
+      <view wx:else class="avatar">👤</view>
+    </button>
     <view class="profile-meta">
-      <view class="profile-name">{{profileNickName || "微信用户"}}</view>
-      <view class="profile-desc">已加入 {{defaultAnalyzeLedgerCount || 0}} 个账本</view>
+      <view class="profile-name profile-name-clickable" bindtap="promptProfileNickname">
+        {{profileNickName || "微信用户"}}
+      </view>
+      <view class="profile-desc">已加入 {{joinedLedgerCount || 0}} 个账本</view>
     </view>
   </view>
   <view class="card-row" bindtap="openManageCategories">
@@ -22,28 +25,7 @@
     </view>
     <text class="card-link">去管理 ></text>
   </view>
-  <view class="card-block">
-    <view class="block-title">📊 默认统计账本</view>
-    <view class="block-desc">
-      当前：{{defaultAnalyzeLedgerName || (defaultAnalyzeLedgerCount ? "未设置" : "暂无账本")}}
-    </view>
-    <button class="chip-btn" bindtap="manageDefaultAnalyzeLedger" loading="{{defaultAnalyzeLedgerLoading}}">
-      管理默认统计账本
-    </button>
-  </view>
-  <view class="card-block">
-    <view class="block-title">🪪 昵称展示</view>
-    <view class="block-desc">用于“按人统计”展示，支持同步微信昵称</view>
-    <button class="chip-btn" bindtap="syncWechatNickname" loading="{{profileSyncing}}">
-      同步微信昵称
-    </button>
-  </view>
-  <view wx:if="{{showSingleLedgerPromo}}" class="card-block promo-multi-ledger">
-    <view class="block-title">📚 多账本</view>
-    <view class="block-desc">
-      工作、家庭、旅行可以各建一本账，分类与统计互不干扰；也可邀请成员协作，同一本账里一起记。
-    </view>
-    <button class="btn-create-inline" bindtap="createLedger">+ 新建账本</button>
-  </view>
-  <button wx:if="{{showEmptyLedgerCreate}}" class="btn-create" bindtap="createLedger">+ 新建账本</button>
+  <button wx:if="{{showEmptyLedgerCreate}}" class="btn-create" bindtap="createLedger">
+    + 新建账本
+  </button>
 </view>

@@ -50,6 +50,8 @@ const COLLECTION_NAMES = [
 ];
 const MAX_SCHEDULES_PER_USER = 40;
 const INVITE_CODE_LEN = 8;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const CHINA_TZ_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 function txTimeMs(tx) {
   if (!tx) {
@@ -271,6 +273,36 @@ function readDateMs(v) {
   return Number.isFinite(t) ? t : NaN;
 }
 
+function chinaDateParts(v) {
+  const ms = readDateMs(v);
+  if (!Number.isFinite(ms)) {
+    return null;
+  }
+  const d = new Date(ms + CHINA_TZ_OFFSET_MS);
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
+    weekday: d.getUTCDay(),
+  };
+}
+
+function chinaDayStartMsByYmd(year, month, day) {
+  return Date.UTC(year, month - 1, day, 0, 0, 0, 0) - CHINA_TZ_OFFSET_MS;
+}
+
+function chinaDayEndMsByYmd(year, month, day) {
+  return chinaDayStartMsByYmd(year, month, day) + DAY_MS - 1;
+}
+
+function chinaDayStartMs(v) {
+  const p = chinaDateParts(v);
+  if (!p) {
+    return NaN;
+  }
+  return chinaDayStartMsByYmd(p.year, p.month, p.day);
+}
+
 function formatChinaTimeText(ms) {
   if (!Number.isFinite(ms)) {
     return "";
@@ -453,9 +485,18 @@ exports.main = async (event) => {
     }
   }
 
-  const openid = wxContext.OPENID;
+  // 资源共享跨小程序调用时，调用方身份可能出现在 FROM_OPENID
+  const openid = String(wxContext.OPENID || wxContext.FROM_OPENID || "").trim();
   if (!openid) {
-    return { success: false, errMsg: "未获取到 openid" };
+    console.error("missing openid in wxContext", wxContext);
+    return {
+      success: false,
+      errMsg: "未获取到 openid",
+      debug: {
+        appid: wxContext.APPID || "",
+        fromAppid: wxContext.FROM_APPID || "",
+      },
+    };
   }
 
   const { type } = event;
@@ -471,8 +512,6 @@ exports.main = async (event) => {
         return await updateLedgerMonthlyBudget(openid, event);
       case "listLedgers":
         return await listLedgers(openid);
-      case "setDefaultAnalyzeLedger":
-        return await setDefaultAnalyzeLedger(openid, event);
       case "enterLedger":
         return await enterLedger(openid, event);
       case "joinLedger":
@@ -670,6 +709,44 @@ async function listLedgers(openid) {
     const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return tb - ta;
   });
+  const creatorLedgerIds = rows
+    .filter(
+      (doc) =>
+        doc &&
+        (doc.creatorOpenid === openid ||
+          (!doc.creatorOpenid &&
+            Array.isArray(doc.memberOpenids) &&
+            doc.memberOpenids[0] === openid))
+    )
+    .map((doc) => normalizeLedgerId(doc && doc._id))
+    .filter(Boolean);
+  const pendingCountMap = Object.create(null);
+  if (creatorLedgerIds.length) {
+    const pendingRes = await db
+      .collection("ledger_join_requests")
+      .where({
+        ledgerId: _.in(creatorLedgerIds),
+        status: "pending",
+      })
+      .field({
+        ledgerId: true,
+        applicantOpenid: true,
+      })
+      .limit(100)
+      .get();
+    const pendingRows = pendingRes.data || [];
+    pendingRows.forEach((row) => {
+      const ledgerId = normalizeLedgerId(row && row.ledgerId);
+      const applicantOpenid = String((row && row.applicantOpenid) || "").trim();
+      if (!ledgerId || !applicantOpenid) {
+        return;
+      }
+      if (pendingCountMap[ledgerId] == null) {
+        pendingCountMap[ledgerId] = 0;
+      }
+      pendingCountMap[ledgerId] += 1;
+    });
+  }
   const list = rows.map((doc) => ({
     _id: doc._id,
     name: doc.name,
@@ -684,15 +761,9 @@ async function listLedgers(openid) {
       (!doc.creatorOpenid &&
         Array.isArray(doc.memberOpenids) &&
         doc.memberOpenids[0] === openid),
+    pendingRequestCount: Number(pendingCountMap[doc._id] || 0),
   }));
-  const profile = await getUserProfile(openid);
-  let defaultAnalyzeLedgerId = normalizeLedgerId(
-    profile && profile.defaultAnalyzeLedgerId
-  );
-  if (defaultAnalyzeLedgerId && !list.some((x) => x._id === defaultAnalyzeLedgerId)) {
-    defaultAnalyzeLedgerId = "";
-  }
-  return { success: true, list, defaultAnalyzeLedgerId };
+  return { success: true, list };
 }
 
 /**
@@ -1822,23 +1893,29 @@ async function processDueSchedules() {
 }
 
 function startOfWeekMonday(d) {
-  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = t.getDay();
-  const diff = (day + 6) % 7;
-  t.setDate(t.getDate() - diff);
-  t.setHours(0, 0, 0, 0);
-  return t;
+  const p = chinaDateParts(d);
+  if (!p) {
+    return new Date(0);
+  }
+  const diff = (p.weekday + 6) % 7;
+  const mondayStartMs = chinaDayStartMsByYmd(p.year, p.month, p.day - diff);
+  return new Date(mondayStartMs);
 }
 
 function endOfWeekFromMonday(mondayStart) {
-  const e = new Date(mondayStart);
-  e.setDate(e.getDate() + 6);
-  e.setHours(23, 59, 59, 999);
-  return e;
+  const startMs = chinaDayStartMs(mondayStart);
+  if (!Number.isFinite(startMs)) {
+    return new Date(0);
+  }
+  return new Date(startMs + DAY_MS * 7 - 1);
 }
 
 function formatDateCn(d) {
-  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+  const p = chinaDateParts(d);
+  if (!p) {
+    return "";
+  }
+  return `${p.year}年${p.month}月${p.day}日`;
 }
 
 function toIntInRange(raw, min, max) {
@@ -1870,7 +1947,7 @@ function parseYmdToDate(raw) {
   if (mon < 1 || mon > 12 || d < 1 || d > 31) {
     return null;
   }
-  const dt = new Date(y, mon - 1, d, 0, 0, 0, 0);
+  const dt = new Date(chinaDayStartMsByYmd(y, mon, d));
   if (Number.isNaN(dt.getTime())) {
     return null;
   }
@@ -1878,40 +1955,44 @@ function parseYmdToDate(raw) {
 }
 
 function formatYmd(d) {
+  const p = chinaDateParts(d);
+  if (!p) {
+    return "";
+  }
   const p2 = (n) => (n < 10 ? `0${n}` : `${n}`);
-  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+  return `${p.year}-${p2(p.month)}-${p2(p.day)}`;
 }
 
 const WEEKDAY_CN = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
-/** 折线图：周/月按日历日；年按自然月。每点 income / expense 为非负元（支出为发生额绝对值）。 */
-function buildAnalyzeTrend(range, start, end, rows) {
+/** 折线图：仅展示有效时间（账本创建日起，且不超过今天）。 */
+function buildAnalyzeTrend(range, start, end, rows, ledgerCreatedMs) {
   const points = [];
   if (!(start instanceof Date) || !(end instanceof Date)) {
     return points;
   }
+  const rangeStartMs = start.getTime();
   const rangeEndMs = end.getTime();
-  /** 月维度：只画到「今天」，不展示当月未来日期 */
-  let trendEndMs = rangeEndMs;
-  if (range === "month") {
-    const now = new Date();
-    const endOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      23,
-      59,
-      59,
-      999
-    );
-    trendEndMs = Math.min(rangeEndMs, endOfToday.getTime());
+  const now = new Date();
+  const nowParts = chinaDateParts(now);
+  const endOfToday = nowParts
+    ? new Date(chinaDayEndMsByYmd(nowParts.year, nowParts.month, nowParts.day))
+    : now;
+  let createdStartMs = rangeStartMs;
+  if (Number.isFinite(Number(ledgerCreatedMs)) && Number(ledgerCreatedMs) > 0) {
+    createdStartMs = chinaDayStartMs(Number(ledgerCreatedMs));
+  }
+  const validStartMs = Math.max(rangeStartMs, createdStartMs);
+  const validEndMs = Math.min(rangeEndMs, endOfToday.getTime());
+  if (validEndMs < validStartMs) {
+    return points;
   }
   if (range === "week" || range === "month") {
     const bucket = {};
-    const walk = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
-    while (walk.getTime() <= trendEndMs) {
-      bucket[formatYmd(walk)] = { incomeCents: 0, expenseCents: 0 };
-      walk.setDate(walk.getDate() + 1);
+    let walkMs = chinaDayStartMs(validStartMs);
+    while (walkMs <= validEndMs) {
+      bucket[formatYmd(new Date(walkMs))] = { incomeCents: 0, expenseCents: 0 };
+      walkMs += DAY_MS;
     }
     for (let i = 0; i < rows.length; i += 1) {
       const dt = txOccurredDate(rows[i]);
@@ -1933,36 +2014,50 @@ function buildAnalyzeTrend(range, start, end, rows) {
         bucket[key].expenseCents += mag;
       }
     }
-    const d2 = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
-    while (d2.getTime() <= trendEndMs) {
-      const key = formatYmd(d2);
+    walkMs = chinaDayStartMs(validStartMs);
+    while (walkMs <= validEndMs) {
+      const dayDate = new Date(walkMs);
+      const key = formatYmd(dayDate);
       const b = bucket[key] || { incomeCents: 0, expenseCents: 0 };
+      const p = chinaDateParts(dayDate);
       const x =
         range === "week"
-          ? WEEKDAY_CN[d2.getDay()]
-          : `${d2.getMonth() + 1}/${d2.getDate()}`;
+          ? WEEKDAY_CN[p ? p.weekday : 0]
+          : `${p ? p.month : 0}/${p ? p.day : 0}`;
       points.push({
         x,
         dateKey: key,
         income: b.incomeCents / 100,
         expense: b.expenseCents / 100,
       });
-      d2.setDate(d2.getDate() + 1);
+      walkMs += DAY_MS;
     }
     return points;
   }
   if (range === "year") {
-    const y = start.getFullYear();
+    const startParts = chinaDateParts(start);
+    const validStartParts = chinaDateParts(validStartMs);
+    const validEndParts = chinaDateParts(validEndMs);
+    if (!startParts || !validStartParts || !validEndParts) {
+      return points;
+    }
+    const y = startParts.year;
+    if (validStartParts.year !== y || validEndParts.year !== y) {
+      return points;
+    }
+    const monthStart = validStartParts.month;
+    const monthEnd = validEndParts.month;
     const bucket = {};
-    for (let m = 1; m <= 12; m += 1) {
+    for (let m = monthStart; m <= monthEnd; m += 1) {
       bucket[m] = { incomeCents: 0, expenseCents: 0 };
     }
     for (let i = 0; i < rows.length; i += 1) {
       const dt = txOccurredDate(rows[i]);
-      if (!dt || dt.getFullYear() !== y) {
+      const p = chinaDateParts(dt);
+      if (!p || p.year !== y) {
         continue;
       }
-      const m = dt.getMonth() + 1;
+      const m = p.month;
       const tx = rows[i];
       const mag = txMagnitudeCents(tx);
       if (mag <= 0) {
@@ -1974,7 +2069,7 @@ function buildAnalyzeTrend(range, start, end, rows) {
         bucket[m].expenseCents += mag;
       }
     }
-    for (let m = 1; m <= 12; m += 1) {
+    for (let m = monthStart; m <= monthEnd; m += 1) {
       const b = bucket[m];
       points.push({
         x: `${m}月`,
@@ -2001,12 +2096,13 @@ function getAnalyzeRange(range, event = {}) {
     end = endOfWeekFromMonday(start);
     label = `${formatDateCn(start)} - ${formatDateCn(end)}`;
   } else if (range === "month") {
-    start = new Date(selectedYear, selectedMonth - 1, 1, 0, 0, 0, 0);
-    end = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
+    const lastDay = new Date(Date.UTC(selectedYear, selectedMonth, 0)).getUTCDate();
+    start = new Date(chinaDayStartMsByYmd(selectedYear, selectedMonth, 1));
+    end = new Date(chinaDayEndMsByYmd(selectedYear, selectedMonth, lastDay));
     label = `${selectedYear}年${selectedMonth}月`;
   } else if (range === "year") {
-    start = new Date(selectedYear, 0, 1, 0, 0, 0, 0);
-    end = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+    start = new Date(chinaDayStartMsByYmd(selectedYear, 1, 1));
+    end = new Date(chinaDayEndMsByYmd(selectedYear, 12, 31));
     label = `${selectedYear}年`;
   } else {
     start = new Date(0);
@@ -2042,20 +2138,23 @@ function getAnalyzeCompareRange(range, current) {
     const currentYear = Number(selectedYear) || start.getFullYear();
     const currentMonth = Number(selectedMonth) || start.getMonth() + 1;
     const prevMonthDate = new Date(currentYear, currentMonth - 2, 1, 0, 0, 0, 0);
-    const y = prevMonthDate.getFullYear();
-    const m = prevMonthDate.getMonth() + 1;
+    const p = chinaDateParts(prevMonthDate);
+    const y = p ? p.year : prevMonthDate.getFullYear();
+    const m = p ? p.month : prevMonthDate.getMonth() + 1;
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
     return {
-      start: new Date(y, m - 1, 1, 0, 0, 0, 0),
-      end: new Date(y, m, 0, 23, 59, 59, 999),
+      start: new Date(chinaDayStartMsByYmd(y, m, 1)),
+      end: new Date(chinaDayEndMsByYmd(y, m, lastDay)),
       label: `${y}年${m}月`,
       compareHint: "较上月",
     };
   }
   if (range === "year") {
-    const y = (Number(selectedYear) || start.getFullYear()) - 1;
+    const sp = chinaDateParts(start);
+    const y = (Number(selectedYear) || (sp ? sp.year : start.getFullYear())) - 1;
     return {
-      start: new Date(y, 0, 1, 0, 0, 0, 0),
-      end: new Date(y, 11, 31, 23, 59, 59, 999),
+      start: new Date(chinaDayStartMsByYmd(y, 1, 1)),
+      end: new Date(chinaDayEndMsByYmd(y, 12, 31)),
       label: `${y}年`,
       compareHint: "较去年",
     };
@@ -2341,7 +2440,7 @@ async function analyzeLedger(openid, event) {
     nicknameMap
   );
 
-  const trendPoints = buildAnalyzeTrend(range, start, end, rows);
+  const trendPoints = buildAnalyzeTrend(range, start, end, rows, readDateMs(gate.ledger.createdAt));
 
   const monthlyBudgetCents = readMonthlyBudgetCents(gate.ledger);
   let budgetBarWidth = null;
@@ -2746,9 +2845,6 @@ async function updateMyProfile(openid, event) {
   const profile = await getUserProfile(openid);
   const existingAvatarUrl = normalizeAvatarUrl(profile && profile.avatarUrl);
   const avatarUrl = incomingAvatarUrl || existingAvatarUrl || "";
-  const defaultAnalyzeLedgerId = normalizeLedgerId(
-    profile && profile.defaultAnalyzeLedgerId
-  );
   await db
     .collection("user_profiles")
     .doc(openid)
@@ -2757,7 +2853,6 @@ async function updateMyProfile(openid, event) {
         openid,
         nickName,
         avatarUrl,
-        defaultAnalyzeLedgerId,
         updatedAt: db.serverDate(),
       },
     });
@@ -2778,31 +2873,3 @@ async function getMyProfile(openid) {
   };
 }
 
-async function setDefaultAnalyzeLedger(openid, event) {
-  const ledgerId = normalizeLedgerId(event.ledgerId);
-  if (!ledgerId) {
-    return { success: false, errMsg: "请选择账本" };
-  }
-  const gate = await assertMember(openid, ledgerId);
-  if (!gate.ok) {
-    return { success: false, errMsg: gate.errMsg };
-  }
-  const profile = await getUserProfile(openid);
-  const nickName = normalizeNickname(profile && profile.nickName);
-  const avatarUrl = String(
-    profile && profile.avatarUrl != null ? profile.avatarUrl : ""
-  ).slice(0, 500);
-  await db
-    .collection("user_profiles")
-    .doc(openid)
-    .set({
-      data: {
-        openid,
-        nickName,
-        avatarUrl,
-        defaultAnalyzeLedgerId: ledgerId,
-        updatedAt: db.serverDate(),
-      },
-    });
-  return { success: true, defaultAnalyzeLedgerId: ledgerId };
-}

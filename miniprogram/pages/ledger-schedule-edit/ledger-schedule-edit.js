@@ -181,6 +181,17 @@ Page({
     this.setData({ flowIndex: Number(e.detail.value) });
   },
 
+  onFlowTabTap(e) {
+    if (this.data.status === "completed") {
+      return;
+    }
+    const idx = Number(e.currentTarget.dataset.index);
+    if (idx !== 0 && idx !== 1) {
+      return;
+    }
+    this.setData({ flowIndex: idx });
+  },
+
   onCategoryChange(e) {
     this.setData({ categoryIndex: Number(e.detail.value) });
   },

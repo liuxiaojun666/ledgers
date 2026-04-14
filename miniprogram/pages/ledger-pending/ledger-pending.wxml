@@ -1,0 +1,43 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:else>
+    <view class="header">
+      <view class="title">待审批申请</view>
+      <view class="sub">{{ledgerName || "当前账本"}}</view>
+    </view>
+
+    <view wx:if="{{!isCreator}}" class="card card-lite">
+      <view class="empty">仅账本创建者可审批加入申请</view>
+    </view>
+
+    <block wx:else>
+      <view wx:if="{{!pendingRequests.length}}" class="card card-empty">
+        <view class="empty">暂无待审批申请</view>
+      </view>
+      <view wx:else class="card">
+        <view class="section-title">待处理（{{pendingRequests.length}}）</view>
+        <view class="req-card" wx:for="{{pendingRequests}}" wx:key="openid">
+          <view class="req-name">{{item.displayName}}</view>
+          <view class="req-actions">
+            <button
+              class="btn-pill btn-pill-primary"
+              data-openid="{{item.openid}}"
+              bindtap="onApproveRequest"
+              loading="{{memberOpLoading}}"
+            >
+              同意
+            </button>
+            <button
+              class="btn-pill btn-pill-muted"
+              data-openid="{{item.openid}}"
+              bindtap="onRejectRequest"
+              loading="{{memberOpLoading}}"
+            >
+              拒绝
+            </button>
+          </view>
+        </view>
+      </view>
+    </block>
+  </block>
+</view>

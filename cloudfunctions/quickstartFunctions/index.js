@@ -8,9 +8,11 @@ const db = cloud.database();
 const getOpenId = async () => {
   // 获取基础信息
   const wxContext = cloud.getWXContext();
+  const openid = String(wxContext.OPENID || wxContext.FROM_OPENID || "").trim();
+  const appid = String(wxContext.APPID || wxContext.FROM_APPID || "").trim();
   return {
-    openid: wxContext.OPENID,
-    appid: wxContext.APPID,
+    openid,
+    appid,
     unionid: wxContext.UNIONID,
   };
 };

@@ -1,5 +1,5 @@
 <!-- cover-view 层级高于原生 canvas，避免统计页图表盖住 Tab -->
-<cover-view class="tabbar-wrap">
+<cover-view wx:if="{{!hidden}}" class="tabbar-wrap">
   <cover-view class="tabbar-pill">
     <cover-view
       wx:for="{{list}}"

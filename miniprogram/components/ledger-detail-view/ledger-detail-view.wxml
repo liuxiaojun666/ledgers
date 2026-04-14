@@ -9,8 +9,13 @@
     <block wx:else>
       <view class="header">
         <view class="title-row">
-          <view class="title">账本： {{ledgerName}}</view>
-          <text wx:if="{{isCreator}}" class="link-manage" bindtap="goLedgerManage">管理</text>
+          <view class="title">{{ledgerName}}</view>
+          <view wx:if="{{isCreator}}" class="header-actions">
+            <text class="link-manage" bindtap="goLedgerManage">管理</text>
+          </view>
+        </view>
+        <view wx:if="{{isCreator && pendingRequests.length > 0}}" class="pending-entry" bindtap="goPendingPage">
+          {{pendingRequests.length}} 条待审批申请，点击处理
         </view>
       </view>
       <view class="summary-row">
@@ -42,38 +47,33 @@
         <view class="detail-budget-foot">{{budgetFootText}}</view>
       </view>
       <view wx:elif="{{showBudgetUnsetHint}}" class="detail-budget-hint card">
-        <view class="detail-budget-hint-text">{{budgetUnsetHintText}}</view>
-        <button wx:if="{{isCreator}}" class="detail-budget-hint-btn" bindtap="goLedgerManage">
+        <image class="detail-budget-hint-illu" src="../../images/budget-unset-hint.jpg" mode="aspectFill" />
+        <button wx:if="{{isCreator}}" class="detail-budget-hint-btn" bindtap="goLedgerBudget">
           去设置预算
         </button>
       </view>
       <view class="section-head">
         <view class="section-title">最近流水</view>
-        <button
-          wx:if="{{recordInline}}"
-          class="btn-inline-record"
-          bindtap="goRecordTx"
-        >
+        <button wx:if="{{recordInline}}" class="btn-inline-record" bindtap="goRecordTx">
           + 记一笔
         </button>
       </view>
-      <view wx:if="{{!transactions.length}}" class="empty">暂无记录，记一笔或等好友添加。</view>
+      <view wx:if="{{!transactions.length}}" class="empty-wrap">
+        <image class="empty-illu" src="../../images/LmtpX.png" mode="widthFix" />
+        <view class="empty-title">暂无记录</view>
+        <view class="empty-desc">快去记一笔吧。</view>
+      </view>
       <view wx:else class="tx-list">
-        <view
-          class="tx-row {{item.canEdit ? 'tx-tap' : ''}}"
-          wx:for="{{transactions}}"
-          wx:key="_id"
-          data-id="{{item._id}}"
-          data-editable="{{item.canEdit}}"
-          bindtap="onTxTap"
-        >
+        <view class="tx-row {{item.canEdit ? 'tx-tap' : ''}}" wx:for="{{transactions}}" wx:key="_id" data-id="{{item._id}}" data-editable="{{item.canEdit}}" bindtap="onTxTap">
           <view class="tx-main">
             <text class="tx-line-left">{{item.lineLeft}}</text>
             <view class="tx-meta">
-              <text wx:if="{{item.timeText}}" class="tx-meta-item">{{item.timeText}}</text>
-              <text wx:if="{{item.payerName && item.payerName !== '未知'}}" class="tx-meta-item">
+              <view wx:if="{{item.timeText}}" class="tx-meta-item tx-meta-time">
+                {{item.timeText}}
+              </view>
+              <view wx:if="{{item.payerName && item.payerName !== '未知'}}" class="tx-meta-item tx-meta-payer">
                 {{item.payerName}}
-              </text>
+              </view>
             </view>
           </view>
           <text class="tx-amt {{item.flow === 'income' ? 'tx-amt-income' : 'tx-amt-expense'}}">
@@ -81,7 +81,9 @@
           </text>
         </view>
       </view>
-      <button wx:if="{{!recordInline}}" class="btn-primary-record" bindtap="goRecordTx">+ 记一笔</button>
+      <button wx:if="{{!recordInline}}" class="btn-primary-record" bindtap="goRecordTx">
+        + 记一笔
+      </button>
     </block>
   </block>
 </view>

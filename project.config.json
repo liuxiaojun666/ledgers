@@ -14,7 +14,7 @@
     "autoAudits": false,
     "showShadowRootInWxmlPanel": true,
     "scopeDataCheck": false,
-    "uglifyFileName": false,
+    "uglifyFileName": true,
     "checkInvalidKey": true,
     "checkSiteMap": true,
     "uploadWithSourceMap": true,
@@ -44,7 +44,7 @@
     "swc": false,
     "disableSWC": true
   },
-  "appid": "wxbe6c30a61a51b422",
+  "appid": "wxa7dd928b92fb2a62",
   "projectname": "quickstart-wx-cloud",
   "libVersion": "2.20.1",
   "cloudfunctionTemplateRoot": "cloudfunctionTemplate/",
@@ -74,7 +74,140 @@
   "compileType": "miniprogram",
   "srcMiniprogramRoot": "miniprogram/",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      {
+        "type": "folder",
+        "value": "node_modules"
+      },
+      {
+        "type": "file",
+        "value": "IK88t.png"
+      },
+      {
+        "type": "file",
+        "value": "images/ai_example1.png"
+      },
+      {
+        "type": "file",
+        "value": "images/ai_example2.png"
+      },
+      {
+        "type": "file",
+        "value": "images/avatar.png"
+      },
+      {
+        "type": "file",
+        "value": "images/cloud_dev.png"
+      },
+      {
+        "type": "file",
+        "value": "images/create_cbr.png"
+      },
+      {
+        "type": "file",
+        "value": "images/create_cbrf.png"
+      },
+      {
+        "type": "file",
+        "value": "images/create_env.png"
+      },
+      {
+        "type": "file",
+        "value": "images/database.png"
+      },
+      {
+        "type": "file",
+        "value": "images/database_add.png"
+      },
+      {
+        "type": "file",
+        "value": "images/default-goods-image.png"
+      },
+      {
+        "type": "file",
+        "value": "images/env-select.png"
+      },
+      {
+        "type": "file",
+        "value": "images/function_deploy.png"
+      },
+      {
+        "type": "file",
+        "value": "images/scf-enter.png"
+      },
+      {
+        "type": "file",
+        "value": "images/arrow.svg"
+      },
+      {
+        "type": "file",
+        "value": "images/copy.svg"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/avatar.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/business-active.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/business.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/copy.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/customer-service.svg"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/examples-active.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/examples.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/goods-active.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/goods.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/home-active.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/home.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/question.svg"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/setting.svg"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/share.svg"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/usercenter-active.png"
+      },
+      {
+        "type": "file",
+        "value": "images/icons/usercenter.png"
+      }
+    ],
     "include": []
   },
   "editorSetting": {

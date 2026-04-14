@@ -54,39 +54,6 @@
   padding-top: 8rpx;
 }
 
-.budget-card {
-  margin-bottom: 0;
-}
-
-.budget-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
-}
-
-.budget-meta {
-  flex: 1;
-  min-width: 0;
-}
-
-.budget-label {
-  font-size: 24rpx;
-  color: #6a768f;
-}
-
-.budget-value {
-  margin-top: 12rpx;
-  font-size: 40rpx;
-  font-weight: 700;
-  color: #1b2232;
-  letter-spacing: -0.5rpx;
-}
-
-.budget-tip {
-  margin-top: 28rpx;
-}
-
 /* 卡片内操作：统一小胶囊高度，与画稿比例一致 */
 .btn-pill {
   margin: 0;

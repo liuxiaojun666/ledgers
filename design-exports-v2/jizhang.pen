@@ -6052,6 +6052,87 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "pM73x",
+      "x": 420,
+      "y": 0,
+      "name": "01c-单账本多账本引导横条",
+      "clip": true,
+      "width": 358,
+      "height": 120,
+      "fill": "#FFFFFF",
+      "cornerRadius": 16,
+      "stroke": {
+        "align": "inside",
+        "thickness": 1,
+        "fill": "#E5E5E5"
+      },
+      "layout": "horizontal",
+      "padding": 16,
+      "gap": 12,
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "qN8d2",
+          "name": "ban-left",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 6,
+          "children": [
+            {
+              "type": "text",
+              "id": "rT4m1",
+              "name": "ban-title",
+              "fill": "#1A1A1A",
+              "content": "多账本，账目更清晰",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "sK9p0",
+              "name": "ban-desc",
+              "fill": "#666666",
+              "content": "用不同账本区分家庭、旅行、项目等场景，互不干扰。点这里新建账本。",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "tL2v9",
+          "name": "ban-cta",
+          "fill": "rgba(0, 102, 255, 0.08)",
+          "cornerRadius": 9999,
+          "stroke": {
+            "align": "inside",
+            "thickness": 1,
+            "fill": "rgba(0, 102, 255, 0.25)"
+          },
+          "padding": [
+            8,
+            14
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "uM5w8",
+              "name": "ban-cta-t",
+              "fill": "#0066FF",
+              "content": "+ 新建",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "600"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -1,145 +1,78 @@
 <view class="page">
   <view wx:if="{{loading}}" class="hint">加载中…</view>
-
   <block wx:else>
     <view wx:if="{{status === 'completed'}}" class="done-tip">该定时为一次性任务且已执行完毕，可删除后重新创建。</view>
-
-    <view class="card form">
-      <view class="field row">
-        <text class="label">账本</text>
-        <picker
-          mode="selector"
-          range="{{ledgerNames}}"
-          value="{{ledgerIndex}}"
-          bindchange="onLedgerChange"
-          disabled="{{status === 'completed'}}"
-        >
-          <view class="picker-value">{{ledgerNames[ledgerIndex]}}</view>
-        </picker>
+    <view class="hero-card">
+      <view class="hero-main">快速定时</view>
+      <view class="hero-sub">一键创建自动记账</view>
+      <image class="hero-image" src="../../images/LmtpX.png" mode="aspectFill" />
+    </view>
+    <view class="flow-tabs">
+      <view class="flow-tab {{flowIndex === 0 ? 'active' : ''}} {{status === 'completed' ? 'disabled' : ''}}" data-index="0" bindtap="onFlowTabTap">
+        支出
       </view>
-
-      <view class="field">
-        <text class="label">金额（元）</text>
-        <input
-          class="input"
-          type="digit"
-          placeholder="例如 18.50"
-          value="{{amountInput}}"
-          bindinput="onAmountInput"
-          disabled="{{status === 'completed'}}"
-        />
+      <view class="flow-tab {{flowIndex === 1 ? 'active' : ''}} {{status === 'completed' ? 'disabled' : ''}}" data-index="1" bindtap="onFlowTabTap">
+        收入
       </view>
-
-      <view class="field row">
-        <text class="label">类型</text>
-        <picker
-          mode="selector"
-          range="{{flowLabels}}"
-          value="{{flowIndex}}"
-          bindchange="onFlowChange"
-          disabled="{{status === 'completed'}}"
-        >
-          <view class="picker-value">{{flowLabels[flowIndex]}}</view>
-        </picker>
+    </view>
+    <view class="amount-card">
+      <view class="amount-label">金额</view>
+      <view class="amount-input-row">
+        <text class="amount-prefix">¥</text>
+        <input class="amount-input" type="digit" placeholder="0.00" value="{{amountInput}}" bindinput="onAmountInput" disabled="{{status === 'completed'}}" />
       </view>
-
-      <view class="field row">
-        <text class="label">分类</text>
-        <picker
-          mode="selector"
-          range="{{categories}}"
-          value="{{categoryIndex}}"
-          bindchange="onCategoryChange"
-          disabled="{{status === 'completed'}}"
-        >
-          <view class="picker-value">{{categories[categoryIndex]}}</view>
-        </picker>
+    </view>
+    <picker mode="selector" range="{{ledgerNames}}" value="{{ledgerIndex}}" bindchange="onLedgerChange" disabled="{{status === 'completed'}}">
+      <view class="field-row">
+        <text class="field-label">账本</text>
+        <view class="field-value">{{ledgerNames[ledgerIndex]}}</view>
       </view>
-
-      <view class="field">
-        <text class="label">备注（可选）</text>
-        <input
-          class="input"
-          placeholder="如：房租"
-          value="{{note}}"
-          bindinput="onNoteInput"
-          disabled="{{status === 'completed'}}"
-        />
+    </picker>
+    <picker mode="selector" range="{{categories}}" value="{{categoryIndex}}" bindchange="onCategoryChange" disabled="{{status === 'completed'}}">
+      <view class="field-row">
+        <text class="field-label">分类</text>
+        <view class="field-value">{{categories[categoryIndex]}}</view>
       </view>
-
-      <view class="field row">
-        <text class="label">重复</text>
-        <picker
-          mode="selector"
-          range="{{recurrenceLabels}}"
-          value="{{recurrenceIndex}}"
-          bindchange="onRecurrenceChange"
-          disabled="{{status === 'completed'}}"
-        >
-          <view class="picker-value">{{recurrenceLabels[recurrenceIndex]}}</view>
-        </picker>
+    </picker>
+    <picker mode="selector" range="{{recurrenceLabels}}" value="{{recurrenceIndex}}" bindchange="onRecurrenceChange" disabled="{{status === 'completed'}}">
+      <view class="field-row">
+        <text class="field-label">重复</text>
+        <view class="field-value">{{recurrenceLabels[recurrenceIndex]}}</view>
       </view>
-
-      <view class="field row" wx:if="{{recurrenceIndex === 0}}">
-        <text class="label">执行日期</text>
-        <picker
-          mode="date"
-          value="{{onceDate}}"
-          bindchange="onOnceDateChange"
-          disabled="{{status === 'completed'}}"
-        >
-          <view class="picker-value">{{onceDate}}</view>
-        </picker>
+    </picker>
+    <picker wx:if="{{recurrenceIndex === 0}}" mode="date" value="{{onceDate}}" bindchange="onOnceDateChange" disabled="{{status === 'completed'}}">
+      <view class="field-row">
+        <text class="field-label">执行日期</text>
+        <view class="field-value">{{onceDate}}</view>
       </view>
-
-      <view class="field row" wx:if="{{recurrenceIndex === 2}}">
-        <text class="label">星期</text>
-        <picker
-          mode="selector"
-          range="{{weekdayLabels}}"
-          value="{{weekdayIndex}}"
-          bindchange="onWeekdayChange"
-          disabled="{{status === 'completed'}}"
-        >
-          <view class="picker-value">{{weekdayLabels[weekdayIndex]}}</view>
-        </picker>
+    </picker>
+    <picker wx:if="{{recurrenceIndex === 2}}" mode="selector" range="{{weekdayLabels}}" value="{{weekdayIndex}}" bindchange="onWeekdayChange" disabled="{{status === 'completed'}}">
+      <view class="field-row">
+        <text class="field-label">星期</text>
+        <view class="field-value">{{weekdayLabels[weekdayIndex]}}</view>
       </view>
-
-      <view class="field row" wx:if="{{recurrenceIndex === 3}}">
-        <text class="label">每月几号</text>
-        <picker
-          mode="selector"
-          range="{{monthDayLabels}}"
-          value="{{monthDayIndex}}"
-          bindchange="onMonthDayChange"
-          disabled="{{status === 'completed'}}"
-        >
-          <view class="picker-value">{{monthDayLabels[monthDayIndex]}}</view>
-        </picker>
+    </picker>
+    <picker wx:if="{{recurrenceIndex === 3}}" mode="selector" range="{{monthDayLabels}}" value="{{monthDayIndex}}" bindchange="onMonthDayChange" disabled="{{status === 'completed'}}">
+      <view class="field-row">
+        <text class="field-label">每月几号</text>
+        <view class="field-value">{{monthDayLabels[monthDayIndex]}}</view>
       </view>
-
-      <view class="field row" wx:if="{{mode === 'edit'}}">
-        <text class="label">启用</text>
-        <switch checked="{{enabled}}" bindchange="onEnabledChange" disabled="{{status === 'completed'}}" />
-      </view>
-
-      <view class="tip">执行日以北京时间为准，精确到日期（每天凌晨批量检查）；每月重复仅支持 1～28 日。</view>
-
-      <button
-        class="btn-primary"
-        bindtap="onSave"
-        loading="{{saving}}"
-        disabled="{{status === 'completed'}}"
-      >
+    </picker>
+    <view class="note-card">
+      <text class="field-label">备注（可选）</text>
+      <input class="note-input" placeholder="如：房租" value="{{note}}" bindinput="onNoteInput" disabled="{{status === 'completed'}}" />
+    </view>
+    <view class="field-row" wx:if="{{mode === 'edit'}}">
+      <text class="field-label">启用</text>
+      <switch checked="{{enabled}}" bindchange="onEnabledChange" disabled="{{status === 'completed'}}" />
+    </view>
+    <view class="tip">执行日以北京时间为准，精确到日期（每天凌晨批量检查）；每月重复仅支持 1～28 日。</view>
+    <button wx:if="{{mode === 'edit'}}" class="btn-danger" bindtap="onDelete" loading="{{deleting}}">
+      删除定时
+    </button>
+    <view class="footer-actions">
+      <button class="btn-primary" bindtap="onSave" loading="{{saving}}" disabled="{{status === 'completed'}}">
         {{mode === "edit" ? "保存" : "创建"}}
-      </button>
-      <button
-        wx:if="{{mode === 'edit'}}"
-        class="btn-danger"
-        bindtap="onDelete"
-        loading="{{deleting}}"
-      >
-        删除
       </button>
     </view>
   </block>

@@ -2,33 +2,53 @@
   <view wx:if="{{loading}}" class="hint">加载中…</view>
 
   <block wx:else>
-    <view class="tip">添加/删除会同步到您参与的全部账本。每账本最多 24 个分类，名称最多 16 字；至少保留 1 个。若某账本仅剩该分类则无法删除。删除后新记账需改用其他分类。</view>
-
-    <view class="add card">
-      <input
-        class="input"
-        placeholder="输入新分类名称"
-        maxlength="16"
-        value="{{newName}}"
-        bindinput="onNewName"
-      />
-      <button class="btn-primary" bindtap="add" loading="{{saving}}">添加分类</button>
+    <view class="header">
+      <view class="title">管理分类</view>
+      <view class="sub">分类会同步到您参与的全部账本</view>
     </view>
 
-    <view class="section-title">当前分类</view>
-    <view wx:if="{{!categories.length}}" class="hint">暂无分类</view>
-    <view wx:else class="list">
-      <view class="row card" wx:for="{{categories}}" wx:key="*this">
-        <text class="name">{{item}}</text>
-        <button
-          class="btn-del"
-          size="mini"
-          type="warn"
-          data-name="{{item}}"
-          bindtap="remove"
-        >
-          删除
+    <view class="hero-card">
+      <view class="hero-title">分类模板库</view>
+      <view class="hero-lead">建议优先创建常用分类，记账时录入更快、统计更清晰。</view>
+      <view class="hero-meta">
+        <text class="hero-meta-key">当前数量</text>
+        <text class="hero-meta-value">{{categories.length}} / 24</text>
+      </view>
+    </view>
+
+    <view class="section section-tight">
+      <view class="card">
+        <view class="label">新增分类</view>
+        <view class="tip">名称最多 16 个字；至少保留 1 个分类。</view>
+        <input
+          class="input"
+          placeholder="例如：餐饮、房租、交通"
+          maxlength="16"
+          value="{{newName}}"
+          bindinput="onNewName"
+        />
+        <button class="btn-primary" bindtap="add" loading="{{saving}}" disabled="{{saving || !newName}}">
+          添加分类
         </button>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">当前分类（{{categories.length}}）</view>
+      <view wx:if="{{!categories.length}}" class="card card-empty">
+        <image class="empty-image" src="/images/LmtpX.png" mode="aspectFit" />
+        <view class="empty">暂无分类，先新增一个常用分类吧</view>
+      </view>
+      <view wx:else class="card list-card">
+        <view class="row" wx:for="{{categories}}" wx:key="*this">
+          <view class="name-wrap">
+            <text class="name">{{item}}</text>
+            <text class="name-sub">可用于新增流水</text>
+          </view>
+          <button class="btn-pill btn-pill-danger" data-name="{{item}}" bindtap="remove">
+            删除
+          </button>
+        </view>
       </view>
     </view>
   </block>

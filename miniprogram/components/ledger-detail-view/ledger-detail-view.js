@@ -88,7 +88,6 @@ Component({
             monthlyBudgetCents: null,
             showBudgetStrip: false,
             showBudgetUnsetHint: false,
-            budgetUnsetHintText: "",
             budgetBarWidth: 0,
             budgetFootText: "",
             budgetYuanDisplay: "",
@@ -122,7 +121,6 @@ Component({
     monthlyBudgetCents: null,
     showBudgetStrip: false,
     showBudgetUnsetHint: false,
-    budgetUnsetHintText: "",
     budgetBarWidth: 0,
     budgetFootText: "",
     budgetYuanDisplay: "",
@@ -149,9 +147,13 @@ Component({
     show() {
       const id = (this.properties.ledgerId || "").trim();
       if (id && !this.data.loading && !this.data.pendingApproval) {
+        const refreshCollaborators = this.data.isCreator
+          ? this.fetchCollaboratorPanel().catch(() => {})
+          : Promise.resolve();
         this.refreshBudgetMeta()
           .catch(() => {})
-          .then(() => this.fetchTransactionsOnce().catch(() => {}));
+          .then(() => this.fetchTransactionsOnce().catch(() => {}))
+          .then(() => refreshCollaborators);
       }
     },
   },
@@ -213,7 +215,6 @@ Component({
               monthlyBudgetCents: null,
               showBudgetStrip: false,
               showBudgetUnsetHint: false,
-              budgetUnsetHintText: "",
               budgetBarWidth: 0,
               budgetFootText: "",
               budgetYuanDisplay: "",
@@ -438,13 +439,9 @@ Component({
     applyBudgetStrip(expenseCents) {
       const budget = this.data.monthlyBudgetCents;
       if (!budget || budget <= 0) {
-        const isCreator = !!this.data.isCreator;
         this.setData({
           showBudgetStrip: false,
           showBudgetUnsetHint: !!this._currentLedgerId && !this.data.pendingApproval,
-          budgetUnsetHintText: isCreator
-            ? "尚未设置本月支出预算，设置后可在本页查看使用进度。"
-            : "本账本尚未设置月度支出预算，可联系创建者在「管理」中设置。",
           budgetBarWidth: 0,
           budgetFootText: "",
           budgetYuanDisplay: "",
@@ -511,6 +508,32 @@ Component({
       }
       wx.navigateTo({
         url: `/pages/ledger-manage/ledger-manage?ledgerId=${encodeURIComponent(
+          ledgerId
+        )}&name=${encodeURIComponent(ledgerName)}`,
+      });
+    },
+
+    goLedgerBudget() {
+      const ledgerId = (this.properties.ledgerId || "").trim();
+      const ledgerName = String(this.data.ledgerName || "").trim();
+      if (!ledgerId) {
+        return;
+      }
+      wx.navigateTo({
+        url: `/pages/ledger-budget/ledger-budget?ledgerId=${encodeURIComponent(
+          ledgerId
+        )}&name=${encodeURIComponent(ledgerName)}`,
+      });
+    },
+
+    goPendingPage() {
+      const ledgerId = (this.properties.ledgerId || "").trim();
+      const ledgerName = String(this.data.ledgerName || "").trim();
+      if (!ledgerId) {
+        return;
+      }
+      wx.navigateTo({
+        url: `/pages/ledger-pending/ledger-pending?ledgerId=${encodeURIComponent(
           ledgerId
         )}&name=${encodeURIComponent(ledgerName)}`,
       });

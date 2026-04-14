@@ -3,11 +3,15 @@
   <block wx:else>
     <view wx:if="{{!ledgers.length}}" class="empty">暂无可统计账本，请先在「账本」创建或加入账本。</view>
     <block wx:else>
-      <view class="page-title-row">
-        <view class="page-title">收支与排行</view>
-      </view>
-      <view class="ledger-picker-wrap">
-        <picker mode="selector" range="{{ledgerNameList}}" value="{{ledgerIndex}}" bindchange="onLedgerChange">
+      <view wx:if="{{ledgers.length > 1}}" class="ledger-picker-wrap">
+        <picker
+          mode="selector"
+          range="{{ledgerNameList}}"
+          value="{{ledgerIndex}}"
+          bindtap="onLedgerPickerOpen"
+          bindchange="onLedgerChange"
+          bindcancel="onLedgerPickerClose"
+        >
           <view class="ledger-picker-label">
             <text class="ledger-picker-text">统计账本：{{ledgerName || "请选择账本"}}</text>
             <text class="ledger-picker-caret">▼</text>
@@ -29,9 +33,9 @@
         <view class="period-section-title">
           选择{{range === 'week' ? '周' : range === 'month' ? '月' : '年'}}度（共 {{periodChipCount}} 期）
         </view>
-        <scroll-view class="period-chip-scroll" scroll-x="{{true}}" show-scrollbar="{{false}}">
+        <scroll-view class="period-chip-scroll" scroll-x="{{true}}" scroll-into-view="{{periodScrollIntoView}}" show-scrollbar="{{false}}">
           <view class="period-chip-row">
-            <view wx:for="{{periodChips}}" wx:key="key" class="period-chip {{item.active ? 'period-chip-active' : ''}}" data-kind="{{item.kind}}" data-year="{{item.year}}" data-month="{{item.month}}" data-monday="{{item.weekMondayYmd}}" bindtap="onPeriodChipTap">
+            <view wx:for="{{periodChips}}" wx:key="key" id="period-chip-{{item.key}}" class="period-chip {{item.active ? 'period-chip-active' : ''}}" data-kind="{{item.kind}}" data-year="{{item.year}}" data-month="{{item.month}}" data-monday="{{item.weekMondayYmd}}" bindtap="onPeriodChipTap">
               {{item.label}}
             </view>
           </view>

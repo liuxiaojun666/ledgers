@@ -2,18 +2,21 @@
   <view wx:if="{{loading}}" class="hint">加载中…</view>
 
   <block wx:else>
-    <view class="header-row">
-      <view class="title">定时记账</view>
-      <view class="btn-add-inline" bindtap="onAdd">+ 新建</view>
-    </view>
-
-    <view class="hero-card">
+    <view class="hero-card card-tap" bindtap="onAdd">
       <view class="hero-main">自动记账</view>
-      <view class="hero-sub">省心不漏账</view>
+      <view class="hero-sub">点击这里，新建定时任务</view>
       <view class="hero-icon">🗓</view>
     </view>
 
-    <view wx:if="{{!list.length}}" class="empty">暂无定时任务，可添加「一次性」或按日/周/月重复。</view>
+    <view wx:if="{{!list.length}}" class="empty-wrap">
+      <image
+        class="empty-illu"
+        src="../../images/LmtpX.png"
+        mode="widthFix"
+      />
+      <view class="empty-title">暂无定时任务</view>
+      <view class="empty-desc">还没有任务，先从上方图片进入新建吧</view>
+    </view>
 
     <view
       wx:for="{{list}}"
