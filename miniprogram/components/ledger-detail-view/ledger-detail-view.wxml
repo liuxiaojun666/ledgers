@@ -1,5 +1,8 @@
 <view class="ledger-detail-view {{!loading && !pendingApproval && !recordInline ? 'ledger-detail-view--fab' : ''}}">
-  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <view wx:if="{{loading}}" class="detail-full-loading">
+    <image class="detail-loading-illu" src="../../images/ledger-detail-loading.png" mode="widthFix" />
+    <view class="detail-loading-text">加载中…</view>
+  </view>
   <block wx:else>
     <view wx:if="{{pendingApproval}}" class="pending-box card">
       <view class="pending-title">等待创建人审批</view>
@@ -58,7 +61,11 @@
           + 记一笔
         </button>
       </view>
-      <view wx:if="{{!transactions.length}}" class="empty-wrap">
+      <view wx:if="{{txSyncing && !transactions.length}}" class="tx-loading-wrap">
+        <image class="tx-loading-illu" src="../../images/ledger-detail-loading.png" mode="widthFix" />
+        <view class="tx-loading-text">加载流水中…</view>
+      </view>
+      <view wx:elif="{{!transactions.length}}" class="empty-wrap">
         <image class="empty-illu" src="../../images/LmtpX.png" mode="widthFix" />
         <view class="empty-title">暂无记录</view>
         <view class="empty-desc">快去记一笔吧。</view>

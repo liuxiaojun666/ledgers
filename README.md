@@ -90,10 +90,12 @@
 
 - `pages/ledgers/ledgers`
   - `listLedgers`、`createLedger`（非加载态始终展示多账本介绍 banner）
+  - 本地快照：`wx.setStorageSync('ledgers_list_snap_v1', { list })` 缓存上次 `listLedgers` 结果；`refresh` 时若无缓存则全屏加载，有缓存则先渲染列表再等云函数返回更新（不提前消费 `showBillLedgerListOnce`）。
 - `pages/ledger-manage/ledger-manage`
   - `getLedger`、`createLedgerInvite`、`listLedgerCollaborators`、`updateLedgerName`、`updateLedgerMonthlyBudget`、`reviewJoinRequest`、`removeCollaborator`、`deleteLedger`
 - `components/ledger-detail-view`
   - `enterLedger`、`createLedgerInvite`、`listLedgerCollaborators`、`getLedger`、`listTransactions`
+  - 本地快照：`wx.setStorageSync('ledger_detail_snap:${ledgerId}', …)` 写入 `listTransactions` 的原始流水数组及账本元信息；下次进入同一账本先展示缓存，接口返回后再刷新。首屏 `enterLedger` 完成至流水返回前展示 `miniprogram/images/ledger-detail-loading.png` 加载插图（源稿：`design-exports-v2/jizhang.pen` 画板「插画-加载中-账本」），避免误显示「暂无记录」空态插画。
 - `pages/ledger-tx/ledger-tx` / `components/ledger-tx-form`
   - `listCategories`、`getTransaction`、`addTransaction`、`updateTransaction`、`deleteTransaction`、`addLedgerCategory`
 - `pages/ledger-categories/ledger-categories`
@@ -122,7 +124,7 @@
 - 改统计口径与展示：先改云函数，再改 `pages/ledger-analytics/*`
 - 改账本入口交互：`pages/ledgers/ledgers.js`、`components/ledger-detail-view/*`
 - 改管理分类页视觉：`pages/ledger-categories/*`，与 `pages/ledger-budget` / `pages/ledger-pending` 保持同一套 Pencil 蓝白卡片与胶囊按钮风格
-- 改空状态视觉：优先复用已有插画资源；`components/ledger-detail-view` 的“最近流水空状态”与 `pages/ledger-schedules` 共用 `miniprogram/images/LmtpX.png`
+- 改空状态视觉：优先复用已有插画资源；`components/ledger-detail-view` 的“最近流水空状态”与 `pages/ledger-schedules` 共用 `miniprogram/images/LmtpX.png`；加载/同步流水时用 `miniprogram/images/ledger-detail-loading.png`（勿与空态混淆）
 - 改 Tab 行为：`miniprogram/custom-tab-bar/*` 与各 Tab 页 `getTabBar()` 调用
 
 ## 提测前自检清单

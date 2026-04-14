@@ -1,12 +1,6 @@
 <view class="page">
   <view wx:if="{{loading}}" class="hint">加载中…</view>
-
   <block wx:else>
-    <view class="header">
-      <view class="title">管理分类</view>
-      <view class="sub">分类会同步到您参与的全部账本</view>
-    </view>
-
     <view class="hero-card">
       <view class="hero-title">分类模板库</view>
       <view class="hero-lead">建议优先创建常用分类，记账时录入更快、统计更清晰。</view>
@@ -15,24 +9,16 @@
         <text class="hero-meta-value">{{categories.length}} / 24</text>
       </view>
     </view>
-
     <view class="section section-tight">
       <view class="card">
         <view class="label">新增分类</view>
         <view class="tip">名称最多 16 个字；至少保留 1 个分类。</view>
-        <input
-          class="input"
-          placeholder="例如：餐饮、房租、交通"
-          maxlength="16"
-          value="{{newName}}"
-          bindinput="onNewName"
-        />
+        <input class="input" placeholder="例如：餐饮、房租、交通" maxlength="16" value="{{newName}}" bindinput="onNewName" />
         <button class="btn-primary" bindtap="add" loading="{{saving}}" disabled="{{saving || !newName}}">
           添加分类
         </button>
       </view>
     </view>
-
     <view class="section">
       <view class="section-title">当前分类（{{categories.length}}）</view>
       <view wx:if="{{!categories.length}}" class="card card-empty">
@@ -45,9 +31,7 @@
             <text class="name">{{item}}</text>
             <text class="name-sub">可用于新增流水</text>
           </view>
-          <button class="btn-pill btn-pill-danger" data-name="{{item}}" bindtap="remove">
-            删除
-          </button>
+          <button class="btn-pill btn-pill-danger" data-name="{{item}}" bindtap="remove">删除</button>
         </view>
       </view>
     </view>

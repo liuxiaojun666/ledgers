@@ -47,6 +47,7 @@
 - **月支出预算**：`ledgers.monthlyBudgetCents`（可选，分，自然月支出上限）；由创建者在账本管理里维护，云函数 `updateLedgerMonthlyBudget`。
 - **流水改删权限**（云函数侧）：`getTransaction` / `updateTransaction` / `deleteTransaction` 仅允许**该条流水的记录人**；若历史数据无 `createdByOpenid`，仅**账本创建者**可改删（见 `index.js` 顶部注释）。
 - **账本 Tab 列表优先**：`globalData.showBillLedgerListOnce` 为 `true` 时，下次 `pages/ledgers/ledgers` 的 `refresh` 会**强制展示账本列表**（即使只有一个账本也不进入内嵌详情）；标志在消费后清零。由 `ledger-detail`、`ledger-manage` 等在删账本等场景内置位。
+- **账本列表缓存**：`pages/ledgers/ledgers.js` 的 `refresh` 使用 `ledgers_list_snap_v1` 本地键先展示上一屏 `listLedgers` 数据，接口成功后再覆盖并写回缓存；应用缓存时**不**清零 `showBillLedgerListOnce`（与云函数返回后的消费逻辑一致）。
 - **账本页多账本引导条**：`pages/ledgers/ledgers` 的“多账本，账目更清晰”banner 在**非加载态始终展示**（单账本内嵌详情 / 多账本列表 / 空账本均显示），点击统一走 `createLedger`。
 - **统计账本记忆**：`pages/ledger-analytics` 通过本地缓存 `lastAnalyzeLedgerId` 记住用户上次选择的统计账本；若该账本已删除或无权限，会自动回退到当前可访问账本，避免报错。
 - **用户资料设置口径**：`pages/mine` 不依赖 `getUserProfile` 直接同步真实微信资料；点击圆头像触发 `chooseAvatar`，点击昵称触发弹窗输入，最终通过 `updateMyProfile` 保存。
@@ -101,7 +102,7 @@
 - 新增/修改业务接口：改 `ledgerFunctions/index.js` 对应 `case`，并同步前端 `wx.cloud.callFunction` 的 `type` 与入参。
 - 调整统计展示或口径：先改云函数聚合返回，再改 `pages/ledger-analytics/*` 与 `pages/ledger-analytics-drill/*`。
 - 调整账本页交互：优先看 `pages/ledgers/ledgers.js`、`components/ledger-detail-view/*`、`globalData.showBillLedgerListOnce`。
-- 调整空状态插画：优先复用既有素材；`ledger-detail-view` 的“最近流水空状态”与 `pages/ledger-schedules` 统一使用 `miniprogram/images/LmtpX.png`。
+- 调整空状态插画：优先复用既有素材；`ledger-detail-view` 的“最近流水空状态”与 `pages/ledger-schedules` 统一使用 `miniprogram/images/LmtpX.png`；加载与「流水同步中」使用 `miniprogram/images/ledger-detail-loading.png`（Pencil 稿：`design-exports-v2/jizhang.pen` /「插画-加载中-账本」），且详情组件对上一屏有 `wx.setStorage` 快照（键 `ledger_detail_snap:${ledgerId}`），再次进入先渲染缓存再等 `listTransactions`。
 - 调整定时记账规则：改 `scheduleLib.js` + `config.json`（确认 Cron 与 nextRunAt 语义一致）。
 
 ## 改动自检清单（给 Cursor）

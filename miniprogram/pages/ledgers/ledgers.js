@@ -1,3 +1,28 @@
+const LEDGERS_LIST_CACHE_KEY = "ledgers_list_snap_v1";
+
+function readLedgersListCache() {
+  try {
+    const v = wx.getStorageSync(LEDGERS_LIST_CACHE_KEY);
+    if (v && Array.isArray(v.list)) {
+      return v.list;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return null;
+}
+
+function writeLedgersListCache(list) {
+  try {
+    wx.setStorageSync(LEDGERS_LIST_CACHE_KEY, {
+      savedAt: Date.now(),
+      list: Array.isArray(list) ? list : [],
+    });
+  } catch (e) {
+    // ignore quota errors
+  }
+}
+
 Page({
   data: {
     list: [],
@@ -47,7 +72,32 @@ Page({
       });
       return;
     }
-    this.setData({ loading: true });
+
+    const cached = readLedgersListCache();
+    if (cached) {
+      const g0 = getApp();
+      const showListOnce0 = !!g0.globalData.showBillLedgerListOnce;
+      const showDetailView0 = cached.length === 1 && !showListOnce0;
+      const embeddedLedgerId0 =
+        showDetailView0 && cached[0] ? cached[0]._id : "";
+      this.setData({
+        list: cached,
+        activeFilter: "all",
+        showDetailView: showDetailView0,
+        embeddedLedgerId: embeddedLedgerId0,
+        shareLedgerName: "",
+        shareLedgerId: "",
+        shareInviteCode: "",
+        loading: false,
+      });
+      this.syncDisplayList();
+      if (showDetailView0 && embeddedLedgerId0) {
+        wx.showShareMenu({ menus: ["shareAppMessage"] });
+      }
+    } else {
+      this.setData({ loading: true });
+    }
+
     wx.cloud
       .callFunction({
         name: "ledgerFunctions",
@@ -60,6 +110,7 @@ Page({
           return;
         }
         const list = r.list || [];
+        writeLedgersListCache(list);
         const g = getApp();
         const showListOnce = !!g.globalData.showBillLedgerListOnce;
         if (showListOnce) {

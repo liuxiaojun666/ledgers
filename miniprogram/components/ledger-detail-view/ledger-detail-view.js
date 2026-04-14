@@ -52,6 +52,10 @@ function yuanWithCurrency(signedYuan) {
   return `¥${s}`;
 }
 
+function detailCacheKey(ledgerId) {
+  return `ledger_detail_snap:${ledgerId}`;
+}
+
 function formatTime(d) {
   const dt = d instanceof Date ? d : new Date(d);
   if (Number.isNaN(dt.getTime())) {
@@ -81,6 +85,7 @@ Component({
           this._currentLedgerId = "";
           this.setData({
             loading: false,
+            txSyncing: false,
             ledgerName: "",
             transactions: [],
             monthIncomeYuan: "0.00",
@@ -99,6 +104,57 @@ Component({
           return;
         }
         this._currentLedgerId = s;
+        this._hydratedFromCache = false;
+        let cacheHit = null;
+        try {
+          cacheHit = wx.getStorageSync(detailCacheKey(s));
+        } catch (e) {
+          cacheHit = null;
+        }
+        if (
+          cacheHit &&
+          cacheHit.ledgerId === s &&
+          Array.isArray(cacheHit.rawList)
+        ) {
+          this._hydratedFromCache = true;
+          const rawB = cacheHit.monthlyBudgetCents;
+          const monthlyBudgetCents =
+            rawB != null && Number.isFinite(Number(rawB)) && Number(rawB) > 0
+              ? Math.floor(Number(rawB))
+              : null;
+          this._lastTxDocsForBudget = cacheHit.rawList;
+          this.setData({
+            loading: false,
+            txSyncing: true,
+            ledgerName: String(cacheHit.ledgerName || ""),
+            isCreator: !!cacheHit.isCreator,
+            monthlyBudgetCents,
+            pendingApproval: false,
+            pendingApprovalMsg: "",
+            collaborators: [],
+            pendingRequests: [],
+            shareInviteCode: "",
+            shareInviteExpireText: "",
+            shareInviteExpireAtMs: 0,
+          });
+          this._applyTransactionsFromServerDocs(cacheHit.rawList);
+        } else {
+          this.setData({
+            loading: true,
+            txSyncing: true,
+            ledgerName: "",
+            transactions: [],
+            monthIncomeYuan: "0.00",
+            monthExpenseYuan: "0.00",
+            monthlyBudgetCents: null,
+            showBudgetStrip: false,
+            showBudgetUnsetHint: false,
+            budgetBarWidth: 0,
+            budgetFootText: "",
+            budgetYuanDisplay: "",
+            budgetFillClass: "",
+          });
+        }
         this.bootstrap(s);
       },
     },
@@ -135,6 +191,8 @@ Component({
     shareInviteCode: "",
     shareInviteExpireText: "",
     shareInviteExpireAtMs: 0,
+    /** 最近流水与云端对齐中；无缓存且列表为空时不展示「暂无记录」插图 */
+    txSyncing: false,
   },
 
   lifetimes: {
@@ -159,6 +217,71 @@ Component({
   },
 
   methods: {
+    _clearLedgerDetailCache(ledgerId) {
+      const id = ledgerId == null ? "" : String(ledgerId).trim();
+      if (!id) {
+        return;
+      }
+      try {
+        wx.removeStorageSync(detailCacheKey(id));
+      } catch (e) {
+        // ignore
+      }
+    },
+
+    _writeLedgerDetailCache(ledgerId, rawListSorted) {
+      const id = ledgerId == null ? "" : String(ledgerId).trim();
+      if (!id || !Array.isArray(rawListSorted)) {
+        return;
+      }
+      try {
+        wx.setStorageSync(detailCacheKey(id), {
+          ledgerId: id,
+          savedAt: Date.now(),
+          ledgerName: String(this.data.ledgerName || ""),
+          isCreator: !!this.data.isCreator,
+          monthlyBudgetCents: this.data.monthlyBudgetCents,
+          rawList: rawListSorted,
+        });
+      } catch (e) {
+        // ignore quota / serialize errors
+      }
+    },
+
+    _applyTransactionsFromServerDocs(docs) {
+      const docsSorted = sortTx(docs || []);
+      const sorted = docsSorted.map((d) => this.decorateTx(d));
+      const now = new Date();
+      const cy = now.getFullYear();
+      const cm = now.getMonth();
+      let incomeCents = 0;
+      let expenseCents = 0;
+      docsSorted.forEach((tx) => {
+        const t = txOccurredAt(tx);
+        if (!t || Number.isNaN(t.getTime())) {
+          return;
+        }
+        if (t.getFullYear() !== cy || t.getMonth() !== cm) {
+          return;
+        }
+        const cents = Math.abs(Number(tx.amountCents) || 0);
+        if (!cents) {
+          return;
+        }
+        if (normalizeTxFlow(tx) === "income") {
+          incomeCents += cents;
+        } else {
+          expenseCents += cents;
+        }
+      });
+      this.setData({
+        transactions: sorted,
+        monthIncomeYuan: (incomeCents / 100).toFixed(2),
+        monthExpenseYuan: (expenseCents / 100).toFixed(2),
+      });
+      this.applyBudgetStrip(expenseCents);
+    },
+
     decorateTx(doc) {
       const flow = normalizeTxFlow(doc);
       const signed = txSignedCents(doc);
@@ -188,11 +311,13 @@ Component({
           title: "提示",
           content: "请在 miniprogram/app.js 中配置云环境 env（环境 ID）。",
         });
-        this.setData({ loading: false });
+        this.setData({ loading: false, txSyncing: false });
         return;
       }
 
-      this.setData({ loading: true });
+      if (!this._hydratedFromCache) {
+        this.setData({ loading: true });
+      }
       try {
         const res = await wx.cloud.callFunction({
           name: "ledgerFunctions",
@@ -204,9 +329,11 @@ Component({
         });
         const r = res.result || {};
         if (!r.success) {
+          this._clearLedgerDetailCache(ledgerId);
           if (r.code === "PENDING_APPROVAL") {
             this.setData({
               loading: false,
+              txSyncing: false,
               pendingApproval: true,
               pendingApprovalMsg: r.errMsg || "已提交申请，请等待创建人同意",
               transactions: [],
@@ -229,7 +356,7 @@ Component({
           }
           this._currentLedgerId = "";
           wx.showToast({ title: r.errMsg || "无法打开账本", icon: "none" });
-          this.setData({ loading: false });
+          this.setData({ loading: false, txSyncing: false });
           return;
         }
         const rawB = r.ledger && r.ledger.monthlyBudgetCents;
@@ -243,8 +370,13 @@ Component({
           monthlyBudgetCents,
           pendingApproval: false,
           pendingApprovalMsg: "",
-          loading: false,
         });
+        if (
+          this._hydratedFromCache &&
+          Array.isArray(this._lastTxDocsForBudget)
+        ) {
+          this._applyTransactionsFromServerDocs(this._lastTxDocsForBudget);
+        }
         let shareInviteCode = "";
         let shareInviteExpireText = "";
         let shareInviteExpireAtMs = 0;
@@ -272,17 +404,13 @@ Component({
           inviteExpireAtMs: shareInviteExpireAtMs,
           inviteExpireText: shareInviteExpireText,
         });
-        await this.fetchTransactionsOnce().catch((e) => {
-          const msg =
-            (e && e.message) ||
-            (e && e.errMsg) ||
-            "流水加载失败，请检查云函数与权限配置";
-          wx.showToast({ title: String(msg).slice(0, 48), icon: "none" });
-        });
+        await this.fetchTransactionsOnce();
+        this._lastTxDocsForBudget = null;
+        this.setData({ loading: false });
       } catch (e) {
         this._currentLedgerId = "";
         wx.showToast({ title: "加载失败", icon: "none" });
-        this.setData({ loading: false });
+        this.setData({ loading: false, txSyncing: false });
       }
     },
 
@@ -360,6 +488,8 @@ Component({
       if (!ledgerId) {
         return;
       }
+      this._hydratedFromCache = false;
+      this.setData({ loading: true, txSyncing: true });
       this.bootstrap(ledgerId);
     },
 
@@ -403,36 +533,20 @@ Component({
             throw new Error(r.errMsg || "加载流水失败");
           }
           const docs = sortTx(r.list || []);
-          const sorted = docs.map((d) => this.decorateTx(d));
-          const now = new Date();
-          const cy = now.getFullYear();
-          const cm = now.getMonth();
-          let incomeCents = 0;
-          let expenseCents = 0;
-          docs.forEach((tx) => {
-            const t = txOccurredAt(tx);
-            if (!t || Number.isNaN(t.getTime())) {
-              return;
-            }
-            if (t.getFullYear() !== cy || t.getMonth() !== cm) {
-              return;
-            }
-            const cents = Math.abs(Number(tx.amountCents) || 0);
-            if (!cents) {
-              return;
-            }
-            if (normalizeTxFlow(tx) === "income") {
-              incomeCents += cents;
-            } else {
-              expenseCents += cents;
-            }
-          });
-          this.setData({
-            transactions: sorted,
-            monthIncomeYuan: (incomeCents / 100).toFixed(2),
-            monthExpenseYuan: (expenseCents / 100).toFixed(2),
-          });
-          this.applyBudgetStrip(expenseCents);
+          this._applyTransactionsFromServerDocs(docs);
+          this._writeLedgerDetailCache(ledgerId, docs);
+        })
+        .catch((e) => {
+          const msg =
+            (e && e.message) ||
+            (e && e.errMsg) ||
+            "流水加载失败，请检查云函数与权限配置";
+          wx.showToast({ title: String(msg).slice(0, 48), icon: "none" });
+        })
+        .then(() => {
+          if ((this.properties.ledgerId || "").trim() === ledgerId) {
+            this.setData({ txSyncing: false });
+          }
         });
     },
 
