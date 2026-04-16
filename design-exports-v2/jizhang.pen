@@ -198,24 +198,54 @@
                   "padding": 14,
                   "children": [
                     {
-                      "type": "text",
-                      "id": "o9olh",
-                      "name": "card1t",
-                      "fill": "#1A1A1A",
-                      "content": "家庭账本",
-                      "fontFamily": "Inter",
-                      "fontSize": 18,
-                      "fontWeight": "700"
+                      "type": "frame",
+                      "id": "q7LmN2pR",
+                      "name": "card1head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "o9olh",
+                          "name": "card1t",
+                          "fill": "#1A1A1A",
+                          "content": "家庭账本",
+                          "fontFamily": "Inter",
+                          "fontSize": 18,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "icon_font",
+                          "id": "m3Kp9xQw",
+                          "name": "card1more",
+                          "width": 22,
+                          "height": 22,
+                          "iconFontName": "ellipsis",
+                          "iconFontFamily": "lucide",
+                          "fill": "#666666"
+                        }
+                      ]
                     },
                     {
                       "type": "text",
                       "id": "eZsIU",
                       "name": "card1s",
                       "fill": "#666666",
-                      "content": "本月支出 ¥3,482 · 成员 3 人",
+                      "content": "2026年4月 · 收入 ¥200.00 · 支出 ¥3,482.00",
                       "fontFamily": "Inter",
-                      "fontSize": 13,
+                      "fontSize": 12,
                       "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "n4Bz8wKx",
+                      "name": "card1m",
+                      "fill": "#666666",
+                      "content": "成员 3 人 · 我创建",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "500"
                     }
                   ]
                 },
@@ -231,24 +261,54 @@
                   "padding": 14,
                   "children": [
                     {
-                      "type": "text",
-                      "id": "4nsx1",
-                      "name": "card2t",
-                      "fill": "#1A1A1A",
-                      "content": "旅行基金",
-                      "fontFamily": "Inter",
-                      "fontSize": 18,
-                      "fontWeight": "700"
+                      "type": "frame",
+                      "id": "r8Np2kLm",
+                      "name": "card2head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "4nsx1",
+                          "name": "card2t",
+                          "fill": "#1A1A1A",
+                          "content": "旅行基金",
+                          "fontFamily": "Inter",
+                          "fontSize": 18,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "icon_font",
+                          "id": "v2Qx9mNp",
+                          "name": "card2more",
+                          "width": 22,
+                          "height": 22,
+                          "iconFontName": "ellipsis",
+                          "iconFontFamily": "lucide",
+                          "fill": "#666666"
+                        }
+                      ]
                     },
                     {
                       "type": "text",
                       "id": "wUQZr",
                       "name": "card2s",
                       "fill": "#666666",
-                      "content": "本月收入 ¥8,000 · 成员 2 人",
+                      "content": "2026年4月 · 收入 ¥8,000.00 · 支出 ¥0.00",
                       "fontFamily": "Inter",
-                      "fontSize": 13,
+                      "fontSize": 12,
                       "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "k9Jw3nRt",
+                      "name": "card2m",
+                      "fill": "#666666",
+                      "content": "成员 2 人 · 我加入",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "500"
                     }
                   ]
                 }
@@ -2436,24 +2496,54 @@
                   "padding": 14,
                   "children": [
                     {
-                      "type": "text",
-                      "id": "pD2eJ",
-                      "name": "card1t",
-                      "fill": "#1A1A1A",
-                      "content": "家庭账本",
-                      "fontFamily": "Inter",
-                      "fontSize": 18,
-                      "fontWeight": "700"
+                      "type": "frame",
+                      "id": "z2Qw8nLp",
+                      "name": "card1head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pD2eJ",
+                          "name": "card1t",
+                          "fill": "#1A1A1A",
+                          "content": "家庭账本",
+                          "fontFamily": "Inter",
+                          "fontSize": 18,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "icon_font",
+                          "id": "b4Rt7yUi",
+                          "name": "card1more",
+                          "width": 22,
+                          "height": 22,
+                          "iconFontName": "ellipsis",
+                          "iconFontFamily": "lucide",
+                          "fill": "#666666"
+                        }
+                      ]
                     },
                     {
                       "type": "text",
                       "id": "9uSbv",
                       "name": "card1s",
                       "fill": "#666666",
-                      "content": "本月支出 ¥3,482 · 成员 3 人",
+                      "content": "2026年4月 · 收入 ¥200.00 · 支出 ¥3,482.00",
                       "fontFamily": "Inter",
-                      "fontSize": 13,
+                      "fontSize": 12,
                       "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "c5As9vXo",
+                      "name": "card1m",
+                      "fill": "#666666",
+                      "content": "成员 3 人 · 我创建",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "500"
                     },
                     {
                       "type": "icon_font",
@@ -2484,24 +2574,54 @@
                   "padding": 14,
                   "children": [
                     {
-                      "type": "text",
-                      "id": "YySOM",
-                      "name": "card2t",
-                      "fill": "#1A1A1A",
-                      "content": "旅行基金",
-                      "fontFamily": "Inter",
-                      "fontSize": 18,
-                      "fontWeight": "700"
+                      "type": "frame",
+                      "id": "d6Hx2mKq",
+                      "name": "card2head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YySOM",
+                          "name": "card2t",
+                          "fill": "#1A1A1A",
+                          "content": "旅行基金",
+                          "fontFamily": "Inter",
+                          "fontSize": 18,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "icon_font",
+                          "id": "f8Jw4nRt",
+                          "name": "card2more",
+                          "width": 22,
+                          "height": 22,
+                          "iconFontName": "ellipsis",
+                          "iconFontFamily": "lucide",
+                          "fill": "#666666"
+                        }
+                      ]
                     },
                     {
                       "type": "text",
                       "id": "YE3tM",
                       "name": "card2s",
                       "fill": "#666666",
-                      "content": "本月收入 ¥8,000 · 成员 2 人",
+                      "content": "2026年4月 · 收入 ¥8,000.00 · 支出 ¥0.00",
                       "fontFamily": "Inter",
-                      "fontSize": 13,
+                      "fontSize": 12,
                       "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "g3Kx7mNp",
+                      "name": "card2m",
+                      "fill": "#666666",
+                      "content": "成员 2 人 · 我加入",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "500"
                     },
                     {
                       "type": "icon_font",
@@ -6069,9 +6189,8 @@
         "thickness": 1,
         "fill": "#E5E5E5"
       },
-      "layout": "horizontal",
-      "padding": 16,
       "gap": 12,
+      "padding": 16,
       "alignItems": "center",
       "children": [
         {
@@ -6129,6 +6248,540 @@
               "fontFamily": "Inter",
               "fontSize": 13,
               "fontWeight": "600"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "zIV9X",
+      "x": 3520,
+      "y": 0,
+      "name": "插画-暂无数据",
+      "width": 390,
+      "height": 258,
+      "fill": "#F3F7FF",
+      "cornerRadius": 24,
+      "stroke": {
+        "align": "inside",
+        "thickness": 1,
+        "fill": "#DDE8FF"
+      },
+      "layout": "vertical",
+      "padding": 24,
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "5hRv4",
+          "name": "插画主体",
+          "width": 342,
+          "height": 210,
+          "fill": {
+            "type": "image",
+            "enabled": true,
+            "url": "../miniprogram/IK88t.png",
+            "mode": "fill"
+          },
+          "cornerRadius": 20
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "DMItG",
+      "x": 3520,
+      "y": 338,
+      "name": "插画-暂无数据-记账感",
+      "width": 390,
+      "height": 300,
+      "fill": "#F3F7FF",
+      "cornerRadius": 24,
+      "stroke": {
+        "align": "inside",
+        "thickness": 1,
+        "fill": "#DDE8FF"
+      },
+      "layout": "vertical",
+      "padding": 24,
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "LmtpX",
+          "name": "记账感插画",
+          "width": 342,
+          "height": 210,
+          "fill": {
+            "type": "image",
+            "enabled": true,
+            "url": "./images/generated-1776176262089.png",
+            "mode": "fill"
+          },
+          "cornerRadius": 20
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "PpeNv",
+      "x": 0,
+      "y": 2804,
+      "name": "插画-暂无数据-记账感-原创",
+      "width": 390,
+      "height": 258,
+      "fill": "#F3F7FF",
+      "cornerRadius": 24,
+      "stroke": {
+        "align": "inside",
+        "thickness": 1,
+        "fill": "#DDE8FF"
+      },
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "4LXHG",
+          "x": 24,
+          "y": 24,
+          "name": "记账场景",
+          "clip": true,
+          "width": 342,
+          "height": 210,
+          "fill": "#EAF1FF",
+          "cornerRadius": 20,
+          "layout": "none",
+          "children": [
+            {
+              "type": "ellipse",
+              "id": "nk4qz",
+              "x": 68,
+              "y": 30,
+              "name": "blob",
+              "fill": "#DDE9FF",
+              "width": 206,
+              "height": 146
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 14,
+              "id": "pcU6V",
+              "x": 58,
+              "y": 42,
+              "name": "ledger",
+              "fill": "#FFFFFF",
+              "width": 156,
+              "height": 104,
+              "stroke": {
+                "align": "inside",
+                "thickness": 2,
+                "fill": "#BFD5FF"
+              }
+            },
+            {
+              "type": "line",
+              "id": "3cqzu",
+              "x": 135,
+              "y": 52,
+              "name": "split",
+              "width": 2,
+              "height": 86,
+              "stroke": {
+                "align": "center",
+                "thickness": 2,
+                "fill": "#C8D9FF"
+              }
+            },
+            {
+              "type": "ellipse",
+              "id": "GumUj",
+              "x": 124,
+              "y": 38,
+              "name": "ring1",
+              "fill": "#82A8FF",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "ellipse",
+              "id": "o1wV9",
+              "x": 134,
+              "y": 38,
+              "name": "ring2",
+              "fill": "#82A8FF",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "ellipse",
+              "id": "OKZFK",
+              "x": 144,
+              "y": 38,
+              "name": "ring3",
+              "fill": "#82A8FF",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 14,
+              "id": "2Em1c",
+              "x": 220,
+              "y": 90,
+              "name": "calc",
+              "fill": "#FFFFFF",
+              "width": 92,
+              "height": 94,
+              "stroke": {
+                "align": "inside",
+                "thickness": 2,
+                "fill": "#BFD5FF"
+              }
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 6,
+              "id": "6D1pe",
+              "x": 232,
+              "y": 100,
+              "name": "calcScreen",
+              "fill": "#75A1FF",
+              "width": 68,
+              "height": 20
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 4,
+              "id": "ycP9O",
+              "x": 232,
+              "y": 128,
+              "name": "btn1",
+              "fill": "#BFD5FF",
+              "width": 14,
+              "height": 12
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 4,
+              "id": "Lp0c8",
+              "x": 251,
+              "y": 128,
+              "name": "btn2",
+              "fill": "#BFD5FF",
+              "width": 14,
+              "height": 12
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 4,
+              "id": "LFGmx",
+              "x": 270,
+              "y": 128,
+              "name": "btn3",
+              "fill": "#FFC36B",
+              "width": 14,
+              "height": 12
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 4,
+              "id": "lGfPI",
+              "x": 232,
+              "y": 145,
+              "name": "btn4",
+              "fill": "#BFD5FF",
+              "width": 14,
+              "height": 12
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 4,
+              "id": "hRUyA",
+              "x": 251,
+              "y": 145,
+              "name": "btn5",
+              "fill": "#BFD5FF",
+              "width": 14,
+              "height": 12
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 4,
+              "id": "5f4UR",
+              "x": 270,
+              "y": 145,
+              "name": "btn6",
+              "fill": "#BFD5FF",
+              "width": 14,
+              "height": 12
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 8,
+              "id": "q8xS3",
+              "x": 248,
+              "y": 28,
+              "name": "receipt",
+              "rotation": 12.000000000000002,
+              "fill": "#FFFFFF",
+              "width": 58,
+              "height": 72,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#D9E5FF"
+              }
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": 10,
+              "id": "3auMX",
+              "x": 130,
+              "y": 150,
+              "name": "calendar",
+              "fill": "#FFFFFF",
+              "width": 82,
+              "height": 48,
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#C8D9FF"
+              }
+            },
+            {
+              "type": "rectangle",
+              "cornerRadius": [
+                10,
+                10,
+                0,
+                0
+              ],
+              "id": "hUNlO",
+              "x": 130,
+              "y": 150,
+              "name": "calTop",
+              "fill": "#7EA6FF",
+              "width": 82,
+              "height": 14
+            },
+            {
+              "type": "text",
+              "id": "TnvRX",
+              "x": 190,
+              "y": 163,
+              "name": "plus",
+              "fill": "#FFFFFF",
+              "content": "+",
+              "fontFamily": "Inter",
+              "fontSize": 22,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "IjBaX",
+              "x": 28,
+              "y": 118,
+              "name": "coinL",
+              "fill": "#FFD98A",
+              "width": 28,
+              "height": 28,
+              "stroke": {
+                "align": "inside",
+                "thickness": 2,
+                "fill": "#F6BC4B"
+              }
+            },
+            {
+              "type": "text",
+              "id": "aWl1u",
+              "x": 37,
+              "y": 123,
+              "name": "coinLText",
+              "fill": "#FFFFFF",
+              "content": "¥",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "odaKV",
+              "x": 302,
+              "y": 120,
+              "name": "coinR",
+              "fill": "#FFD98A",
+              "width": 24,
+              "height": 24,
+              "stroke": {
+                "align": "inside",
+                "thickness": 2,
+                "fill": "#F6BC4B"
+              }
+            },
+            {
+              "type": "text",
+              "id": "T5GvJ",
+              "x": 310,
+              "y": 124,
+              "name": "coinRText",
+              "fill": "#FFFFFF",
+              "content": "¥",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "4w2fA",
+      "x": 3958,
+      "y": 0,
+      "name": "插画-加载中-账本",
+      "clip": true,
+      "width": 640,
+      "height": 560,
+      "fill": {
+        "type": "gradient",
+        "gradientType": "linear",
+        "enabled": true,
+        "rotation": 115,
+        "size": {
+          "height": 1
+        },
+        "colors": [
+          {
+            "color": "#D2E4FF",
+            "position": 0
+          },
+          {
+            "color": "#F2F7FF",
+            "position": 1
+          }
+        ]
+      },
+      "cornerRadius": 28,
+      "layout": "vertical",
+      "gap": 32,
+      "padding": 48,
+      "justifyContent": "center",
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "NEc5F",
+          "name": "card",
+          "width": 336,
+          "height": 268,
+          "fill": "#FFFFFF",
+          "cornerRadius": 26,
+          "stroke": {
+            "align": "inside",
+            "thickness": 1.5,
+            "fill": "#B8CCE8"
+          },
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0066FF33",
+            "offset": {
+              "x": 0,
+              "y": 10
+            },
+            "blur": 28
+          },
+          "layout": "vertical",
+          "gap": 24,
+          "padding": [
+            36,
+            28
+          ],
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "5piSP",
+              "name": "ico",
+              "width": 56,
+              "height": 56,
+              "iconFontName": "notebook-pen",
+              "iconFontFamily": "lucide",
+              "fill": "#0052CC"
+            },
+            {
+              "type": "frame",
+              "id": "SaMm4",
+              "name": "sk",
+              "width": 272,
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "6xIBD",
+                  "name": "ln1",
+                  "width": 272,
+                  "height": 9,
+                  "fill": "#E8EEF8",
+                  "cornerRadius": 5
+                },
+                {
+                  "type": "frame",
+                  "id": "jErm6",
+                  "name": "ln2",
+                  "width": 272,
+                  "height": 9,
+                  "fill": "#E8EEF8",
+                  "cornerRadius": 5
+                },
+                {
+                  "type": "frame",
+                  "id": "TETvK",
+                  "name": "ln3",
+                  "width": 160,
+                  "height": 9,
+                  "fill": "#DCE6F5",
+                  "cornerRadius": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "6lAoG",
+          "name": "dots",
+          "gap": 11,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "ellipse",
+              "id": "vqF3j",
+              "name": "dot1",
+              "fill": "#B4CEFF",
+              "width": 11,
+              "height": 11
+            },
+            {
+              "type": "ellipse",
+              "id": "r1Hi7",
+              "name": "dot2",
+              "fill": "#6B9DFF",
+              "width": 11,
+              "height": 11
+            },
+            {
+              "type": "ellipse",
+              "id": "vCYOH",
+              "name": "dot3",
+              "fill": "#0066FF",
+              "width": 11,
+              "height": 11
             }
           ]
         }

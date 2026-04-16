@@ -23,7 +23,7 @@
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.1);
 }
 
 .tab-item {
@@ -33,10 +33,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.18s ease;
 }
 
 .tab-item-active {
   background: #0066ff;
+  box-shadow: 0 4rpx 12rpx rgba(0, 102, 255, 0.28);
 }
 
 .tab-label {

@@ -732,16 +732,22 @@ Page({
   },
 
   onShow() {
-    if (typeof this.getTabBar === "function") {
-      const tabBar = this.getTabBar();
-      if (tabBar && typeof tabBar.setData === "function") {
-        tabBar.setData({ selected: 1, hidden: false });
-      }
-    }
+    this.setTabBarState({ selected: 1, hidden: false });
     if (!this.ensureEnv()) {
       return;
     }
     this.refreshLedgersAndLoad();
+  },
+
+  setTabBarState(patch) {
+    if (typeof this.getTabBar !== "function") {
+      return;
+    }
+    const tabBar = this.getTabBar();
+    if (!tabBar || typeof tabBar.setData !== "function") {
+      return;
+    }
+    tabBar.setData(patch || {});
   },
 
   ensureEnv() {
@@ -838,14 +844,7 @@ Page({
   },
 
   setCustomTabBarHidden(hidden) {
-    if (typeof this.getTabBar !== "function") {
-      return;
-    }
-    const tabBar = this.getTabBar();
-    if (!tabBar || typeof tabBar.setData !== "function") {
-      return;
-    }
-    tabBar.setData({ hidden: !!hidden });
+    this.setTabBarState({ hidden: !!hidden });
   },
 
   onLedgerPickerOpen() {

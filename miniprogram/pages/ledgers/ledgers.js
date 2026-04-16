@@ -1,5 +1,25 @@
 const LEDGERS_LIST_CACHE_KEY = "ledgers_list_snap_v1";
 
+function formatYuanFromCents(cents) {
+  const n = Math.floor(Number(cents) || 0);
+  if (!Number.isFinite(n) || n < 0) {
+    return "0.00";
+  }
+  return (n / 100).toFixed(2);
+}
+
+function decorateLedgerRowsForDisplay(list) {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  return list.map((item) => ({
+    ...item,
+    monthIncomeYuan: formatYuanFromCents(item.monthIncomeCents),
+    monthExpenseYuan: formatYuanFromCents(item.monthExpenseCents),
+    monthSummaryLabel: item.monthSummaryLabel || "本月",
+  }));
+}
+
 function readLedgersListCache() {
   try {
     const v = wx.getStorageSync(LEDGERS_LIST_CACHE_KEY);
@@ -34,6 +54,11 @@ Page({
     shareLedgerName: "",
     shareLedgerId: "",
     shareInviteCode: "",
+    sheetOpen: false,
+    sheetLedgerId: "",
+    sheetLedgerName: "",
+    sheetIsCreator: false,
+    sheetDeleting: false,
   },
 
   onLoad() {
@@ -43,16 +68,18 @@ Page({
   },
 
   onShow() {
-    if (typeof this.getTabBar === "function") {
-      const tabBar = this.getTabBar();
-      if (tabBar && typeof tabBar.setData === "function") {
-        tabBar.setData({ selected: 0, hidden: false });
-      }
-    }
+    this.setTabBarState({ selected: 0, hidden: !!this.data.sheetOpen });
     this.refresh();
   },
 
-  setCustomTabBarHidden(hidden) {
+  onHide() {
+    if (this.data.sheetOpen) {
+      this.setData({ sheetOpen: false });
+    }
+    this.setCustomTabBarHidden(false);
+  },
+
+  setTabBarState(patch) {
     if (typeof this.getTabBar !== "function") {
       return;
     }
@@ -60,7 +87,11 @@ Page({
     if (!tabBar || typeof tabBar.setData !== "function") {
       return;
     }
-    tabBar.setData({ hidden: !!hidden });
+    tabBar.setData(patch || {});
+  },
+
+  setCustomTabBarHidden(hidden) {
+    this.setTabBarState({ hidden: !!hidden });
   },
 
   refresh() {
@@ -153,6 +184,11 @@ Page({
     });
   },
 
+  onEmbeddedHostTabBar(e) {
+    const hidden = !!(e.detail && e.detail.hidden);
+    this.setCustomTabBarHidden(hidden);
+  },
+
   onEmbeddedDetailDeleted() {
     this.refresh();
   },
@@ -216,13 +252,174 @@ Page({
 
   syncDisplayList() {
     const { list, activeFilter } = this.data;
-    let displayList = Array.isArray(list) ? list.slice() : [];
+    let base = Array.isArray(list) ? list.slice() : [];
     if (activeFilter === "created") {
-      displayList = displayList.filter((item) => !!item.isCreator);
+      base = base.filter((item) => !!item.isCreator);
     } else if (activeFilter === "joined") {
-      displayList = displayList.filter((item) => !item.isCreator);
+      base = base.filter((item) => !item.isCreator);
     }
+    const displayList = decorateLedgerRowsForDisplay(base);
     this.setData({ displayList });
+  },
+
+  closeLedgerSheet() {
+    this.setCustomTabBarHidden(false);
+    this.setData({ sheetOpen: false });
+  },
+
+  openLedgerMenu(e) {
+    const ds = e.currentTarget.dataset || {};
+    const ledgerId = String(ds.id || "").trim();
+    if (!ledgerId) {
+      return;
+    }
+    const ledgerName = String(ds.name || "").trim();
+    const rawCr = ds.creator;
+    const isCreator =
+      rawCr === true || rawCr === "true" || rawCr === 1 || rawCr === "1";
+    this.setData(
+      {
+        sheetOpen: true,
+        sheetLedgerId: ledgerId,
+        sheetLedgerName: ledgerName,
+        sheetIsCreator: isCreator,
+      },
+      () => {
+        this.setCustomTabBarHidden(true);
+      }
+    );
+  },
+
+  onSheetBudget() {
+    if (!this.data.sheetIsCreator) {
+      wx.showToast({ title: "仅创建者可设置预算", icon: "none" });
+      return;
+    }
+    const ledgerId = String(this.data.sheetLedgerId || "").trim();
+    const name = String(this.data.sheetLedgerName || "").trim();
+    this.closeLedgerSheet();
+    if (!ledgerId) {
+      return;
+    }
+    wx.navigateTo({
+      url: `/pages/ledger-budget/ledger-budget?ledgerId=${encodeURIComponent(
+        ledgerId
+      )}&name=${encodeURIComponent(name)}`,
+    });
+  },
+
+  onSheetRename() {
+    if (!this.data.sheetIsCreator) {
+      wx.showToast({ title: "仅创建者可修改名称", icon: "none" });
+      return;
+    }
+    const ledgerId = String(this.data.sheetLedgerId || "").trim();
+    const curName = String(this.data.sheetLedgerName || "").trim();
+    if (!ledgerId) {
+      return;
+    }
+    this.closeLedgerSheet();
+    this.setCustomTabBarHidden(true);
+    wx.showModal({
+      title: "修改账本名称",
+      editable: true,
+      placeholderText: "账本名称",
+      content: curName,
+      success: (res) => {
+        if (!res.confirm) {
+          return;
+        }
+        const name = (res.content || "").trim();
+        wx.cloud
+          .callFunction({
+            name: "ledgerFunctions",
+            data: { type: "updateLedgerName", ledgerId, name },
+          })
+          .then((resp) => {
+            const r = resp.result || {};
+            if (r.success) {
+              wx.showToast({ title: "已保存" });
+              this.refresh();
+            } else {
+              wx.showToast({ title: r.errMsg || "失败", icon: "none" });
+            }
+          })
+          .catch(() => {
+            wx.showToast({ title: "云函数调用失败", icon: "none" });
+          });
+      },
+      complete: () => {
+        this.setCustomTabBarHidden(false);
+      },
+    });
+  },
+
+  onSheetCollaborators() {
+    const ledgerId = String(this.data.sheetLedgerId || "").trim();
+    const name = String(this.data.sheetLedgerName || "").trim();
+    if (!ledgerId) {
+      return;
+    }
+    this.closeLedgerSheet();
+    wx.navigateTo({
+      url: `/pages/ledger-collaborators/ledger-collaborators?ledgerId=${encodeURIComponent(
+        ledgerId
+      )}&name=${encodeURIComponent(name)}`,
+    });
+  },
+
+  onSheetDeleteLedger() {
+    if (!this.data.sheetIsCreator) {
+      wx.showToast({ title: "仅创建者可删除账本", icon: "none" });
+      return;
+    }
+    const ledgerId = String(this.data.sheetLedgerId || "").trim();
+    const ledgerName = String(this.data.sheetLedgerName || "").trim();
+    if (!ledgerId || this.data.sheetDeleting) {
+      return;
+    }
+    this.closeLedgerSheet();
+    this.setCustomTabBarHidden(true);
+    wx.showModal({
+      title: "删除账本",
+      content: `将永久删除「${
+        ledgerName || "该账本"
+      }」及全部流水、分类设置，协作者也将无法访问。此操作不可恢复。`,
+      confirmText: "删除",
+      confirmColor: "#e54545",
+      success: (res) => {
+        if (!res.confirm) {
+          return;
+        }
+        this.setData({ sheetDeleting: true });
+        wx.cloud
+          .callFunction({
+            name: "ledgerFunctions",
+            data: { type: "deleteLedger", ledgerId },
+          })
+          .then((resp) => {
+            const r = resp.result || {};
+            if (!r.success) {
+              wx.showToast({ title: r.errMsg || "删除失败", icon: "none" });
+              return;
+            }
+            wx.showToast({ title: "已删除" });
+            getApp().globalData.showBillLedgerListOnce = false;
+            setTimeout(() => {
+              this.refresh();
+            }, 400);
+          })
+          .catch(() => {
+            wx.showToast({ title: "删除失败", icon: "none" });
+          })
+          .finally(() => {
+            this.setData({ sheetDeleting: false });
+          });
+      },
+      complete: () => {
+        this.setCustomTabBarHidden(false);
+      },
+    });
   },
 
   openDetail(e) {

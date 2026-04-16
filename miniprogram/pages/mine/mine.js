@@ -11,26 +11,21 @@ function normalizeAvatarUrl(raw) {
 
 Page({
   data: {
-    categoriesLoading: false,
     profileSyncing: false,
     profileNickName: "",
     profileAvatarUrl: "",
+    profileAvatarStorageUrl: "",
     joinedLedgerCount: 0,
     showEmptyLedgerCreate: false,
   },
 
   onShow() {
-    if (typeof this.getTabBar === "function") {
-      const tabBar = this.getTabBar();
-      if (tabBar && typeof tabBar.setData === "function") {
-        tabBar.setData({ selected: 2, hidden: false });
-      }
-    }
+    this.setTabBarState({ selected: 2, hidden: false });
     this.loadMyProfile();
     this.refreshLedgerOverview();
   },
 
-  setCustomTabBarHidden(hidden) {
+  setTabBarState(patch) {
     if (typeof this.getTabBar !== "function") {
       return;
     }
@@ -38,7 +33,11 @@ Page({
     if (!tabBar || typeof tabBar.setData !== "function") {
       return;
     }
-    tabBar.setData({ hidden: !!hidden });
+    tabBar.setData(patch || {});
+  },
+
+  setCustomTabBarHidden(hidden) {
+    this.setTabBarState({ hidden: !!hidden });
   },
 
   isPlaceholderWechatNick(nick) {
@@ -70,10 +69,12 @@ Page({
         if (r.success) {
           wx.showToast({ title: "资料已保存" });
           const profile = r.profile || {};
+          const storedAvatarUrl = normalizeAvatarUrl(profile.avatarUrl || avatarUrl || "");
           this.setData({
             profileNickName: String(profile.nickName || name).trim(),
-            profileAvatarUrl: normalizeAvatarUrl(profile.avatarUrl || avatarUrl || ""),
+            profileAvatarStorageUrl: storedAvatarUrl,
           });
+          this.applyAvatarForDisplay(storedAvatarUrl);
           this.loadMyProfile();
         } else {
           wx.showToast({ title: r.errMsg || "保存失败", icon: "none" });
@@ -88,18 +89,90 @@ Page({
   },
 
   onChooseAvatar(e) {
-    const avatarUrl = normalizeAvatarUrl(e && e.detail ? e.detail.avatarUrl : "");
-    if (!avatarUrl) {
+    if (!this.ensureEnv() || this.data.profileSyncing) {
+      return;
+    }
+    const localPath = normalizeAvatarUrl(e && e.detail ? e.detail.avatarUrl : "");
+    if (!localPath) {
       wx.showToast({ title: "请选择头像", icon: "none" });
       return;
     }
-    const nickName = String(this.data.profileNickName || "").trim().slice(0, 32);
-    if (!nickName || this.isPlaceholderWechatNick(nickName)) {
-      this.setData({ profileAvatarUrl: avatarUrl });
-      wx.showToast({ title: "已选头像，请再点昵称设置名字", icon: "none" });
+    this.uploadAndSaveAvatar(localPath);
+  },
+
+  buildAvatarCloudPath(localPath) {
+    const rawExt = String(localPath || "").split(".").pop();
+    const ext = /^[a-zA-Z0-9]{1,8}$/.test(rawExt) ? rawExt.toLowerCase() : "png";
+    return `avatars/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  },
+
+  applyAvatarForDisplay(storageUrl) {
+    const normalized = normalizeAvatarUrl(storageUrl);
+    if (!normalized) {
+      this.setData({ profileAvatarUrl: "" });
       return;
     }
-    this.saveProfileNickname(nickName, avatarUrl);
+    if (!normalized.startsWith("cloud://")) {
+      this.setData({ profileAvatarUrl: normalized });
+      return;
+    }
+    wx.cloud
+      .getTempFileURL({ fileList: [normalized] })
+      .then((res) => {
+        const list = (res && res.fileList) || [];
+        const first = list[0] || {};
+        const tempFileURL = normalizeAvatarUrl(first.tempFileURL || "");
+        this.setData({ profileAvatarUrl: tempFileURL || normalized });
+      })
+      .catch(() => {
+        this.setData({ profileAvatarUrl: normalized });
+      });
+  },
+
+  uploadAndSaveAvatar(localPath) {
+    const cloudPath = this.buildAvatarCloudPath(localPath);
+    this.setData({ profileSyncing: true });
+    wx.showLoading({ title: "上传头像中", mask: true });
+    wx.cloud
+      .uploadFile({
+        cloudPath,
+        filePath: localPath,
+      })
+      .then((uploadResp) => {
+        const fileID = normalizeAvatarUrl(uploadResp && uploadResp.fileID);
+        if (!fileID) {
+          throw new Error("uploadFile did not return fileID");
+        }
+        return wx.cloud.callFunction({
+          name: "ledgerFunctions",
+          data: {
+            type: "updateMyProfile",
+            avatarUrl: fileID,
+          },
+        });
+      })
+      .then((resp) => {
+        const r = resp.result || {};
+        if (!r.success) {
+          wx.showToast({ title: r.errMsg || "保存失败", icon: "none" });
+          return;
+        }
+        const profile = r.profile || {};
+        const storedAvatarUrl = normalizeAvatarUrl(profile.avatarUrl || "");
+        this.setData({
+          profileNickName: String(profile.nickName || this.data.profileNickName || "").trim(),
+          profileAvatarStorageUrl: storedAvatarUrl,
+        });
+        this.applyAvatarForDisplay(storedAvatarUrl);
+        wx.showToast({ title: "头像已更新" });
+      })
+      .catch(() => {
+        wx.showToast({ title: "头像上传失败", icon: "none" });
+      })
+      .finally(() => {
+        wx.hideLoading();
+        this.setData({ profileSyncing: false });
+      });
   },
 
   promptProfileNickname() {
@@ -116,7 +189,7 @@ Page({
           return;
         }
         const nickName = String(res.content || "").trim();
-        const avatarUrl = normalizeAvatarUrl(this.data.profileAvatarUrl || "");
+        const avatarUrl = normalizeAvatarUrl(this.data.profileAvatarStorageUrl || "");
         this.saveProfileNickname(nickName, avatarUrl);
       },
       complete: () => {
@@ -150,32 +223,9 @@ Page({
     if (!this.ensureEnv()) {
       return;
     }
-    this.setData({ categoriesLoading: true });
-    this.fetchLedgers()
-      .then((resp) => {
-        const r = resp || {};
-        if (!r.success) {
-          wx.showToast({ title: r.errMsg || "加载失败", icon: "none" });
-          return;
-        }
-        const list = r.list || [];
-        if (!list.length) {
-          wx.showToast({ title: "暂无账本", icon: "none" });
-          return;
-        }
-        wx.navigateTo({
-          url: `/pages/ledger-categories/ledger-categories?id=${list[0]._id}`,
-        });
-      })
-      .catch(() => {
-        wx.showToast({
-          title: "请上传并部署云函数 ledgerFunctions",
-          icon: "none",
-        });
-      })
-      .finally(() => {
-        this.setData({ categoriesLoading: false });
-      });
+    wx.navigateTo({
+      url: "/pages/ledger-categories/ledger-categories",
+    });
   },
 
   fetchLedgers() {
@@ -203,11 +253,12 @@ Page({
         }
         const profile = r.profile || {};
         const nickName = String(profile.nickName || "").trim();
-        const avatarUrl = normalizeAvatarUrl(profile.avatarUrl);
+        const avatarStorageUrl = normalizeAvatarUrl(profile.avatarUrl);
         this.setData({
           profileNickName: nickName,
-          profileAvatarUrl: avatarUrl,
+          profileAvatarStorageUrl: avatarStorageUrl,
         });
+        this.applyAvatarForDisplay(avatarStorageUrl);
       })
       .catch(() => {});
   },

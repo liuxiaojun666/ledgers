@@ -1,0 +1,49 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:else>
+    <view class="header">
+      <view class="title">协作者管理</view>
+      <view class="sub">{{ledgerName || "账本协作"}}</view>
+    </view>
+
+    <view wx:if="{{!isCreator}}" class="card card-lite">
+      <view class="tip">仅账本创建者可查看该页面。</view>
+    </view>
+
+    <block wx:else>
+      <view class="hero-card">
+        <view class="hero-lead">通过微信将邀请链接发给好友，对方打开即可申请加入。</view>
+        <button class="hero-btn hero-btn-block" open-type="share">微信邀请</button>
+      </view>
+
+      <view wx:if="{{pendingRequests.length > 0}}" class="section">
+        <view class="section-title">待审批（{{pendingRequests.length}}）</view>
+        <view class="card card-compact">
+          <view class="tip">有新成员等待加入，点击去审批页面处理。</view>
+          <button class="btn-pill btn-pill-primary" bindtap="goPendingPage">去审批</button>
+        </view>
+      </view>
+
+      <view class="section">
+        <view class="section-title">协作者（{{collaborators.length + 1}}）</view>
+        <view class="card">
+          <view class="member-card owner-row">
+            <view class="member-name">{{ledgerName || "当前账本"}} · 创建者</view>
+            <view class="owner-tag">我</view>
+          </view>
+          <view class="member-card" wx:for="{{collaborators}}" wx:key="openid">
+            <view class="member-name">{{item.displayName}}</view>
+            <button
+              class="btn-pill btn-pill-weak"
+              data-openid="{{item.openid}}"
+              bindtap="onRemoveCollaborator"
+              loading="{{memberOpLoading}}"
+            >
+              移除
+            </button>
+          </view>
+        </view>
+      </view>
+    </block>
+  </block>
+</view>

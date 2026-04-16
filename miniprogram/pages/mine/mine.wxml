@@ -16,7 +16,7 @@
       <text class="card-icon">📂</text>
       <text class="card-title">分类管理</text>
     </view>
-    <text class="card-link">{{categoriesLoading ? "加载中..." : "去管理 >"}}</text>
+    <text class="card-link">去管理 ></text>
   </view>
   <view class="card-row" bindtap="openSchedules">
     <view class="card-left">

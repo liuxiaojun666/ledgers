@@ -13,7 +13,7 @@
       </view>
       <view class="multi-ledger-banner__cta">+ 新建</view>
     </view>
-    <ledger-detail-view ledger-id="{{embeddedLedgerId}}" record-inline="{{true}}" bind:deleted="onEmbeddedDetailDeleted" bind:ready="onEmbeddedDetailReady" />
+    <ledger-detail-view ledger-id="{{embeddedLedgerId}}" record-inline="{{true}}" bind:deleted="onEmbeddedDetailDeleted" bind:ready="onEmbeddedDetailReady" bind:hosttabbar="onEmbeddedHostTabBar" />
   </block>
   <block wx:elif="{{!list.length}}">
     <view class="multi-ledger-banner" hover-class="multi-ledger-banner--hover" bindtap="createLedger">
@@ -61,21 +61,61 @@
     <view wx:if="{{!displayList.length}}" class="empty-inline">当前筛选下暂无账本</view>
     <view wx:else class="list">
       <view class="card" wx:for="{{displayList}}" wx:key="_id">
-        <view class="card-main" data-id="{{item._id}}" bindtap="openDetail">
-          <view class="card-title">{{item.name}}</view>
-          <view class="card-meta">
-            <text>成员 {{item.memberCount}} 人</text>
-            <text class="dot">·</text>
-            <text>{{item.isCreator ? "我创建" : "我加入"}}</text>
+        <view class="card-top">
+          <view class="card-main" data-id="{{item._id}}" bindtap="openDetail">
+            <view class="card-title-row">
+              <view class="card-title">{{item.name}}</view>
+            </view>
+            <view class="card-month-line">
+              <text class="card-month-label">{{item.monthSummaryLabel}}</text>
+              <text class="card-month-sep"> · </text>
+              <text class="card-month-income">收入 ¥{{item.monthIncomeYuan}}</text>
+              <text class="card-month-sep"> · </text>
+              <text class="card-month-expense">支出 ¥{{item.monthExpenseYuan}}</text>
+            </view>
+            <view class="card-meta">
+              <text>成员 {{item.memberCount}} 人</text>
+              <text class="dot">·</text>
+              <text>{{item.isCreator ? "我创建" : "我加入"}}</text>
+            </view>
+            <view wx:if="{{item.isCreator && item.pendingRequestCount > 0}}" class="pending-entry" data-id="{{item._id}}" data-name="{{item.name}}" catchtap="openPendingPage">
+              {{item.pendingRequestCount}} 条待审批申请，点击处理
+            </view>
           </view>
-          <view wx:if="{{item.isCreator && item.pendingRequestCount > 0}}" class="pending-entry" data-id="{{item._id}}" data-name="{{item.name}}" catchtap="openPendingPage">
-            {{item.pendingRequestCount}} 条待审批申请，点击处理
+          <view class="card-side">
+            <view
+              class="btn-more"
+              data-id="{{item._id}}"
+              data-name="{{item.name}}"
+              data-creator="{{item.isCreator}}"
+              catchtap="openLedgerMenu"
+            >
+              <text class="btn-more-dots">⋯</text>
+            </view>
+            <button class="btn-record" data-id="{{item._id}}" catchtap="openRecordTx">记一笔</button>
           </view>
-        </view>
-        <view class="card-actions">
-          <button class="btn-record" data-id="{{item._id}}" catchtap="openRecordTx">记一笔</button>
         </view>
       </view>
     </view>
   </view>
+
+  <block wx:if="{{sheetOpen}}">
+    <view class="sheet-mask" catchtap="closeLedgerSheet"></view>
+    <view class="sheet-panel">
+      <view class="sheet-grabber" />
+      <view class="sheet-head">
+        <view class="sheet-title">{{sheetLedgerName || "账本"}}</view>
+        <view class="sheet-sub">管理预算、名称与成员</view>
+      </view>
+      <view class="sheet-actions">
+        <view class="sheet-row" hover-class="sheet-row--hover" bindtap="onSheetBudget">预算设置</view>
+        <view class="sheet-row" hover-class="sheet-row--hover" bindtap="onSheetRename">修改账本名称</view>
+        <view class="sheet-row" hover-class="sheet-row--hover" bindtap="onSheetCollaborators">协作者管理</view>
+        <view class="sheet-row sheet-row--danger" hover-class="sheet-row--hover" bindtap="onSheetDeleteLedger">删除账本</view>
+      </view>
+      <view class="sheet-cancel-wrap">
+        <view class="sheet-cancel" hover-class="sheet-row--hover" bindtap="closeLedgerSheet">取消</view>
+      </view>
+    </view>
+  </block>
 </view>

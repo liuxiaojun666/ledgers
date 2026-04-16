@@ -66,14 +66,17 @@
 .title-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 16rpx;
 }
 
-.header-actions {
-  display: inline-flex;
+.title-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   align-items: center;
-  gap: 24rpx;
+  justify-content: space-between;
+  gap: 12rpx;
 }
 
 .pending-box {
@@ -94,6 +97,27 @@
   min-width: 0;
 }
 
+.btn-more {
+  flex-shrink: 0;
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+}
+
+.btn-more:active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.btn-more-dots {
+  font-size: 44rpx;
+  line-height: 1;
+  color: #666666;
+  font-weight: 700;
+}
+
 .btn-secondary {
   width: 100%;
   background: #f5f6f8;
@@ -101,14 +125,6 @@
   border-radius: 14rpx;
   font-size: 28rpx;
   padding: 16rpx 0;
-}
-
-.link-manage {
-  flex-shrink: 0;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #0066ff;
-  padding: 8rpx 0;
 }
 
 .share-tip {
@@ -506,4 +522,83 @@
 .btn-inline-record::after,
 .btn-secondary::after {
   border: none;
+}
+
+/* 标题「⋯」底部抽屉（与 pages/ledgers 列表抽屉视觉一致） */
+.detail-sheet-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+}
+
+.detail-sheet-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2001;
+  background: #ffffff;
+  border-radius: 24rpx 24rpx 0 0;
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
+  box-shadow: 0 -8rpx 32rpx rgba(0, 0, 0, 0.12);
+}
+
+.detail-sheet-grabber {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: #e0e0e0;
+  margin: 16rpx auto 8rpx;
+}
+
+.detail-sheet-head {
+  padding: 8rpx 32rpx 20rpx;
+  border-bottom: 1rpx solid #eeeeee;
+}
+
+.detail-sheet-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.detail-sheet-sub {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #888888;
+}
+
+.detail-sheet-actions {
+  padding: 8rpx 0;
+}
+
+.detail-sheet-row {
+  padding: 28rpx 32rpx;
+  font-size: 30rpx;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.detail-sheet-row--danger {
+  color: #e54545;
+}
+
+.detail-sheet-row--hover {
+  background: #f5f7fb;
+}
+
+.detail-sheet-cancel-wrap {
+  border-top: 12rpx solid #f0f2f6;
+  padding-top: 8rpx;
+}
+
+.detail-sheet-cancel {
+  padding: 24rpx 32rpx;
+  text-align: center;
+  font-size: 28rpx;
+  color: #666666;
 }

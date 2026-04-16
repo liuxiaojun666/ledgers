@@ -12,9 +12,11 @@
     <block wx:else>
       <view class="header">
         <view class="title-row">
-          <view class="title">{{ledgerName}}</view>
-          <view wx:if="{{isCreator}}" class="header-actions">
-            <text class="link-manage" bindtap="goLedgerManage">管理</text>
+          <view class="title-main">
+            <view class="title">{{ledgerName}}</view>
+            <view class="btn-more" catchtap="openDetailMenu">
+              <text class="btn-more-dots">⋯</text>
+            </view>
           </view>
         </view>
         <view wx:if="{{isCreator && pendingRequests.length > 0}}" class="pending-entry" bindtap="goPendingPage">
@@ -92,5 +94,25 @@
         + 记一笔
       </button>
     </block>
+  </block>
+
+  <block wx:if="{{sheetOpen}}">
+    <view class="detail-sheet-mask" catchtap="closeDetailSheet"></view>
+    <view class="detail-sheet-panel">
+      <view class="detail-sheet-grabber"></view>
+      <view class="detail-sheet-head">
+        <view class="detail-sheet-title">{{ledgerName || "账本"}}</view>
+        <view class="detail-sheet-sub">预算、名称、成员与删除</view>
+      </view>
+      <view class="detail-sheet-actions">
+        <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetBudget">预算设置</view>
+        <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetRename">修改账本名称</view>
+        <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetCollaborators">协作者管理</view>
+        <view class="detail-sheet-row detail-sheet-row--danger" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetDeleteLedger">删除账本</view>
+      </view>
+      <view class="detail-sheet-cancel-wrap">
+        <view class="detail-sheet-cancel" hover-class="detail-sheet-row--hover" bindtap="closeDetailSheet">取消</view>
+      </view>
+    </view>
   </block>
 </view>

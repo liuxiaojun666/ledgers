@@ -24,11 +24,21 @@ Component({
     },
   },
 
+  pageLifetimes: {
+    show() {
+      this.syncSelectedWithRoute();
+    },
+  },
+
   methods: {
-    syncSelectedWithRoute() {
+    getCurrentRouteIndex() {
       const pages = getCurrentPages();
       const current = pages.length ? `/${pages[pages.length - 1].route}` : "";
-      const idx = this.data.list.findIndex((item) => item.pagePath === current);
+      return this.data.list.findIndex((item) => item.pagePath === current);
+    },
+
+    syncSelectedWithRoute() {
+      const idx = this.getCurrentRouteIndex();
       if (idx >= 0 && idx !== this.data.selected) {
         this.setData({ selected: idx });
       }
@@ -43,12 +53,21 @@ Component({
       if (!item || !item.pagePath) {
         return;
       }
-      if (idx === this.data.selected) {
+      const currentRouteIdx = this.getCurrentRouteIndex();
+      if (idx === currentRouteIdx) {
+        this.syncSelectedWithRoute();
         return;
       }
+      if (this._isSwitchingTab) {
+        return;
+      }
+      this._isSwitchingTab = true;
       this.setData({ selected: idx });
       wx.switchTab({
         url: item.pagePath,
+        complete: () => {
+          this._isSwitchingTab = false;
+        },
       });
     },
   },

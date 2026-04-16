@@ -1,5 +1,3 @@
-/* 与 Pencil「05-协作管理」画板（/pencil-new.pen · ZnWly）对齐 */
-
 .page {
   min-height: 100vh;
   padding: 24rpx 32rpx calc(40rpx + env(safe-area-inset-bottom));
@@ -33,15 +31,7 @@
   margin-top: 48rpx;
 }
 
-/* 蓝卡只做「邀请」，下面白卡单独做「账本信息 / 改名」 */
-.section.section-after-hero {
-  margin-top: 24rpx;
-}
-
-.section-after-hero + .section {
-  margin-top: 40rpx;
-}
-
+/* 蓝卡只做「邀请」 */
 .section-title {
   font-size: 28rpx;
   color: #3d4a63;
@@ -54,48 +44,29 @@
   padding-top: 8rpx;
 }
 
-/* 卡片内操作：统一小胶囊高度，与画稿比例一致 */
 .btn-pill {
-  margin: 0;
-  flex-shrink: 0;
-  display: inline-flex;
+  margin: 24rpx 0 0;
+  width: 100%;
+  display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  height: 56rpx;
+  height: 72rpx;
   padding: 0 28rpx;
   line-height: 1;
-  font-size: 24rpx;
+  font-size: 26rpx;
   font-weight: 500;
-  border-radius: 999rpx;
+  border-radius: 16rpx;
 }
 
 .btn-pill::after {
   border: none;
 }
 
-.btn-pill-outline {
-  background: #fff;
-  color: #1f63ff;
-  border: 1rpx solid #b8d0ff;
-}
-
-.btn-pill-weak {
-  background: #edf3ff;
-  color: #2a67ff;
-  border: 1rpx solid #d6e4ff;
-}
-
 .btn-pill-primary {
   background: linear-gradient(120deg, #1f63ff, #3f89ff);
   color: #fff;
   border: none;
-}
-
-.btn-pill-muted {
-  background: #f2f5fb;
-  color: #6b778f;
-  border: 1rpx solid #d9e2f5;
 }
 
 .tip {
@@ -135,135 +106,10 @@
   padding: 28rpx 32rpx;
 }
 
-.rename-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
-}
-
-.rename-row-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.rename-kicker {
-  font-size: 22rpx;
-  color: #6a768f;
-}
-
-.rename-value {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #1b2232;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hero-card {
-  background: linear-gradient(135deg, #1e56f5 0%, #5590ff 100%);
-  border: none;
-  border-radius: 40rpx;
-  padding: 40rpx;
-  color: #fff;
-  box-shadow: 0 20rpx 48rpx rgba(30, 86, 245, 0.28);
-}
-
-.hero-lead {
-  color: #f3f7ff;
-  font-size: 26rpx;
-  line-height: 1.45;
-}
-
-/* 不用 size="mini"，否则与自定义高度冲突会把按钮撑得异常高 */
-.hero-btn {
-  margin: 0;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 72rpx;
-  padding: 0 12rpx;
-  line-height: normal;
-  font-size: 26rpx;
-  font-weight: 500;
-  border-radius: 16rpx;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  border: 1rpx solid rgba(255, 255, 255, 0.55);
-}
-
-.hero-btn-block {
-  width: 100%;
-  margin-top: 24rpx;
-}
-
-.hero-btn::after {
-  border: none;
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.member-card {
-  padding: 28rpx 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1rpx solid #eef2fa;
-}
-
-.member-card:last-child {
-  border-bottom: none;
-}
-
-.owner-row {
-  padding-top: 4rpx;
-}
-
-.member-name {
+.entry-title {
   color: #2a344c;
-  font-size: 28rpx;
-  font-weight: 500;
-}
-
-.owner-tag {
-  font-size: 22rpx;
-  color: #8b96ab;
-  padding: 8rpx 24rpx;
-  border-radius: 999rpx;
-  background: #f0f4fc;
-}
-
-.member-actions {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.req-card {
-  padding: 16rpx 0;
-}
-
-.req-card + .req-card {
-  border-top: 1rpx solid #eef2fa;
-}
-
-.req-name {
-  font-size: 26rpx;
-  color: #25324c;
-  font-weight: 500;
-}
-
-.req-actions {
-  margin-top: 12rpx;
+  font-size: 30rpx;
+  font-weight: 600;
 }
 
 .danger-title {
@@ -292,12 +138,5 @@
 
 .btn-delete-ledger::after {
   border: none;
-}
-
-.empty {
-  color: #8b95a8;
-  font-size: 26rpx;
-  text-align: center;
-  line-height: 1.5;
 }
 

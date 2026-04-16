@@ -99,10 +99,14 @@
   padding: 28rpx;
   border: none;
   box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.04);
+}
+
+.card-top {
   display: flex;
-  align-items: center;
+  flex-direction: row;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 20rpx;
+  gap: 16rpx;
 }
 
 .card-main {
@@ -110,12 +114,32 @@
   min-width: 0;
 }
 
-.card-actions {
+.card-side {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 12rpx;
+}
+
+.btn-more {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+}
+
+.btn-more:active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.btn-more-dots {
+  font-size: 44rpx;
+  line-height: 1;
+  color: #666666;
+  font-weight: 700;
 }
 
 .btn-record {
@@ -136,14 +160,41 @@
   font-weight: 600;
 }
 
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
 .card-title {
   font-size: 36rpx;
   color: #1a1a1a;
   font-weight: 700;
 }
 
+.card-month-line {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.55;
+  color: #666666;
+}
+
+.card-month-label {
+  color: #888888;
+}
+
+.card-month-income {
+  color: #0a7a3a;
+  font-weight: 600;
+}
+
+.card-month-expense {
+  color: #c45a00;
+  font-weight: 600;
+}
+
 .card-meta {
-  margin-top: 16rpx;
+  margin-top: 12rpx;
   font-size: 26rpx;
   color: #666666;
 }
@@ -255,4 +306,83 @@
   color: #0066ff;
   background: rgba(0, 102, 255, 0.08);
   border: 1rpx solid rgba(0, 102, 255, 0.25);
+}
+
+/* 账本列表 · 底部操作抽屉 */
+.sheet-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+}
+
+.sheet-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2001;
+  background: #ffffff;
+  border-radius: 24rpx 24rpx 0 0;
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
+  box-shadow: 0 -8rpx 32rpx rgba(0, 0, 0, 0.12);
+}
+
+.sheet-grabber {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: #e0e0e0;
+  margin: 16rpx auto 8rpx;
+}
+
+.sheet-head {
+  padding: 8rpx 32rpx 20rpx;
+  border-bottom: 1rpx solid #eeeeee;
+}
+
+.sheet-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.sheet-sub {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #888888;
+}
+
+.sheet-actions {
+  padding: 8rpx 0;
+}
+
+.sheet-row {
+  padding: 28rpx 32rpx;
+  font-size: 30rpx;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.sheet-row--danger {
+  color: #e54545;
+}
+
+.sheet-row--hover {
+  background: #f5f7fb;
+}
+
+.sheet-cancel-wrap {
+  border-top: 12rpx solid #f0f2f6;
+  padding-top: 8rpx;
+}
+
+.sheet-cancel {
+  padding: 24rpx 32rpx;
+  text-align: center;
+  font-size: 28rpx;
+  color: #666666;
 }

@@ -18,6 +18,12 @@
       ]
     },
     {
+      "root": "pages/ledger-collaborators",
+      "pages": [
+        "ledger-collaborators"
+      ]
+    },
+    {
       "root": "pages/ledger-pending",
       "pages": [
         "ledger-pending"
@@ -100,6 +106,7 @@
       "packages": [
         "pages/ledger-detail",
         "pages/ledger-manage",
+        "pages/ledger-collaborators",
         "pages/ledger-pending",
         "pages/ledger-budget",
         "pages/ledger-categories",
@@ -114,6 +121,7 @@
       "packages": [
         "pages/ledger-detail",
         "pages/ledger-manage",
+        "pages/ledger-collaborators",
         "pages/ledger-pending",
         "pages/ledger-budget",
         "pages/ledger-categories",
@@ -128,6 +136,7 @@
       "packages": [
         "pages/ledger-detail",
         "pages/ledger-manage",
+        "pages/ledger-collaborators",
         "pages/ledger-pending",
         "pages/ledger-budget",
         "pages/ledger-categories",

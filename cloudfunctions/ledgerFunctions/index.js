@@ -25,6 +25,8 @@
  * getTransaction / updateTransaction / deleteTransaction：仅流水记录人可读取（编辑页）/修改/删除；无 createdByOpenid 的历史记录仅账本创建者可改删。
  * deleteLedger：仅创建者可删账本，并删除该账本下全部流水与成员关联。
  * listLedgers：若当前用户无任何账本，会自动创建默认账本「我的账本」后再返回列表。
+ *   每条含当月（北京时间自然月）收入/支出分汇总 monthIncomeCents/monthExpenseCents、monthSummaryLabel，
+ *   口径与统计一致（bookedAt ?? createdAt；每账本最多拉取 1000 条流水参与汇总，与 analyzeLedger 一致）。
  * addLedgerCategory / removeLedgerCategory：会同步到当前用户参与的全部账本（不仅是传入的 ledgerId）。
  * addLedgerCategory / removeLedgerCategory：在当前用户参与的全部账本上同步增删分类（入口需带任一账本 ledgerId 做权限校验）。
  * deleteLedger：仅创建者可删；删除该账本下全部流水与 ledger_members 记录。
@@ -671,6 +673,66 @@ async function updateLedgerMonthlyBudget(openid, event) {
   return { success: true, monthlyBudgetCents: cents };
 }
 
+function getChinaMonthWindowForList(now = new Date()) {
+  const p = chinaDateParts(now);
+  if (!p) {
+    const d = now instanceof Date ? now : new Date();
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return {
+      startMs: chinaDayStartMsByYmd(y, m, 1),
+      endMs: chinaDayEndMsByYmd(y, m, lastDay),
+      label: `${y}年${m}月`,
+    };
+  }
+  const y = p.year;
+  const m = p.month;
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return {
+    startMs: chinaDayStartMsByYmd(y, m, 1),
+    endMs: chinaDayEndMsByYmd(y, m, lastDay),
+    label: `${y}年${m}月`,
+  };
+}
+
+async function sumLedgerTransactionsInTimeRange(ledgerId, startMs, endMs) {
+  let incomeCents = 0;
+  let expenseCents = 0;
+  const id = normalizeLedgerId(ledgerId);
+  if (!id || !Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    return { incomeCents: 0, expenseCents: 0 };
+  }
+  try {
+    const res = await db
+      .collection("transactions")
+      .where({ ledgerId: id })
+      .field({ amountCents: true, flow: true, bookedAt: true, createdAt: true })
+      .limit(1000)
+      .get();
+    const rows = res.data || [];
+    for (let i = 0; i < rows.length; i += 1) {
+      const tx = rows[i];
+      const t = txTimeMs(tx);
+      if (t < startMs || t > endMs) {
+        continue;
+      }
+      const mag = txMagnitudeCents(tx);
+      if (mag <= 0) {
+        continue;
+      }
+      if (normalizeTxFlow(tx) === "income") {
+        incomeCents += mag;
+      } else {
+        expenseCents += mag;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return { incomeCents, expenseCents };
+}
+
 async function listLedgers(openid) {
   let res = await db
     .collection("ledgers")
@@ -680,6 +742,7 @@ async function listLedgers(openid) {
       createdAt: true,
       memberOpenids: true,
       creatorOpenid: true,
+      monthlyBudgetCents: true,
     })
     .get();
   let rows = res.data || [];
@@ -700,6 +763,7 @@ async function listLedgers(openid) {
         createdAt: true,
         memberOpenids: true,
         creatorOpenid: true,
+        monthlyBudgetCents: true,
       })
       .get();
     rows = res.data || [];
@@ -747,22 +811,36 @@ async function listLedgers(openid) {
       pendingCountMap[ledgerId] += 1;
     });
   }
-  const list = rows.map((doc) => ({
-    _id: doc._id,
-    name: doc.name,
-    memberCount: (doc.memberOpenids || []).length,
-    /** 毫秒时间戳，供统计页按账本创建日生成可选周期 */
-    createdAtMs: (() => {
-      const ms = readDateMs(doc.createdAt);
-      return Number.isFinite(ms) ? ms : Date.now();
-    })(),
-    isCreator:
-      doc.creatorOpenid === openid ||
-      (!doc.creatorOpenid &&
-        Array.isArray(doc.memberOpenids) &&
-        doc.memberOpenids[0] === openid),
-    pendingRequestCount: Number(pendingCountMap[doc._id] || 0),
-  }));
+  const monthWin = getChinaMonthWindowForList(new Date());
+  const monthSums = await Promise.all(
+    rows.map((doc) =>
+      sumLedgerTransactionsInTimeRange(doc._id, monthWin.startMs, monthWin.endMs)
+    )
+  );
+  const list = rows.map((doc, idx) => {
+    const sums = monthSums[idx] || { incomeCents: 0, expenseCents: 0 };
+    const budget = readMonthlyBudgetCents(doc);
+    return {
+      _id: doc._id,
+      name: doc.name,
+      memberCount: (doc.memberOpenids || []).length,
+      /** 毫秒时间戳，供统计页按账本创建日生成可选周期 */
+      createdAtMs: (() => {
+        const ms = readDateMs(doc.createdAt);
+        return Number.isFinite(ms) ? ms : Date.now();
+      })(),
+      isCreator:
+        doc.creatorOpenid === openid ||
+        (!doc.creatorOpenid &&
+          Array.isArray(doc.memberOpenids) &&
+          doc.memberOpenids[0] === openid),
+      pendingRequestCount: Number(pendingCountMap[doc._id] || 0),
+      monthIncomeCents: sums.incomeCents,
+      monthExpenseCents: sums.expenseCents,
+      monthSummaryLabel: monthWin.label,
+      monthlyBudgetCents: budget,
+    };
+  });
   return { success: true, list };
 }
 
@@ -2833,18 +2911,25 @@ async function deleteTransaction(openid, event) {
 }
 
 async function updateMyProfile(openid, event) {
-  const rawNickName = String(event.nickName == null ? "" : event.nickName).trim().slice(0, 32);
-  const nickName = normalizeNickname(rawNickName);
-  if (!nickName) {
+  const payload = event || {};
+  const hasNickNameInput = Object.prototype.hasOwnProperty.call(payload, "nickName");
+  const rawNickName = String(payload.nickName == null ? "" : payload.nickName).trim().slice(0, 32);
+  const incomingNickName = normalizeNickname(rawNickName);
+  const incomingAvatarUrl = normalizeAvatarUrl(payload.avatarUrl);
+  const profile = await getUserProfile(openid);
+  const existingNickName = normalizeNickname(profile && profile.nickName);
+  const existingAvatarUrl = normalizeAvatarUrl(profile && profile.avatarUrl);
+  const nickName = hasNickNameInput ? incomingNickName : existingNickName;
+  if (hasNickNameInput && !nickName) {
     return {
       success: false,
       errMsg: "昵称无效，请填写一个自定义昵称（不要使用“微信用户”）",
     };
   }
-  const incomingAvatarUrl = normalizeAvatarUrl(event.avatarUrl);
-  const profile = await getUserProfile(openid);
-  const existingAvatarUrl = normalizeAvatarUrl(profile && profile.avatarUrl);
   const avatarUrl = incomingAvatarUrl || existingAvatarUrl || "";
+  if (!hasNickNameInput && !incomingAvatarUrl) {
+    return { success: false, errMsg: "未检测到可更新的资料" };
+  }
   await db
     .collection("user_profiles")
     .doc(openid)

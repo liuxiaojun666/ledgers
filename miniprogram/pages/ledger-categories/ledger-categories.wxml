@@ -1,8 +1,11 @@
 <view class="page">
-  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <view wx:if="{{loading}}" class="category-loading">
+    <image class="category-loading-illu" src="/images/ledger-detail-loading.png" mode="widthFix" />
+    <view class="category-loading-text">加载中…</view>
+  </view>
   <block wx:else>
     <view class="hero-card">
-      <view class="hero-title">分类模板库</view>
+      <!-- <view class="hero-title">分类模板库</view> -->
       <view class="hero-lead">建议优先创建常用分类，记账时录入更快、统计更清晰。</view>
       <view class="hero-meta">
         <text class="hero-meta-key">当前数量</text>
@@ -14,7 +17,7 @@
         <view class="label">新增分类</view>
         <view class="tip">名称最多 16 个字；至少保留 1 个分类。</view>
         <input class="input" placeholder="例如：餐饮、房租、交通" maxlength="16" value="{{newName}}" bindinput="onNewName" />
-        <button class="btn-primary" bindtap="add" loading="{{saving}}" disabled="{{saving || !newName}}">
+        <button class="btn-primary" bindtap="add" loading="{{saving}}" disabled="{{saving || !newName || !ledgerId}}">
           添加分类
         </button>
       </view>
