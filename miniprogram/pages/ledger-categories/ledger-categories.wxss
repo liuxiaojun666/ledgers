@@ -208,6 +208,7 @@
 .btn-pill {
   margin: 0;
   height: 56rpx;
+  max-width: 25%;
   padding: 0 28rpx;
   line-height: 56rpx;
   border-radius: 999rpx;

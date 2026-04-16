@@ -95,6 +95,22 @@ function toAmountTone(amount) {
   return "amt-zero";
 }
 
+function normalizeAvatarUrl(raw) {
+  let url = String(raw == null ? "" : raw).trim().slice(0, 500);
+  if (!url) {
+    return "";
+  }
+  if (url.startsWith("http://")) {
+    url = `https://${url.slice("http://".length)}`;
+  }
+  return url;
+}
+
+function isCloudAvatarUrl(url) {
+  const s = String(url || "");
+  return !!s && s.startsWith("cloud://");
+}
+
 function toInt(raw) {
   const n = Number(raw);
   if (!Number.isFinite(n)) {
@@ -288,11 +304,58 @@ Page({
           summaryTone: toSummaryTone(listSignedYuan),
           summaryMetaText: `共 ${list.length} 笔明细`,
         });
+        this._resolveListAvatarUrls(list).catch(() => {});
       })
       .catch(() => {
         wx.showToast({ title: "云函数调用失败", icon: "none" });
         this.setData({ loading: false });
       });
+  },
+
+  async _resolveListAvatarUrls(listSnapshot) {
+    if (!Array.isArray(listSnapshot) || !listSnapshot.length) {
+      return;
+    }
+    const token = (this._avatarResolveToken = (this._avatarResolveToken || 0) + 1);
+    const uniqueCloudUrls = [
+      ...new Set(
+        listSnapshot
+          .map((t) => normalizeAvatarUrl(t.payerAvatarUrl))
+          .filter((u) => u && isCloudAvatarUrl(u))
+      ),
+    ];
+    if (!uniqueCloudUrls.length) {
+      return;
+    }
+    if (!this._avatarTempUrlCache) {
+      this._avatarTempUrlCache = {};
+    }
+    const need = uniqueCloudUrls.filter((u) => !this._avatarTempUrlCache[u]);
+    if (need.length) {
+      const res = await wx.cloud.getTempFileURL({ fileList: need });
+      const fileList = (res && res.fileList) || [];
+      for (let i = 0; i < need.length; i += 1) {
+        const item = fileList[i] || {};
+        const temp = normalizeAvatarUrl(item.tempFileURL || "");
+        const fileId = normalizeAvatarUrl(item.fileID || item.fileId || "");
+        if (temp) {
+          if (fileId) {
+            this._avatarTempUrlCache[fileId] = temp;
+          } else {
+            this._avatarTempUrlCache[need[i]] = temp;
+          }
+        }
+      }
+    }
+    if (token !== this._avatarResolveToken) {
+      return;
+    }
+    const replaced = listSnapshot.map((t) => {
+      const src = normalizeAvatarUrl(t.payerAvatarUrl);
+      const next = isCloudAvatarUrl(src) ? this._avatarTempUrlCache[src] || src : src;
+      return next === t.payerAvatarUrl ? t : { ...t, payerAvatarUrl: next };
+    });
+    this.setData({ list: replaced });
   },
 
   onSubGroupTap(e) {

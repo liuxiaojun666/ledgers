@@ -9,10 +9,19 @@ function normalizeAvatarUrl(raw) {
   return url;
 }
 
+function resolveProfileDisplayName(profile, fallbackNickName) {
+  const displayName = String((profile && profile.displayName) || "").trim();
+  if (displayName) {
+    return displayName;
+  }
+  return String((profile && profile.nickName) || fallbackNickName || "").trim();
+}
+
 Page({
   data: {
     profileSyncing: false,
     profileNickName: "",
+    profileDisplayName: "",
     profileAvatarUrl: "",
     profileAvatarStorageUrl: "",
     joinedLedgerCount: 0,
@@ -70,8 +79,10 @@ Page({
           wx.showToast({ title: "资料已保存" });
           const profile = r.profile || {};
           const storedAvatarUrl = normalizeAvatarUrl(profile.avatarUrl || avatarUrl || "");
+          const nextNickName = String(profile.nickName || name).trim();
           this.setData({
-            profileNickName: String(profile.nickName || name).trim(),
+            profileNickName: nextNickName,
+            profileDisplayName: resolveProfileDisplayName(profile, nextNickName),
             profileAvatarStorageUrl: storedAvatarUrl,
           });
           this.applyAvatarForDisplay(storedAvatarUrl);
@@ -159,8 +170,10 @@ Page({
         }
         const profile = r.profile || {};
         const storedAvatarUrl = normalizeAvatarUrl(profile.avatarUrl || "");
+        const nextNickName = String(profile.nickName || this.data.profileNickName || "").trim();
         this.setData({
-          profileNickName: String(profile.nickName || this.data.profileNickName || "").trim(),
+          profileNickName: nextNickName,
+          profileDisplayName: resolveProfileDisplayName(profile, nextNickName),
           profileAvatarStorageUrl: storedAvatarUrl,
         });
         this.applyAvatarForDisplay(storedAvatarUrl);
@@ -256,6 +269,7 @@ Page({
         const avatarStorageUrl = normalizeAvatarUrl(profile.avatarUrl);
         this.setData({
           profileNickName: nickName,
+          profileDisplayName: resolveProfileDisplayName(profile, nickName),
           profileAvatarStorageUrl: avatarStorageUrl,
         });
         this.applyAvatarForDisplay(avatarStorageUrl);

@@ -20,13 +20,14 @@ Component({
 
   lifetimes: {
     attached() {
-      this.syncSelectedWithRoute();
+      // 选中态由各 Tab 页 onShow 显式设置。
+      // 避免在切 Tab 过渡期用 getCurrentPages() 推断路由导致 selected 来回改动。
     },
   },
 
   pageLifetimes: {
     show() {
-      this.syncSelectedWithRoute();
+      // 选中态由各 Tab 页 onShow 显式设置。
     },
   },
 
@@ -55,14 +56,12 @@ Component({
       }
       const currentRouteIdx = this.getCurrentRouteIndex();
       if (idx === currentRouteIdx) {
-        this.syncSelectedWithRoute();
         return;
       }
       if (this._isSwitchingTab) {
         return;
       }
       this._isSwitchingTab = true;
-      this.setData({ selected: idx });
       wx.switchTab({
         url: item.pagePath,
         complete: () => {

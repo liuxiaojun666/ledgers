@@ -74,6 +74,93 @@ function formatTime(d) {
   return `${ymd} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
 }
 
+function dayStartMs(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) {
+    return 0;
+  }
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+}
+
+function formatDateOnly(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) {
+    return "";
+  }
+  const p = (n) => (n < 10 ? `0${n}` : `${n}`);
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+}
+
+function formatClockText(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) {
+    return "";
+  }
+  if (
+    dt.getHours() === 0 &&
+    dt.getMinutes() === 0 &&
+    dt.getSeconds() === 0 &&
+    dt.getMilliseconds() === 0
+  ) {
+    return "";
+  }
+  const p = (n) => (n < 10 ? `0${n}` : `${n}`);
+  return `${p(dt.getHours())}:${p(dt.getMinutes())}`;
+}
+
+function resolveTxGroupLabel(tx, todayStartMs) {
+  if (!tx || !tx.dayStartMs) {
+    return "未知日期";
+  }
+  const diffDays = Math.floor((todayStartMs - tx.dayStartMs) / 86400000);
+  if (diffDays === 0) {
+    return "今天";
+  }
+  if (diffDays === 1) {
+    return "昨天";
+  }
+  return tx.dayText || "未知日期";
+}
+
+function buildTxGroups(transactions) {
+  const list = Array.isArray(transactions) ? transactions : [];
+  if (!list.length) {
+    return [];
+  }
+  const groups = [];
+  const todayStartMs = dayStartMs(Date.now());
+  list.forEach((tx) => {
+    const key = tx.dayKey || "unknown";
+    const last = groups[groups.length - 1];
+    if (!last || last.key !== key) {
+      groups.push({
+        key,
+        label: resolveTxGroupLabel(tx, todayStartMs),
+        items: [tx],
+      });
+      return;
+    }
+    last.items.push(tx);
+  });
+  return groups;
+}
+
+function normalizeAvatarUrl(raw) {
+  let url = String(raw == null ? "" : raw).trim().slice(0, 500);
+  if (!url) {
+    return "";
+  }
+  if (url.startsWith("http://")) {
+    url = `https://${url.slice("http://".length)}`;
+  }
+  return url;
+}
+
+function isCloudAvatarUrl(url) {
+  const s = String(url || "");
+  return !!s && s.startsWith("cloud://");
+}
+
 Component({
   properties: {
     ledgerId: {
@@ -88,6 +175,7 @@ Component({
             txSyncing: false,
             ledgerName: "",
             transactions: [],
+            txGroups: [],
             monthIncomeYuan: "0.00",
             monthExpenseYuan: "0.00",
             monthlyBudgetCents: null,
@@ -146,6 +234,7 @@ Component({
             txSyncing: true,
             ledgerName: "",
             transactions: [],
+            txGroups: [],
             monthIncomeYuan: "0.00",
             monthExpenseYuan: "0.00",
             monthlyBudgetCents: null,
@@ -175,6 +264,7 @@ Component({
   data: {
     ledgerName: "",
     transactions: [],
+    txGroups: [],
     monthIncomeYuan: "0.00",
     monthExpenseYuan: "0.00",
     monthlyBudgetCents: null,
@@ -286,6 +376,7 @@ Component({
     _applyTransactionsFromServerDocs(docs) {
       const docsSorted = sortTx(docs || []);
       const sorted = docsSorted.map((d) => this.decorateTx(d));
+      const txGroups = buildTxGroups(sorted);
       const now = new Date();
       const cy = now.getFullYear();
       const cm = now.getMonth();
@@ -311,10 +402,69 @@ Component({
       });
       this.setData({
         transactions: sorted,
+        txGroups,
         monthIncomeYuan: (incomeCents / 100).toFixed(2),
         monthExpenseYuan: (expenseCents / 100).toFixed(2),
       });
+      this._resolveTransactionAvatarUrls(sorted).catch(() => {});
       this.applyBudgetStrip(expenseCents);
+    },
+
+    async _resolveTransactionAvatarUrls(transactionsSnapshot) {
+      if (!Array.isArray(transactionsSnapshot) || !transactionsSnapshot.length) {
+        return;
+      }
+      // token 用于避免异步回填到已刷新/切账本后的旧列表
+      const token = (this._avatarResolveToken = (this._avatarResolveToken || 0) + 1);
+
+      const uniqueCloudUrls = [
+        ...new Set(
+          transactionsSnapshot
+            .map((t) => normalizeAvatarUrl(t.payerAvatarUrl))
+            .filter((u) => u && isCloudAvatarUrl(u))
+        ),
+      ];
+      if (!uniqueCloudUrls.length) {
+        return;
+      }
+
+      if (!this._avatarTempUrlCache) {
+        this._avatarTempUrlCache = {};
+      }
+
+      const need = uniqueCloudUrls.filter((u) => !this._avatarTempUrlCache[u]);
+      if (need.length) {
+        const res = await wx.cloud.getTempFileURL({ fileList: need });
+        const list = (res && res.fileList) || [];
+        for (let i = 0; i < need.length; i += 1) {
+          const needUrl = need[i];
+          const item = list[i] || {};
+          const temp = normalizeAvatarUrl(item.tempFileURL || "");
+        const fileId = normalizeAvatarUrl(item.fileID || item.fileId || "");
+        if (temp) {
+          if (fileId) {
+            this._avatarTempUrlCache[fileId] = temp;
+          } else {
+            this._avatarTempUrlCache[needUrl] = temp;
+          }
+        }
+        }
+      }
+
+      // 异步回填：把 payerAvatarUrl（cloud://...）替换为临时URL
+      const replaced = (transactionsSnapshot || []).map((t) => {
+        const src = normalizeAvatarUrl(t.payerAvatarUrl);
+        const next = isCloudAvatarUrl(src) ? this._avatarTempUrlCache[src] || src : src;
+        return next === t.payerAvatarUrl ? t : { ...t, payerAvatarUrl: next };
+      });
+
+      if (token !== this._avatarResolveToken) {
+        return;
+      }
+      this.setData({
+        transactions: replaced,
+        txGroups: buildTxGroups(replaced),
+      });
     },
 
     decorateTx(doc) {
@@ -332,10 +482,14 @@ Component({
         flow,
         amountYuan: signedYuan,
         amountDisplay: yuanWithCurrency(signedYuan),
-        timeText: at ? formatTime(at) : "",
+        timeText: at ? formatClockText(at) : "",
         payerName: doc.payerName || "未知",
+        payerAvatarUrl: doc.payerAvatarUrl || "",
         lineLeft,
         canEdit: !!doc.canEdit,
+        dayKey: at ? formatDateOnly(at) : "unknown",
+        dayText: at ? formatDateOnly(at) : "",
+        dayStartMs: at ? dayStartMs(at) : 0,
       };
     },
 
@@ -372,6 +526,7 @@ Component({
               pendingApproval: true,
               pendingApprovalMsg: r.errMsg || "已提交申请，请等待创建人同意",
               transactions: [],
+              txGroups: [],
               monthIncomeYuan: "0.00",
               monthExpenseYuan: "0.00",
               monthlyBudgetCents: null,
@@ -651,7 +806,12 @@ Component({
 
     openDetailMenu() {
       const ledgerId = (this.properties.ledgerId || "").trim();
-      if (!ledgerId || this.data.loading || this.data.pendingApproval) {
+      if (
+        !ledgerId ||
+        this.data.loading ||
+        this.data.pendingApproval ||
+        !this.data.isCreator
+      ) {
         return;
       }
       this.setData({ sheetOpen: true }, () => {

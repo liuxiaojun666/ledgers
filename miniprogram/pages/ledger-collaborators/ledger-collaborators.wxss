@@ -119,9 +119,29 @@
 }
 
 .member-name {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
   color: #2a344c;
   font-size: 28rpx;
   font-weight: 500;
+  min-width: 0;
+}
+
+.member-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-avatar {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 999rpx;
+  background: #eef2ff;
+  flex-shrink: 0;
 }
 
 .owner-tag {

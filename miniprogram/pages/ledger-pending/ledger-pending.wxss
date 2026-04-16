@@ -58,9 +58,28 @@
 }
 
 .req-name {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.req-name-text {
   font-size: 28rpx;
   color: #25324c;
   font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-avatar {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 999rpx;
+  background: #eef2ff;
+  flex-shrink: 0;
 }
 
 .req-actions {
@@ -77,8 +96,9 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  max-width: 45%;
   height: 56rpx;
-  padding: 0 28rpx;
+  /* padding: 0 28rpx; */
   line-height: 1;
   font-size: 24rpx;
   font-weight: 500;

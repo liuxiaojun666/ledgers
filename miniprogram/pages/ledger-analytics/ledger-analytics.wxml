@@ -131,7 +131,15 @@
           <view class="list">
             <view class="row row-tap" wx:for="{{groupsPerson}}" wx:key="key" data-key="{{item.key}}" data-dim="person" bindtap="onGroupRowTap">
               <view class="row-top">
-                <text class="row-label">{{item.label}}</text>
+                <view class="row-person">
+                  <image
+                    wx:if="{{item.avatarUrl}}"
+                    class="member-avatar"
+                    src="{{item.avatarUrl}}"
+                    mode="aspectFill"
+                  />
+                  <text class="row-label row-label--person">{{item.label}}</text>
+                </view>
                 <text class="row-amt {{item.amtTone}}">{{item.rowAmtDisplay}}</text>
               </view>
               <view class="row-meta">{{item.count}} 笔 · 占 {{item.percent}}%</view>

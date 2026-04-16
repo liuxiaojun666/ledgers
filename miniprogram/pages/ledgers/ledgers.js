@@ -16,7 +16,7 @@ function decorateLedgerRowsForDisplay(list) {
     ...item,
     monthIncomeYuan: formatYuanFromCents(item.monthIncomeCents),
     monthExpenseYuan: formatYuanFromCents(item.monthExpenseCents),
-    monthSummaryLabel: item.monthSummaryLabel || "本月",
+    monthSummaryLabel:  "本月",
   }));
 }
 
@@ -277,6 +277,9 @@ Page({
     const rawCr = ds.creator;
     const isCreator =
       rawCr === true || rawCr === "true" || rawCr === 1 || rawCr === "1";
+    if (!isCreator) {
+      return;
+    }
     this.setData(
       {
         sheetOpen: true,

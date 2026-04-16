@@ -1,36 +1,28 @@
 <view class="page">
   <view wx:if="{{loading}}" class="hint">加载中…</view>
-
   <block wx:else>
-    <view class="crumb-row">
+    <!-- <view class="crumb-row">
       <view class="crumb-back" bindtap="onBackTap">
         <text class="crumb-back-icon">←</text>
         <text class="crumb-back-text">返回</text>
       </view>
       <text class="crumb-text">{{breadcrumbText}}</text>
-    </view>
-
+    </view> -->
     <view class="head">
       <view class="head-title">{{groupTitle}}</view>
-      <view wx:if="{{viewMode === 'groups'}}" class="head-sub">{{ledgerName}} · {{rangeLabel}} · 共 {{groups.length}} 类</view>
+      <view wx:if="{{viewMode === 'groups'}}" class="head-sub">
+        {{ledgerName}} · {{rangeLabel}} · 共 {{groups.length}} 类
+      </view>
       <view wx:else class="head-sub">{{ledgerName}} · {{rangeLabel}} · 共 {{list.length}} 笔</view>
     </view>
-
     <view class="summary-card">
       <view class="summary-label">{{viewMode === 'groups' ? "该成员分类净额" : "明细净额"}}</view>
       <view class="summary-value {{summaryTone}}">{{summaryAmountDisplay}}</view>
       <view class="summary-meta">{{summaryMetaText}}</view>
     </view>
-
     <view wx:if="{{viewMode === 'groups' && !groups.length}}" class="empty">该成员在此时段暂无流水。</view>
     <view wx:if="{{viewMode === 'groups' && groups.length}}" class="list">
-      <view
-        class="row row-tap"
-        wx:for="{{groups}}"
-        wx:key="key"
-        data-key="{{item.key}}"
-        bindtap="onSubGroupTap"
-      >
+      <view class="row row-tap" wx:for="{{groups}}" wx:key="key" data-key="{{item.key}}" bindtap="onSubGroupTap">
         <view class="row-top">
           <text class="row-label">{{item.label}}</text>
           <text class="row-amt {{item.amtTone}}">{{item.rowAmtDisplay}}</text>
@@ -41,23 +33,20 @@
         </view>
       </view>
     </view>
-
     <view wx:if="{{viewMode !== 'groups' && !list.length}}" class="empty">暂无记录。</view>
     <view wx:if="{{viewMode !== 'groups' && list.length}}" class="list">
-      <view
-        class="tx {{item.canEdit ? 'tx-tap' : ''}}"
-        wx:for="{{list}}"
-        wx:key="_id"
-        data-id="{{item._id}}"
-        data-editable="{{item.canEdit}}"
-        bindtap="onTxTap"
-      >
+      <view class="tx {{item.canEdit ? 'tx-tap' : ''}}" wx:for="{{list}}" wx:key="_id" data-id="{{item._id}}" data-editable="{{item.canEdit}}" bindtap="onTxTap">
         <view class="tx-top">
           <text class="tx-cat">{{item.category || "其他"}}</text>
-          <text class="tx-amt {{item.flow === 'income' ? 'tx-amt-income' : 'tx-amt-expense'}}">{{item.amountDisplay}}</text>
+          <text class="tx-amt {{item.flow === 'income' ? 'tx-amt-income' : 'tx-amt-expense'}}">
+            {{item.amountDisplay}}
+          </text>
         </view>
         <view wx:if="{{item.note}}" class="tx-note">{{item.note}}</view>
-        <view class="tx-meta">{{item.timeText}} · 记账 {{item.payerName}}</view>
+        <view class="tx-meta">
+          <image wx:if="{{item.payerAvatarUrl}}" class="tx-meta-avatar" src="{{item.payerAvatarUrl}}" mode="aspectFill" />
+          <text class="tx-meta-text">{{item.timeText}} · 记账 {{item.payerName}}</text>
+        </view>
       </view>
     </view>
   </block>

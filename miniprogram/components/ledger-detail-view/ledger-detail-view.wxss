@@ -372,8 +372,9 @@
 
 .btn-primary-record {
   position: fixed;
-  left: 28rpx;
+  left: 50%;
   bottom: calc(32rpx + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
   z-index: 100;
   width: auto;
   min-width: 0;
@@ -436,7 +437,26 @@
 .tx-list {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 20rpx;
+}
+
+.tx-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.tx-group-title {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #6f7d94;
+  padding: 0 4rpx;
+}
+
+.tx-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
 }
 
 .tx-row {
@@ -472,7 +492,7 @@
 .tx-meta {
   display: flex;
   flex-wrap: nowrap;
-  align-items: flex-start;
+  align-items: center;
   gap: 16rpx;
 }
 
@@ -483,13 +503,29 @@
 }
 
 .tx-meta-time {
-  flex: 0 0 220rpx;
+  flex: 0 0 auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .tx-meta-payer {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.tx-meta-avatar {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 999rpx;
+  flex-shrink: 0;
+  background: #eef2ff;
+}
+
+.tx-meta-payer-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;

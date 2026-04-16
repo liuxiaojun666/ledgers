@@ -44,9 +44,9 @@
 - 如果改了接口入参，先对照 `cloudfunctions/ledgerFunctions/index.js` 的 `switch(type)` 与页面调用处。
 - 统计页账本选择会记录到本地缓存（`lastAnalyzeLedgerId`），下次进入优先恢复；若该账本已删除/无权限会自动回退到可用账本。
 - 账本页（`pages/ledgers/ledgers`）的多账本介绍 banner 在**非加载态始终展示**，不再按账本数量决定显隐。
-- 我的页资料采用手动设置：点击圆头像触发 `chooseAvatar` 后会先上传云存储并调用 `updateMyProfile` 持久化（可只更新头像），点击昵称触发输入弹窗并保存；不依赖 `getUserProfile` 返回真实微信昵称。
+- 我的页资料采用手动设置：点击圆头像触发 `chooseAvatar` 后会先上传云存储并调用 `updateMyProfile` 持久化（可只更新头像），点击昵称触发输入弹窗并保存；不依赖 `getUserProfile` 返回真实微信昵称。未设置昵称时，昵称展示与流水一致，回退为匿名 openid（`…` + 后 8 位）。
 - 我的页的「分类管理」「定时记账」入口点击后直接跳转，不在 `pages/mine` 预加载；目标页内自行展示 loading/加载态。
-- 自定义 TabBar 的立体感仅通过 `box-shadow` 增强：不新增额外覆盖层，避免影响点击区域；样式集中在 `miniprogram/custom-tab-bar/index.wxss` 的 `tabbar-pill` 和 `tab-item-active`。选中态采用“双保险”：三个 Tab 页在 `onShow` 固定写入各自 `selected`，组件内保留“点击即时更新 + 路由同步兜底（`pageLifetimes.show`）”和切换中防重入；`switchTab.complete` 不做 route 回写，避免旧路由时序导致 active 慢一拍。
+- 自定义 TabBar 的立体感仅通过 `box-shadow` 增强：不新增额外覆盖层，避免影响点击区域；样式集中在 `miniprogram/custom-tab-bar/index.wxss` 的 `tabbar-pill` 和 `tab-item-active`。选中态由三个 Tab 页在 `onShow` 显式写入固定索引；`custom-tab-bar` 不再基于 route 做自动同步，点击 Tab 时先即时 `setData({ selected })`，最终以页面 `onShow` 为准。
 
 ## 云函数与定时任务
 
@@ -64,24 +64,24 @@
   - `listLedgers` -> `pages/ledgers`、`pages/ledger-analytics`、`pages/ledger-schedule-edit`、`pages/ledger-categories`、`pages/mine`
   - `createLedger` -> `pages/ledgers`、`pages/mine`
   - `getLedger` -> `pages/ledger-manage`、`pages/ledger-collaborators`、`components/ledger-detail-view`
-  - `updateLedgerName` -> `components/ledger-detail-view`、`pages/ledgers`（多账本列表底部抽屉）
+  - `updateLedgerName` -> `components/ledger-detail-view`
   - `updateLedgerMonthlyBudget` -> `pages/ledger-budget`
-  - `deleteLedger` -> `pages/ledger-manage`、`pages/ledgers`（多账本列表底部抽屉）、`components/ledger-detail-view`（详情标题「⋯」抽屉）
+  - `deleteLedger` -> `pages/ledger-manage`、`components/ledger-detail-view`（详情标题「⋯」抽屉）
 - **协作**
   - `enterLedger` -> `components/ledger-detail-view`
   - `createLedgerInvite` -> `pages/ledger-collaborators`、`components/ledger-detail-view`
-  - `listLedgerCollaborators` -> `pages/ledger-collaborators`、`components/ledger-detail-view`
+  - `listLedgerCollaborators` -> `pages/ledger-collaborators`、`components/ledger-detail-view`（每个成员/待审批项含 `avatarUrl`）
   - `reviewJoinRequest` -> `pages/ledger-pending`
   - `removeCollaborator` -> `pages/ledger-collaborators`
 - **分类与流水**
   - `listCategories` -> `pages/ledger-tx`、`pages/ledger-categories`、`pages/ledger-schedule-edit`
   - `addLedgerCategory` / `removeLedgerCategory` -> `pages/ledger-categories`、`components/ledger-tx-form`
-  - `listTransactions` -> `components/ledger-detail-view`
+  - `listTransactions` -> `components/ledger-detail-view`（流水项含 `payerAvatarUrl`，用于“头像+昵称”展示）
   - `getTransaction` -> `pages/ledger-tx`
   - `addTransaction` / `updateTransaction` / `deleteTransaction` -> `components/ledger-tx-form`
 - **统计**
-  - `analyzeLedger` -> `pages/ledger-analytics`
-  - `listGroupTransactions` -> `pages/ledger-analytics-drill`
+  - `analyzeLedger` -> `pages/ledger-analytics`（`groupsByPerson` 项含 `avatarUrl`）
+  - `listGroupTransactions` -> `pages/ledger-analytics-drill`（明细项含 `payerAvatarUrl`）
 - **定时**
   - `listMySchedules` -> `pages/ledger-schedules`
   - `getSchedule` / `createSchedule` / `updateSchedule` / `deleteSchedule` -> `pages/ledger-schedule-edit`（部分状态切换也在 `pages/ledger-schedules`）
@@ -91,22 +91,25 @@
 ## 页面索引（页面 -> `type`）
 
 - `pages/ledgers/ledgers`
-  - `listLedgers`、`createLedger`、`updateLedgerName`、`deleteLedger`（非加载态始终展示多账本介绍 banner）
+  - `listLedgers`、`createLedger`（非加载态始终展示多账本介绍 banner）
   - `listLedgers` 每条账本含：`monthIncomeCents` / `monthExpenseCents`（当前北京时间自然月，流水时间 `bookedAt ?? createdAt`）、`monthSummaryLabel`（如 `2026年4月`）、`monthlyBudgetCents`（可选）；单账本流水超过 1000 条时与 `analyzeLedger` 一样仅以前 1000 条参与汇总。
-  - 多账本列表：卡片展示当月收入/支出；右侧「⋯」打开底部抽屉（预算设置 → `ledger-budget`、改名、协作者、删除）；非创建者点预算/改名/删除会提示无权限。抽屉打开时自定义 TabBar `hidden: true`；点「删除账本」后的确认弹窗期间同样隐藏，弹窗 `complete` 后恢复。
+  - 多账本列表：卡片展示当月收入/支出；列表卡片右侧仅保留「记一笔」并上下居中，不再展示「⋯」菜单。
   - 本地快照：`wx.setStorageSync('ledgers_list_snap_v1', { list })` 缓存上次 `listLedgers` 结果；`refresh` 时若无缓存则全屏加载，有缓存则先渲染列表再等云函数返回更新（不提前消费 `showBillLedgerListOnce`）。
 - `pages/ledger-manage/ledger-manage`
   - `getLedger`、`deleteLedger`
   - 用于账本管理入口与删除账本；协作者相关功能已拆分到独立页面。
-  - 账本管理页不再提供“修改账本名称”入口；改名在账本详情标题「⋯」抽屉或「账本」Tab 多账本列表的「⋯」抽屉中操作。
+  - 账本管理页不再提供“修改账本名称”入口；改名在账本详情标题「⋯」抽屉中操作。
   - 删除账本成功后统一 `switchTab` 回 `pages/ledgers/ledgers`，并清空 `showBillLedgerListOnce`；若仅剩一个账本将自动进入内嵌详情，多个账本则展示列表。
 - `pages/ledger-collaborators/ledger-collaborators`
   - `getLedger`、`createLedgerInvite`、`listLedgerCollaborators`、`removeCollaborator`
   - 提供微信分享邀请和协作者列表管理，待审批入口跳转到 `pages/ledger-pending`。
+  - `onShareAppMessage` 自定义邀请卡片标题与封面图：标题使用「邀请你加入『账本名』一起记账」，封面图固定 `miniprogram/images/LmtpX.png`，并对超长账本名做截断避免分享文案被系统硬截断。
 - `components/ledger-detail-view`
   - `enterLedger`、`createLedgerInvite`、`listLedgerCollaborators`、`getLedger`、`updateLedgerName`、`deleteLedger`、`listTransactions`
-  - 标题栏账本名称右侧「⋯」打开底部抽屉：预算设置、修改名称、协作者管理、删除账本（预算/改名/删除仅创建者，否则 Toast；协作者页对非创建者能力受限）；删除成功会 `triggerEvent('deleted')`。
+  - 标题栏账本名称右侧仅创建者显示「⋯」并可打开底部抽屉：预算设置、修改名称、协作者管理、删除账本；删除成功会 `triggerEvent('deleted')`。
   - 嵌入 `pages/ledgers`（`record-inline`）时抽屉打开/关闭及删账本确认弹窗通过 `bind:hosttabbar` 同步自定义 TabBar 显隐。
+  - 非 `record-inline` 模式下，底部 fixed「+ 记一笔」按钮保持水平居中显示。
+  - 最近流水在前端按日期分组渲染：当日分组显示“今天”、前一日显示“昨天”、更早记录显示具体日期（`YYYY-MM-DD`）；分组内单条流水不再重复展示日期，仅保留时间（有时分时展示 `HH:mm`）。
   - 本地快照：`wx.setStorageSync('ledger_detail_snap:${ledgerId}', …)` 写入 `listTransactions` 的原始流水数组及账本元信息；下次进入同一账本先展示缓存，接口返回后再刷新。首屏 `enterLedger` 完成至流水返回前展示 `miniprogram/images/ledger-detail-loading.png` 加载插图（源稿：`design-exports-v2/jizhang.pen` 画板「插画-加载中-账本」），避免误显示「暂无记录」空态插画。
 - `pages/ledger-tx/ledger-tx` / `components/ledger-tx-form`
   - `listCategories`、`getTransaction`、`addTransaction`、`updateTransaction`、`deleteTransaction`、`addLedgerCategory`

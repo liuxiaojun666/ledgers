@@ -28,6 +28,44 @@ function pickLedgerName(options) {
   }
 }
 
+function normalizeAvatarUrl(raw) {
+  let url = String(raw == null ? "" : raw).trim().slice(0, 500);
+  if (!url) {
+    return "";
+  }
+  if (url.startsWith("http://")) {
+    url = `https://${url.slice("http://".length)}`;
+  }
+  return url;
+}
+
+function isCloudAvatarUrl(url) {
+  const s = String(url || "");
+  return !!s && s.startsWith("cloud://");
+}
+
+const INVITE_SHARE_IMAGE_URL = "/images/LmtpX.png";
+
+function buildShareLedgerName(rawName) {
+  const name = String(rawName || "").trim().replace(/\s+/g, " ");
+  if (!name) {
+    return "";
+  }
+  if (name.length <= 14) {
+    return name;
+  }
+  return `${name.slice(0, 13)}…`;
+}
+
+function buildInviteShareTitle(rawName) {
+  const name = buildShareLedgerName(rawName);
+  return name ? `邀请你加入「${name}」一起记账` : "邀请你一起协同记账";
+}
+
+function buildInviteSharePath(ledgerId, inviteCode) {
+  return `/pages/ledger-detail/ledger-detail?id=${ledgerId}&invite=${inviteCode}`;
+}
+
 Page({
   data: {
     ledgerId: "",
@@ -63,13 +101,15 @@ Page({
     const { ledgerName, ledgerId, shareInviteCode } = this.data;
     if (ledgerId && shareInviteCode) {
       return {
-        title: ledgerName ? `一起记账：${ledgerName}` : "一起记账",
-        path: `/pages/ledger-detail/ledger-detail?id=${ledgerId}&invite=${shareInviteCode}`,
+        title: buildInviteShareTitle(ledgerName),
+        path: buildInviteSharePath(ledgerId, shareInviteCode),
+        imageUrl: INVITE_SHARE_IMAGE_URL,
       };
     }
     return {
-      title: "一起记账",
+      title: "邀请你一起协同记账",
       path: "/pages/ledgers/ledgers",
+      imageUrl: INVITE_SHARE_IMAGE_URL,
     };
   },
 
@@ -153,14 +193,63 @@ Page({
         if (!r.success) {
           throw new Error(r.errMsg || "成员列表加载失败");
         }
+        const collaborators = r.collaborators || [];
+        const pendingRequests = r.pendingRequests || [];
         this.setData({
-          collaborators: r.collaborators || [],
-          pendingRequests: r.pendingRequests || [],
+          collaborators,
+          pendingRequests,
         });
+        this._resolveAvatarUrlsForItems(collaborators).catch(() => {});
       })
       .catch(() => {
         wx.showToast({ title: "成员信息加载失败", icon: "none" });
       });
+  },
+
+  async _resolveAvatarUrlsForItems(itemsSnapshot) {
+    if (!Array.isArray(itemsSnapshot) || !itemsSnapshot.length) {
+      return;
+    }
+    const token = (this._avatarResolveToken = (this._avatarResolveToken || 0) + 1);
+    if (!this._avatarTempUrlCache) {
+      this._avatarTempUrlCache = {};
+    }
+    const uniqueCloudUrls = [
+      ...new Set(
+        itemsSnapshot
+          .map((x) => normalizeAvatarUrl(x && x.avatarUrl))
+          .filter((u) => u && isCloudAvatarUrl(u))
+      ),
+    ];
+    if (!uniqueCloudUrls.length) {
+      return;
+    }
+    const need = uniqueCloudUrls.filter((u) => !this._avatarTempUrlCache[u]);
+    if (need.length) {
+      const res = await wx.cloud.getTempFileURL({ fileList: need });
+      const fileList = (res && res.fileList) || [];
+      for (let i = 0; i < need.length; i += 1) {
+        const item = fileList[i] || {};
+        const temp = normalizeAvatarUrl(item.tempFileURL || "");
+        const fileId = normalizeAvatarUrl(item.fileID || item.fileId || "");
+        if (temp) {
+          if (fileId) {
+            this._avatarTempUrlCache[fileId] = temp;
+          } else {
+            this._avatarTempUrlCache[need[i]] = temp;
+          }
+        }
+      }
+    }
+    if (token !== this._avatarResolveToken) {
+      return;
+    }
+    const replaced = itemsSnapshot.map((x) => {
+      const src = normalizeAvatarUrl(x && x.avatarUrl);
+      const next = src && isCloudAvatarUrl(src) ? this._avatarTempUrlCache[src] || src : src;
+      return next === x.avatarUrl ? x : { ...x, avatarUrl: next };
+    });
+    this.setData({ collaborators: replaced });
   },
 
   goPendingPage() {

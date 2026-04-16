@@ -1072,12 +1072,14 @@ async function listLedgerCollaborators(openid, event) {
   const pendingOpenids = pendingRows
     .map((row) => String(row.applicantOpenid || "").trim())
     .filter(Boolean);
-  const nicknameMap = await fetchNicknameMapByOpenids(
+  const profileMap = await fetchProfileMapByOpenids(
     collaboratorOpenids.concat(pendingOpenids)
   );
   const collaborators = collaboratorOpenids.map((oid) => ({
     openid: oid,
-    displayName: nicknameMap[oid] || maskOpenidForDisplay(oid),
+    displayName:
+      (profileMap[oid] && profileMap[oid].nickName) || maskOpenidForDisplay(oid),
+    avatarUrl: (profileMap[oid] && profileMap[oid].avatarUrl) || "",
   }));
   const pendingRequests = pendingRows
     .map((row) => {
@@ -1087,7 +1089,11 @@ async function listLedgerCollaborators(openid, event) {
       }
       return {
         openid: applicantOpenid,
-        displayName: nicknameMap[applicantOpenid] || maskOpenidForDisplay(applicantOpenid),
+        displayName:
+          (profileMap[applicantOpenid] &&
+            profileMap[applicantOpenid].nickName) ||
+          maskOpenidForDisplay(applicantOpenid),
+        avatarUrl: (profileMap[applicantOpenid] && profileMap[applicantOpenid].avatarUrl) || "",
       };
     })
     .filter(Boolean);
@@ -1391,15 +1397,22 @@ async function listTransactions(openid, rawLedgerId) {
   const ledger = gate.ledger;
   const res = await db.collection("transactions").where({ ledgerId }).get();
   const rows = res.data || [];
-  const nicknameMap = await fetchNicknameMapByOpenids(
+  const profileMap = await fetchProfileMapByOpenids(
     rows.map((tx) => String(tx.createdByOpenid || "").trim()).filter(Boolean)
   );
   rows.sort((a, b) => txTimeMs(b) - txTimeMs(a));
   const list = rows.map((tx) => {
     const oid = String(tx.createdByOpenid || "").trim();
+    const profile = oid ? profileMap[oid] : null;
     return {
       ...tx,
-      payerName: oid ? nicknameMap[oid] || maskOpenidForDisplay(oid) : "未知",
+      payerName:
+        oid && profile && profile.nickName
+          ? profile.nickName
+          : oid
+            ? maskOpenidForDisplay(oid)
+            : "未知",
+      payerAvatarUrl: oid && profile ? profile.avatarUrl || "" : "",
       canEdit: transactionEditableByCaller(openid, tx, ledger),
     };
   });
@@ -2290,6 +2303,14 @@ function normalizeNickname(raw) {
   return nick;
 }
 
+function buildProfileDisplayName(openid, nickName) {
+  const normalizedNick = normalizeNickname(nickName);
+  if (normalizedNick) {
+    return normalizedNick;
+  }
+  return maskOpenidForDisplay(String(openid || "").trim());
+}
+
 function normalizeAvatarUrl(raw) {
   let url = String(raw == null ? "" : raw).trim().slice(0, 500);
   if (!url) {
@@ -2357,22 +2378,31 @@ function finalizeFlowPieGroups(buckets, groupBy, nicknameMap) {
 }
 
 /** 支出排行：amountCents 为支出分（正），占比相对本维度支出合计 */
-function buildExpenseRankGroupList(buckets, dimension, nicknameMap) {
+function buildExpenseRankGroupList(buckets, dimension, identityMap) {
   const keys = Object.keys(buckets || {});
   if (!keys.length) {
     return [];
   }
   const listRaw = keys.map((k) => {
     const b = buckets[k];
+    const profile = dimension === "person" && k !== "未知" && identityMap ? identityMap[k] : null;
+    const nickText =
+      dimension === "person" && k !== "未知"
+        ? profile && profile.nickName
+          ? profile.nickName
+          : maskOpenidForDisplay(k)
+        : "";
     const labelText =
       dimension === "person"
         ? k === "未知"
           ? "未知"
-          : nicknameMap[k] || maskOpenidForDisplay(k)
+          : nickText
         : k;
     return {
       key: k,
       label: labelText,
+      avatarUrl:
+        dimension === "person" && k !== "未知" && profile ? profile.avatarUrl || "" : "",
       amountCents: b.amountCents,
       count: b.count,
     };
@@ -2387,6 +2417,7 @@ function buildExpenseRankGroupList(buckets, dimension, nicknameMap) {
     return {
       key: g.key,
       label: g.label,
+      avatarUrl: g.avatarUrl || "",
       amountCents: amt,
       amountYuan: (amt / 100).toFixed(2),
       count: g.count,
@@ -2419,6 +2450,36 @@ async function fetchNicknameMapByOpenids(openids) {
       if (oid && nick) {
         map[oid] = nick;
       }
+    }
+  }
+  return map;
+}
+
+async function fetchProfileMapByOpenids(openids) {
+  const uniq = [...new Set((openids || []).map((x) => String(x || "").trim()).filter(Boolean))];
+  const map = {};
+  if (!uniq.length) {
+    return map;
+  }
+  const batchSize = 20;
+  for (let i = 0; i < uniq.length; i += batchSize) {
+    const part = uniq.slice(i, i + batchSize);
+    const res = await db
+      .collection("user_profiles")
+      .where({ openid: _.in(part) })
+      .field({ openid: true, nickName: true, avatarUrl: true })
+      .get();
+    const rows = res.data || [];
+    for (let j = 0; j < rows.length; j += 1) {
+      const r = rows[j];
+      const oid = String(r.openid || "").trim();
+      if (!oid) {
+        continue;
+      }
+      map[oid] = {
+        nickName: normalizeNickname(r.nickName),
+        avatarUrl: normalizeAvatarUrl(r.avatarUrl),
+      };
     }
   }
   return map;
@@ -2457,7 +2518,7 @@ async function analyzeLedger(openid, event) {
     const t = txTimeMs(tx);
     return t >= compareStartMs && t <= compareEndMs;
   });
-  const nicknameMap = await fetchNicknameMapByOpenids(
+  const profileMap = await fetchProfileMapByOpenids(
     rows.map((tx) => String(tx.createdByOpenid || "").trim()).filter(Boolean)
   );
 
@@ -2499,23 +2560,23 @@ async function analyzeLedger(openid, event) {
   const listByCategory = buildExpenseRankGroupList(
     expenseBucketsCategory,
     "category",
-    nicknameMap
+    profileMap
   );
   const listByPerson = buildExpenseRankGroupList(
     expenseBucketsPerson,
     "person",
-    nicknameMap
+    profileMap
   );
 
   const pieGroupsExpense = finalizeFlowPieGroups(
     expenseBucketsCategory,
     "category",
-    nicknameMap
+    {}
   );
   const pieGroupsIncome = finalizeFlowPieGroups(
     incomeBucketsCategory,
     "category",
-    nicknameMap
+    {}
   );
 
   const trendPoints = buildAnalyzeTrend(range, start, end, rows, readDateMs(gate.ledger.createdAt));
@@ -2674,7 +2735,7 @@ async function listGroupTransactions(openid, event) {
       .filter(Boolean)
       .concat(groupBy === "person" && groupKey !== "未知" ? [groupKey] : [])
   )];
-  const nicknameMap = await fetchNicknameMapByOpenids(openidsForNickname);
+  const profileMap = await fetchProfileMapByOpenids(openidsForNickname);
 
   rows.sort((a, b) => txTimeMs(b) - txTimeMs(a));
 
@@ -2682,7 +2743,9 @@ async function listGroupTransactions(openid, event) {
     groupBy === "person"
       ? groupKey === "未知"
         ? "未知"
-        : nicknameMap[groupKey] || maskOpenidForDisplay(groupKey)
+        : profileMap[groupKey] && profileMap[groupKey].nickName
+          ? profileMap[groupKey].nickName
+          : maskOpenidForDisplay(groupKey)
       : groupKey;
 
   if (groupBy === "person" && subGroupBy === "category" && (!subGroupKey || subGroupKey === "")) {
@@ -2739,7 +2802,13 @@ async function listGroupTransactions(openid, event) {
   const ledger = gate.ledger;
   const list = rows.map((tx) => {
     const oid = String(tx.createdByOpenid || "").trim();
-    const payerName = oid ? nicknameMap[oid] || maskOpenidForDisplay(oid) : "未知";
+    const profile = oid ? profileMap[oid] : null;
+    const payerName =
+      oid && profile && profile.nickName
+        ? profile.nickName
+        : oid
+          ? maskOpenidForDisplay(oid)
+          : "未知";
     return {
       _id: tx._id,
       amountYuan: formatSignedYuanFromCents(txSignedCents(tx)),
@@ -2748,6 +2817,7 @@ async function listGroupTransactions(openid, event) {
       note: tx.note ? String(tx.note) : "",
       timeText: formatTxLineTime(txOccurredDate(tx)),
       payerName,
+      payerAvatarUrl: oid && profile ? profile.avatarUrl || "" : "",
       canEdit: transactionEditableByCaller(openid, tx, ledger),
     };
   });
@@ -2941,19 +3011,36 @@ async function updateMyProfile(openid, event) {
         updatedAt: db.serverDate(),
       },
     });
-  return { success: true, profile: { nickName, avatarUrl } };
+  return {
+    success: true,
+    profile: {
+      nickName,
+      avatarUrl,
+      displayName: buildProfileDisplayName(openid, nickName),
+    },
+  };
 }
 
 async function getMyProfile(openid) {
   const profile = await getUserProfile(openid);
   if (!profile) {
-    return { success: true, profile: { nickName: "", avatarUrl: "" } };
+    return {
+      success: true,
+      profile: {
+        nickName: "",
+        avatarUrl: "",
+        displayName: buildProfileDisplayName(openid, ""),
+      },
+    };
   }
+  const nickName = normalizeNickname(profile.nickName);
+  const avatarUrl = normalizeAvatarUrl(profile.avatarUrl);
   return {
     success: true,
     profile: {
-      nickName: normalizeNickname(profile.nickName),
-      avatarUrl: normalizeAvatarUrl(profile.avatarUrl),
+      nickName,
+      avatarUrl,
+      displayName: buildProfileDisplayName(openid, nickName),
     },
   };
 }

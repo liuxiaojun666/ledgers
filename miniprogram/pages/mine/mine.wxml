@@ -6,7 +6,7 @@
     </button>
     <view class="profile-meta">
       <view class="profile-name profile-name-clickable" bindtap="promptProfileNickname">
-        {{profileNickName || "微信用户"}}
+        {{profileDisplayName || profileNickName || "未知"}}
       </view>
       <view class="profile-desc">已加入 {{joinedLedgerCount || 0}} 个账本</view>
     </view>

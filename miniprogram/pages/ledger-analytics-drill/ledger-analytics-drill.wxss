@@ -223,6 +223,20 @@
 
 .tx-meta {
   margin-top: 10rpx;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.tx-meta-avatar {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 999rpx;
+  background: #eef2ff;
+  flex-shrink: 0;
+}
+
+.tx-meta-text {
   font-size: 24rpx;
   color: #8e99ae;
 }

@@ -14,7 +14,7 @@
         <view class="title-row">
           <view class="title-main">
             <view class="title">{{ledgerName}}</view>
-            <view class="btn-more" catchtap="openDetailMenu">
+            <view wx:if="{{isCreator}}" class="btn-more" catchtap="openDetailMenu">
               <text class="btn-more-dots">⋯</text>
             </view>
           </view>
@@ -73,21 +73,27 @@
         <view class="empty-desc">快去记一笔吧。</view>
       </view>
       <view wx:else class="tx-list">
-        <view class="tx-row {{item.canEdit ? 'tx-tap' : ''}}" wx:for="{{transactions}}" wx:key="_id" data-id="{{item._id}}" data-editable="{{item.canEdit}}" bindtap="onTxTap">
-          <view class="tx-main">
-            <text class="tx-line-left">{{item.lineLeft}}</text>
-            <view class="tx-meta">
-              <view wx:if="{{item.timeText}}" class="tx-meta-item tx-meta-time">
-                {{item.timeText}}
+        <view class="tx-group" wx:for="{{txGroups}}" wx:key="key">
+          <view class="tx-group-title">{{item.label}}</view>
+          <view class="tx-group-list">
+            <view class="tx-row {{tx.canEdit ? 'tx-tap' : ''}}" wx:for="{{item.items}}" wx:key="_id" wx:for-item="tx" data-id="{{tx._id}}" data-editable="{{tx.canEdit}}" bindtap="onTxTap">
+              <view class="tx-main">
+                <text class="tx-line-left">{{tx.lineLeft}}</text>
+                <view class="tx-meta">
+                  <view wx:if="{{tx.timeText}}" class="tx-meta-item tx-meta-time">
+                    {{tx.timeText}}
+                  </view>
+                  <view wx:if="{{tx.payerName && tx.payerName !== '未知'}}" class="tx-meta-item tx-meta-payer">
+                    <image wx:if="{{tx.payerAvatarUrl}}" class="tx-meta-avatar" src="{{tx.payerAvatarUrl}}" mode="aspectFill" />
+                    <text class="tx-meta-payer-name">{{tx.payerName}}</text>
+                  </view>
+                </view>
               </view>
-              <view wx:if="{{item.payerName && item.payerName !== '未知'}}" class="tx-meta-item tx-meta-payer">
-                {{item.payerName}}
-              </view>
+              <text class="tx-amt {{tx.flow === 'income' ? 'tx-amt-income' : 'tx-amt-expense'}}">
+                {{tx.amountDisplay}}
+              </text>
             </view>
           </view>
-          <text class="tx-amt {{item.flow === 'income' ? 'tx-amt-income' : 'tx-amt-expense'}}">
-            {{item.amountDisplay}}
-          </text>
         </view>
       </view>
       <button wx:if="{{!recordInline}}" class="btn-primary-record" bindtap="goRecordTx">

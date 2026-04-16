@@ -83,15 +83,6 @@
             </view>
           </view>
           <view class="card-side">
-            <view
-              class="btn-more"
-              data-id="{{item._id}}"
-              data-name="{{item.name}}"
-              data-creator="{{item.isCreator}}"
-              catchtap="openLedgerMenu"
-            >
-              <text class="btn-more-dots">⋯</text>
-            </view>
             <button class="btn-record" data-id="{{item._id}}" catchtap="openRecordTx">记一笔</button>
           </view>
         </view>

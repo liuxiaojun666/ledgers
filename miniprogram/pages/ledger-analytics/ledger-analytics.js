@@ -68,6 +68,22 @@ function yuanWithCurrency(signedYuan) {
   return `¥${s}`;
 }
 
+function normalizeAvatarUrl(raw) {
+  let url = String(raw == null ? "" : raw).trim().slice(0, 500);
+  if (!url) {
+    return "";
+  }
+  if (url.startsWith("http://")) {
+    url = `https://${url.slice("http://".length)}`;
+  }
+  return url;
+}
+
+function isCloudAvatarUrl(url) {
+  const s = String(url || "");
+  return !!s && s.startsWith("cloud://");
+}
+
 function parseSignedYuan(raw) {
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
@@ -1075,12 +1091,61 @@ Page({
             });
           }
         );
+        this._resolveGroupsPersonAvatarUrls(groupsPerson).catch(() => {});
         this._loadedOnce = true;
       })
       .catch(() => {
         wx.showToast({ title: "请上传云函数 ledgerFunctions", icon: "none" });
         this.setData({ loading: false, listLoading: false });
       });
+  },
+
+  async _resolveGroupsPersonAvatarUrls(groupsPersonSnapshot) {
+    if (!Array.isArray(groupsPersonSnapshot) || !groupsPersonSnapshot.length) {
+      return;
+    }
+    const token = (this._avatarResolveToken = (this._avatarResolveToken || 0) + 1);
+    const uniqueCloudUrls = [
+      ...new Set(
+        groupsPersonSnapshot
+          .map((g) => normalizeAvatarUrl(g && g.avatarUrl))
+          .filter((u) => u && isCloudAvatarUrl(u))
+      ),
+    ];
+    if (!uniqueCloudUrls.length) {
+      return;
+    }
+    if (!this._avatarTempUrlCache) {
+      this._avatarTempUrlCache = {};
+    }
+    const need = uniqueCloudUrls.filter((u) => !this._avatarTempUrlCache[u]);
+    if (need.length) {
+      const res = await wx.cloud.getTempFileURL({ fileList: need });
+      const fileList = (res && res.fileList) || [];
+      for (let i = 0; i < need.length; i += 1) {
+        const item = fileList[i] || {};
+        const temp = normalizeAvatarUrl(item.tempFileURL || "");
+        const fileId = normalizeAvatarUrl(item.fileID || item.fileId || "");
+        if (temp) {
+          if (fileId) {
+            this._avatarTempUrlCache[fileId] = temp;
+          } else {
+            this._avatarTempUrlCache[need[i]] = temp;
+          }
+        }
+      }
+    }
+    if (token !== this._avatarResolveToken) {
+      return;
+    }
+    const replaced = (groupsPersonSnapshot || []).map((g) => {
+      const src = normalizeAvatarUrl(g && g.avatarUrl);
+      if (src && isCloudAvatarUrl(src) && this._avatarTempUrlCache[src]) {
+        return { ...g, avatarUrl: this._avatarTempUrlCache[src] };
+      }
+      return g;
+    });
+    this.setData({ groupsPerson: replaced });
   },
 
   onRangeTap(e) {

@@ -32,7 +32,15 @@
             <view class="owner-tag">我</view>
           </view>
           <view class="member-card" wx:for="{{collaborators}}" wx:key="openid">
-            <view class="member-name">{{item.displayName}}</view>
+            <view class="member-name">
+              <image
+                wx:if="{{item.avatarUrl}}"
+                class="member-avatar"
+                src="{{item.avatarUrl}}"
+                mode="aspectFill"
+              />
+              <text class="member-name-text">{{item.displayName}}</text>
+            </view>
             <button
               class="btn-pill btn-pill-weak"
               data-openid="{{item.openid}}"
