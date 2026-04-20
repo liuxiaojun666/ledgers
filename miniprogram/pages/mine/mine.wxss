@@ -124,6 +124,60 @@
   margin-bottom: 14rpx;
 }
 
+.share-card {
+  width: 100% !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 14rpx;
+  padding: 24rpx 28rpx 24rpx 14rpx;
+  border: none;
+  border-radius: 24rpx;
+  background: linear-gradient(120deg, #fff7e8, #ffe4bf);
+  box-shadow: 0 8rpx 20rpx rgba(255, 165, 48, 0.14);
+}
+
+.share-card-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.share-card-icon {
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 29rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  background: rgba(255, 255, 255, 0.72);
+  /* margin-right: 16rpx; */
+}
+
+.share-card-texts {
+  min-width: 0;
+}
+
+.share-card-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #4d2e00;
+}
+
+.share-card-desc {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #855300;
+}
+
+.share-card-link {
+  margin-left: 16rpx;
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #c56a00;
+}
+
 .card-row {
   display: flex;
   justify-content: space-between;
@@ -197,6 +251,7 @@
 .chip-btn-on-gradient::after,
 .avatar-picker::after,
 .chip-btn::after,
+.share-card::after,
 .btn-create::after {
   border: none;
 }

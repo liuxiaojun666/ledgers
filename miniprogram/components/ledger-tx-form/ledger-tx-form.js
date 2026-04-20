@@ -2,6 +2,14 @@ function pad2(n) {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
+const {
+  DEFAULT_ICON,
+  PRESET_CATEGORY_ICONS,
+  cleanCustomEmoji,
+  decorateCategoryList,
+  buildCategoryNameWithIcon,
+} = require("../../category-icons");
+
 function msToBookDate(ms) {
   const d = new Date(ms);
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -28,15 +36,20 @@ Component({
       value: [],
       observer(cats) {
         if (!Array.isArray(cats) || cats.length === 0) {
+          this.setData({ categoryDisplayList: [] });
           return;
         }
         const ci = Math.min(
           Math.max(0, this.data.categoryIndex),
           cats.length - 1
         );
+        const patch = {
+          categoryDisplayList: decorateCategoryList(cats),
+        };
         if (ci !== this.data.categoryIndex) {
-          this.setData({ categoryIndex: ci });
+          patch.categoryIndex = ci;
         }
+        this.setData(patch);
       },
     },
   },
@@ -60,6 +73,11 @@ Component({
     newCategoryName: "",
     addingCategory: false,
     categoryNameMaxLen: CATEGORY_NAME_MAX_LEN,
+    categoryDisplayList: [],
+    iconOptions: PRESET_CATEGORY_ICONS,
+    iconIndex: 0,
+    customEmojiInput: "",
+    categorySheetOpen: false,
   },
 
   methods: {
@@ -92,7 +110,23 @@ Component({
         bookDate: msToBookDate(Date.now()),
         showAddCategory: false,
         newCategoryName: "",
+        iconIndex: 0,
+        customEmojiInput: "",
+        categorySheetOpen: false,
       });
+    },
+
+    openCategorySheet() {
+      const list = this.properties.categories || [];
+      if (!Array.isArray(list) || !list.length) {
+        wx.showToast({ title: "暂无分类", icon: "none" });
+        return;
+      }
+      this.setData({ categorySheetOpen: true });
+    },
+
+    closeCategorySheet() {
+      this.setData({ categorySheetOpen: false });
     },
 
     toggleAddCategory() {
@@ -102,6 +136,20 @@ Component({
     onNewCategoryInput(e) {
       const v = String(e.detail.value || "").slice(0, CATEGORY_NAME_MAX_LEN);
       this.setData({ newCategoryName: v });
+    },
+
+    onIconTap(e) {
+      const idx = Number(e.currentTarget.dataset.index);
+      const list = this.data.iconOptions || [];
+      const safe = Number.isFinite(idx)
+        ? Math.min(Math.max(0, idx), list.length - 1)
+        : 0;
+      this.setData({ iconIndex: safe });
+    },
+
+    onCustomEmojiInput(e) {
+      const v = cleanCustomEmoji(e.detail.value);
+      this.setData({ customEmojiInput: v });
     },
 
     /** 父页面在 categories 更新后调用，用于选中新加的分类 */
@@ -122,6 +170,13 @@ Component({
     onAddCategory() {
       const { ledgerId } = this.properties;
       const name = String(this.data.newCategoryName || "").trim();
+      const iconOptions = this.data.iconOptions || [];
+      const selectedIcon = iconOptions[this.data.iconIndex] || DEFAULT_ICON;
+      const customEmoji = this.data.customEmojiInput;
+      const categoryName = buildCategoryNameWithIcon(name, {
+        selectedIcon,
+        customEmoji,
+      });
       if (!ledgerId) {
         wx.showToast({ title: "缺少账本", icon: "none" });
         return;
@@ -137,7 +192,7 @@ Component({
           data: {
             type: "addLedgerCategory",
             ledgerId,
-            name,
+            name: categoryName,
           },
         })
         .then((resp) => {
@@ -147,10 +202,12 @@ Component({
             return;
           }
           const list = Array.isArray(r.list) ? r.list : [];
-          const newIdx = list.indexOf(name);
+          const newIdx = list.indexOf(categoryName);
           this.setData({
             newCategoryName: "",
             showAddCategory: false,
+            iconIndex: 0,
+            customEmojiInput: "",
           });
           this.triggerEvent("categoriesupdated", {
             categories: list,
@@ -176,6 +233,18 @@ Component({
 
     onCategoryChange(e) {
       this.setData({ categoryIndex: Number(e.detail.value) });
+    },
+
+    onCategoryTap(e) {
+      const idx = Number(e.currentTarget.dataset.index);
+      const list = this.data.categoryDisplayList || [];
+      const safe = Number.isFinite(idx)
+        ? Math.min(Math.max(0, idx), list.length - 1)
+        : 0;
+      this.setData({
+        categoryIndex: safe,
+        categorySheetOpen: false,
+      });
     },
 
     onFlowChange(e) {

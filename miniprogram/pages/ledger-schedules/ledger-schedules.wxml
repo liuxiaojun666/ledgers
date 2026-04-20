@@ -1,30 +1,17 @@
 <view class="page">
   <view wx:if="{{loading}}" class="hint">加载中…</view>
-
   <block wx:else>
     <view class="hero-card card-tap" bindtap="onAdd">
       <view class="hero-main">自动记账</view>
       <view class="hero-sub">点击这里，新建定时任务</view>
       <view class="hero-icon">🗓</view>
     </view>
-
     <view wx:if="{{!list.length}}" class="empty-wrap">
-      <image
-        class="empty-illu"
-        src="../../images/LmtpX.png"
-        mode="widthFix"
-      />
+      <image class="empty-illu" src="../../images/LmtpX.png" mode="widthFix" bindtap="onAdd" />
       <view class="empty-title">暂无定时任务</view>
       <view class="empty-desc">还没有任务，先从上方图片进入新建吧</view>
     </view>
-
-    <view
-      wx:for="{{list}}"
-      wx:key="_id"
-      class="card card-tap"
-      data-id="{{item._id}}"
-      bindtap="onEdit"
-    >
+    <view wx:for="{{list}}" wx:key="_id" class="card card-tap" data-id="{{item._id}}" bindtap="onEdit">
       <view class="row-top">
         <view>
           <view class="item-title">{{item.ledgerName}} · {{item.category}}</view>
@@ -34,17 +21,17 @@
             <view class="meta-line err" wx:if="{{item.lastError}}">{{item.lastError}}</view>
           </view>
         </view>
-        <text class="amt {{item.flow === 'income' ? 'income' : ''}}">{{item.flow === 'income' ? '+' : '-'}}¥{{item.amountYuan}}</text>
+        <text class="amt {{item.flow === 'income' ? 'income' : ''}}">
+          {{item.flow === 'income' ? '+' : '-'}}¥{{item.amountYuan}}
+        </text>
       </view>
       <view class="switch-row" catchtap="noop">
         <text>{{item.enabled ? "启用中" : "已暂停"}}</text>
-        <switch
-          checked="{{item.enabled}}"
-          disabled="{{item.status === 'completed'}}"
-          data-id="{{item._id}}"
-          bindchange="onToggleEnabled"
-        />
+        <switch checked="{{item.enabled}}" disabled="{{item.status === 'completed'}}" data-id="{{item._id}}" bindchange="onToggleEnabled" />
       </view>
     </view>
   </block>
+  <view class="footer-action">
+    <button class="footer-action-btn" bindtap="onAdd">新建定时记账</button>
+  </view>
 </view>

@@ -1,11 +1,22 @@
 const NAME_MAX = 16;
+const {
+  DEFAULT_ICON,
+  PRESET_CATEGORY_ICONS,
+  cleanCustomEmoji,
+  decorateCategoryName,
+  buildCategoryNameWithIcon,
+} = require("../../category-icons");
 
 Page({
   data: {
     ledgerId: "",
     categories: [],
+    categoryRows: [],
     loading: true,
     newName: "",
+    iconOptions: PRESET_CATEGORY_ICONS,
+    iconIndex: 0,
+    customEmojiInput: "",
     saving: false,
   },
 
@@ -90,6 +101,7 @@ Page({
         this.setData({
           loading: false,
           categories: Array.isArray(r.list) ? r.list : [],
+          categoryRows: this.buildCategoryRows(r.list),
         });
       })
       .catch(() => {
@@ -103,9 +115,37 @@ Page({
     this.setData({ newName: v });
   },
 
+  onIconTap(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    const list = this.data.iconOptions || [];
+    const safe = Number.isFinite(idx)
+      ? Math.min(Math.max(0, idx), list.length - 1)
+      : 0;
+    this.setData({ iconIndex: safe });
+  },
+
+  onCustomEmojiInput(e) {
+    this.setData({ customEmojiInput: cleanCustomEmoji(e.detail.value) });
+  },
+
+  buildCategoryRows(list) {
+    if (!Array.isArray(list)) {
+      return [];
+    }
+    return list.map((name) => ({
+      name,
+      displayName: decorateCategoryName(name),
+    }));
+  },
+
   add() {
     const name = (this.data.newName || "").trim();
-    const { ledgerId } = this.data;
+    const { ledgerId, iconOptions, iconIndex, customEmojiInput } = this.data;
+    const selectedIcon = iconOptions[iconIndex] || DEFAULT_ICON;
+    const categoryName = buildCategoryNameWithIcon(name, {
+      selectedIcon,
+      customEmoji: customEmojiInput,
+    });
     if (!ledgerId) {
       wx.showToast({ title: "暂无可用账本", icon: "none" });
       return;
@@ -121,7 +161,7 @@ Page({
         data: {
           type: "addLedgerCategory",
           ledgerId,
-          name,
+          name: categoryName,
         },
       })
       .then((resp) => {
@@ -129,7 +169,10 @@ Page({
         if (r.success) {
           this.setData({
             newName: "",
+            iconIndex: 0,
+            customEmojiInput: "",
             categories: Array.isArray(r.list) ? r.list : this.data.categories,
+            categoryRows: this.buildCategoryRows(r.list),
           });
           wx.showToast({ title: "已添加" });
         } else {
@@ -172,6 +215,7 @@ Page({
             if (r.success) {
               this.setData({
                 categories: Array.isArray(r.list) ? r.list : [],
+                categoryRows: this.buildCategoryRows(r.list),
               });
               wx.showToast({ title: "已删除" });
             } else {

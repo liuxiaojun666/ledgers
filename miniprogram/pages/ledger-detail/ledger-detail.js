@@ -74,9 +74,6 @@ Page({
   },
 
   onLoad(options) {
-    wx.showShareMenu({
-      menus: ["shareAppMessage"],
-    });
     const launchQ = safeEnterQuery(wx.getLaunchOptionsSync);
     const ledgerId = pickLedgerId(options, launchQ);
     const inviteCode = pickInviteCode(options, launchQ);
@@ -133,17 +130,4 @@ Page({
     }, 400);
   },
 
-  onShareAppMessage() {
-    const { shareLedgerName, shareLedgerId, shareInviteCode } = this.data;
-    if (shareLedgerId && shareInviteCode) {
-      return {
-        title: shareLedgerName ? `一起记账：${shareLedgerName}` : "一起记账",
-        path: `/pages/ledger-detail/ledger-detail?id=${shareLedgerId}&invite=${shareInviteCode}`,
-      };
-    }
-    return {
-      title: "一起记账",
-      path: "/pages/ledgers/ledgers",
-    };
-  },
 });

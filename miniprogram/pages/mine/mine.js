@@ -17,6 +17,17 @@ function resolveProfileDisplayName(profile, fallbackNickName) {
   return String((profile && profile.nickName) || fallbackNickName || "").trim();
 }
 
+const MINE_SHARE_IMAGE_URL = "/images/LmtpX.png";
+
+function buildMineShareTitle(displayName) {
+  const name = String(displayName || "").trim().replace(/\s+/g, " ");
+  if (!name) {
+    return "我在用协同记账，邀请你一起把账目管清楚";
+  }
+  const sliced = name.length > 10 ? `${name.slice(0, 9)}…` : name;
+  return `${sliced} 邀请你一起协同记账`;
+}
+
 Page({
   data: {
     profileSyncing: false,
@@ -337,6 +348,22 @@ Page({
         this.setCustomTabBarHidden(false);
       },
     });
+  },
+
+  onShareAppMessage() {
+    const displayName = this.data.profileDisplayName || this.data.profileNickName;
+    const joinedLedgerCount = Number(this.data.joinedLedgerCount || 0);
+    const title = buildMineShareTitle(displayName);
+    const countDesc =
+      joinedLedgerCount > 0
+        ? `我已经在这里管理 ${joinedLedgerCount} 个账本了`
+        : "多人协作记账、预算和统计都很方便";
+    return {
+      title,
+      desc: countDesc,
+      path: "/pages/ledgers/ledgers",
+      imageUrl: MINE_SHARE_IMAGE_URL,
+    };
   },
 
 });

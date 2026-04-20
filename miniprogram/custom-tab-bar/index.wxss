@@ -17,7 +17,7 @@
 .tabbar-pill {
   height: 124rpx;
   border-radius: 72rpx;
-  border: 1rpx solid #e5e5e5;
+  border: 1px solid #e5e5e5;
   background: #ffffff;
   padding: 8rpx;
   display: flex;
@@ -42,7 +42,7 @@
 }
 
 .tab-label {
-  font-size: 20rpx;
+  font-size: 26rpx;
   line-height: 1;
   letter-spacing: 1rpx;
   font-weight: 600;

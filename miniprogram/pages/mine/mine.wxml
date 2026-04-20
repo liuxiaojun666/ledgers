@@ -25,6 +25,16 @@
     </view>
     <text class="card-link">去管理 ></text>
   </view>
+  <button class="share-card" open-type="share">
+    <view class="share-card-left">
+      <text class="share-card-icon">🎁</text>
+      <view class="share-card-texts">
+        <view class="share-card-title">分享给朋友</view>
+        <!-- <view class="share-card-desc">邀请朋友一起协同记账，账目更清晰</view> -->
+      </view>
+    </view>
+    <text class="share-card-link">立即分享 ></text>
+  </button>
   <button wx:if="{{showEmptyLedgerCreate}}" class="btn-create" bindtap="createLedger">
     + 新建账本
   </button>

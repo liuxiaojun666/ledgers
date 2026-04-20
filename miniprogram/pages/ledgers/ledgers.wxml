@@ -28,7 +28,7 @@
       </view>
       <view class="multi-ledger-banner__cta">+ 新建</view>
     </view>
-    <view class="empty">暂无账本，先新建一个，再在详情里分享给微信好友一起记。</view>
+    <view class="empty">暂无账本，先新建一个，再到协作者管理里邀请微信好友一起记。</view>
   </block>
   <view wx:else class="content">
     <view class="multi-ledger-banner" hover-class="multi-ledger-banner--hover" bindtap="createLedger">

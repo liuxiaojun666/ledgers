@@ -61,11 +61,7 @@ Page({
     sheetDeleting: false,
   },
 
-  onLoad() {
-    wx.showShareMenu({
-      menus: ["shareAppMessage"],
-    });
-  },
+  onLoad() {},
 
   onShow() {
     this.setTabBarState({ selected: 0, hidden: !!this.data.sheetOpen });
@@ -122,9 +118,6 @@ Page({
         loading: false,
       });
       this.syncDisplayList();
-      if (showDetailView0 && embeddedLedgerId0) {
-        wx.showShareMenu({ menus: ["shareAppMessage"] });
-      }
     } else {
       this.setData({ loading: true });
     }
@@ -160,9 +153,6 @@ Page({
           shareInviteCode: "",
         });
         this.syncDisplayList();
-        if (showDetailView && embeddedLedgerId) {
-          wx.showShareMenu({ menus: ["shareAppMessage"] });
-        }
       })
       .catch(() => {
         wx.showToast({
@@ -191,20 +181,6 @@ Page({
 
   onEmbeddedDetailDeleted() {
     this.refresh();
-  },
-
-  onShareAppMessage() {
-    const { shareLedgerName, shareLedgerId, shareInviteCode, showDetailView } = this.data;
-    if (showDetailView && shareLedgerId && shareInviteCode) {
-      return {
-        title: shareLedgerName ? `一起记账：${shareLedgerName}` : "一起记账",
-        path: `/pages/ledger-detail/ledger-detail?id=${shareLedgerId}&invite=${shareInviteCode}`,
-      };
-    }
-    return {
-      title: "协同记账",
-      path: "/pages/ledgers/ledgers",
-    };
   },
 
   createLedger() {

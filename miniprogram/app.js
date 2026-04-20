@@ -1,6 +1,91 @@
 // app.js
+const SHARE_WHITELIST_ROUTES = new Set([
+  "pages/ledger-collaborators/ledger-collaborators",
+  "pages/mine/mine",
+]);
+
+function isShareAllowedForPage(page) {
+  const route = String((page && page.route) || "").trim();
+  return SHARE_WHITELIST_ROUTES.has(route);
+}
+
+function syncShareMenuByPage(page) {
+  if (typeof wx === "undefined") {
+    return;
+  }
+  try {
+    if (isShareAllowedForPage(page)) {
+      wx.showShareMenu({ menus: ["shareAppMessage"] });
+      return;
+    }
+    wx.hideShareMenu({ menus: ["shareAppMessage", "shareTimeline"] });
+  } catch (e) {
+    // ignore base library incompatibility
+  }
+}
+
+function setupAutoUpdate() {
+  if (typeof wx === "undefined" || typeof wx.getUpdateManager !== "function") {
+    return;
+  }
+
+  const updateManager = wx.getUpdateManager();
+
+  updateManager.onCheckForUpdate(() => {});
+
+  updateManager.onUpdateReady(() => {
+    wx.showModal({
+      title: "更新提示",
+      content: "检测到新版本，是否重启小程序完成更新？",
+      confirmText: "立即更新",
+      cancelText: "稍后",
+      success(res) {
+        if (res.confirm) {
+          updateManager.applyUpdate();
+        }
+      },
+    });
+  });
+
+  updateManager.onUpdateFailed(() => {
+    wx.showToast({
+      title: "新版本下载失败",
+      icon: "none",
+      duration: 2500,
+    });
+  });
+}
+
+if (!globalThis.__ledgerSharePageWrapped__) {
+  globalThis.__ledgerSharePageWrapped__ = true;
+  const rawPage = Page;
+  Page = function wrapPageWithSharePolicy(options) {
+    if (!options || typeof options !== "object") {
+      return rawPage(options);
+    }
+    const rawOnLoad = options.onLoad;
+    const rawOnShow = options.onShow;
+    options.onLoad = function patchedOnLoad(...args) {
+      syncShareMenuByPage(this);
+      if (typeof rawOnLoad === "function") {
+        return rawOnLoad.apply(this, args);
+      }
+      return undefined;
+    };
+    options.onShow = function patchedOnShow(...args) {
+      syncShareMenuByPage(this);
+      if (typeof rawOnShow === "function") {
+        return rawOnShow.apply(this, args);
+      }
+      return undefined;
+    };
+    return rawPage(options);
+  };
+}
+
 App({
   onLaunch: function () {
+    setupAutoUpdate();
     this.globalData = {
       // 当前要访问的资源方云环境 ID（环境共享）
       env: "dev-4iov0",

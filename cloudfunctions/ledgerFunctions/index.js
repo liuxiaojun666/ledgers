@@ -24,6 +24,7 @@
  * analyzeLedger（统计页数据）：按周/月/年；groups / groupsByPerson 为分类与成员的「支出排行」（仅支出流水）；汇总区净额等仍含收支；另返回 trendPoints、饼图 pieGroups* 等。
  * getTransaction / updateTransaction / deleteTransaction：仅流水记录人可读取（编辑页）/修改/删除；无 createdByOpenid 的历史记录仅账本创建者可改删。
  * deleteLedger：仅创建者可删账本，并删除该账本下全部流水与成员关联。
+ * exitLedger：非创建者可主动退出账本，会清理该成员在账本内的成员关系与定时任务。
  * listLedgers：若当前用户无任何账本，会自动创建默认账本「我的账本」后再返回列表。
  *   每条含当月（北京时间自然月）收入/支出分汇总 monthIncomeCents/monthExpenseCents、monthSummaryLabel，
  *   口径与统计一致（bookedAt ?? createdAt；每账本最多拉取 1000 条流水参与汇总，与 analyzeLedger 一致）。
@@ -109,7 +110,26 @@ const memberDocId = (openid, ledgerId) => `${openid}_${ledgerId}`;
 const joinRequestDocId = (openid, ledgerId) => `${openid}_${ledgerId}`;
 const inviteDocId = (ledgerId, inviteCode) => `${ledgerId}_${inviteCode}`;
 
-const DEFAULT_CATEGORIES = ["餐饮", "交通", "购物", "娱乐", "住房", "其他"];
+const DEFAULT_CATEGORIES = [
+  "餐饮",
+  "早餐",
+  "午餐",
+  "晚餐",
+  "买菜",
+  "交通",
+  "住房",
+  "水电燃气",
+  "通讯网络",
+  "日用",
+  "服饰",
+  "购物",
+  "医疗",
+  "教育",
+  "人情",
+  "旅行",
+  "娱乐",
+  "其他",
+];
 const MAX_LEDGER_CATEGORIES = 24;
 const CATEGORY_NAME_MAX_LEN = 16;
 const LEDGER_NAME_MAX_LEN = 24;
@@ -526,6 +546,8 @@ exports.main = async (event) => {
         return await reviewJoinRequest(openid, event);
       case "removeCollaborator":
         return await removeCollaborator(openid, event);
+      case "exitLedger":
+        return await exitLedger(openid, event);
       case "getLedger":
         return await getLedger(openid, event.ledgerId);
       case "deleteLedger":
@@ -1187,6 +1209,51 @@ async function removeCollaborator(openid, event) {
     ledgerId,
     ownerOpenid: targetOpenid,
   }, 100);
+  return { success: true };
+}
+
+async function exitLedger(openid, event) {
+  const ledgerId = normalizeLedgerId(event.ledgerId);
+  if (!ledgerId) {
+    return { success: false, errMsg: "缺少 ledgerId" };
+  }
+  const gate = await assertMember(openid, ledgerId);
+  if (!gate.ok) {
+    return { success: false, errMsg: gate.errMsg };
+  }
+  const ledger = gate.ledger;
+  if (isLedgerCreator(ledger, openid)) {
+    return { success: false, errMsg: "创建者不能退出账本，请删除账本" };
+  }
+  await db.collection("ledgers").doc(ledgerId).update({
+    data: {
+      memberOpenids: _.pull(openid),
+    },
+  });
+  try {
+    await db
+      .collection("ledger_members")
+      .doc(memberDocId(openid, ledgerId))
+      .remove();
+  } catch (e) {
+    // ignore
+  }
+  try {
+    await db
+      .collection("ledger_join_requests")
+      .doc(joinRequestDocId(openid, ledgerId))
+      .remove();
+  } catch (e) {
+    // ignore
+  }
+  await removeDocumentsWhere(
+    "ledger_schedules",
+    {
+      ledgerId,
+      ownerOpenid: openid,
+    },
+    100
+  );
   return { success: true };
 }
 

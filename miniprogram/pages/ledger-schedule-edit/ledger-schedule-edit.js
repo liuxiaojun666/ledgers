@@ -2,6 +2,8 @@ function pad2(n) {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
+const { decorateCategoryList } = require("../../category-icons");
+
 function todayStr() {
   const t = new Date();
   return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(t.getDate())}`;
@@ -24,6 +26,7 @@ Page({
     ledgerNames: [],
     ledgerIndex: 0,
     categories: ["其他"],
+    categoryDisplayList: ["📦 其他"],
     categoryIndex: 0,
     amountInput: "",
     note: "",
@@ -41,6 +44,7 @@ Page({
     status: "active",
     saving: false,
     deleting: false,
+    categorySheetOpen: false,
   },
 
   onLoad(options) {
@@ -125,14 +129,19 @@ Page({
         this.setData({
           ledgerIndex: idx,
           categories: cats,
+          categoryDisplayList: decorateCategoryList(cats),
           categoryIndex: 0,
+          categorySheetOpen: false,
         });
       })
       .catch(() => {
+        const fallback = ["其他"];
         this.setData({
           ledgerIndex: idx,
-          categories: ["其他"],
+          categories: fallback,
+          categoryDisplayList: decorateCategoryList(fallback),
           categoryIndex: 0,
+          categorySheetOpen: false,
         });
       });
   },
@@ -181,6 +190,23 @@ Page({
     this.setData({ flowIndex: Number(e.detail.value) });
   },
 
+  onOpenCategorySheet() {
+    const { status, categories } = this.data;
+    if (status === "completed") {
+      return;
+    }
+    const list = categories || [];
+    if (!list.length) {
+      wx.showToast({ title: "暂无分类", icon: "none" });
+      return;
+    }
+    this.setData({ categorySheetOpen: true });
+  },
+
+  closeCategorySheet() {
+    this.setData({ categorySheetOpen: false });
+  },
+
   onFlowTabTap(e) {
     if (this.data.status === "completed") {
       return;
@@ -192,8 +218,23 @@ Page({
     this.setData({ flowIndex: idx });
   },
 
-  onCategoryChange(e) {
-    this.setData({ categoryIndex: Number(e.detail.value) });
+  onCategoryTap(e) {
+    if (this.data.status === "completed") {
+      return;
+    }
+    const idx = Number(e.currentTarget.dataset.index);
+    const list = this.data.categories || [];
+    if (!list.length) {
+      return;
+    }
+    if (!Number.isFinite(idx)) {
+      return;
+    }
+    const ci = Math.min(Math.max(0, idx), list.length - 1);
+    this.setData({
+      categoryIndex: ci,
+      categorySheetOpen: false,
+    });
   },
 
   onRecurrenceChange(e) {

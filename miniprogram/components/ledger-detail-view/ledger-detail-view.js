@@ -806,12 +806,7 @@ Component({
 
     openDetailMenu() {
       const ledgerId = (this.properties.ledgerId || "").trim();
-      if (
-        !ledgerId ||
-        this.data.loading ||
-        this.data.pendingApproval ||
-        !this.data.isCreator
-      ) {
+      if (!ledgerId || this.data.loading || this.data.pendingApproval) {
         return;
       }
       this.setData({ sheetOpen: true }, () => {
@@ -949,6 +944,58 @@ Component({
             })
             .catch(() => {
               wx.showToast({ title: "删除失败", icon: "none" });
+            })
+            .finally(() => {
+              this.setData({ sheetDeleting: false });
+            });
+        },
+        complete: () => {
+          this._emitHostTabBarHidden(false);
+        },
+      });
+    },
+
+    onDetailSheetExitLedger() {
+      if (this.data.isCreator) {
+        wx.showToast({ title: "创建者不能退出账本", icon: "none" });
+        return;
+      }
+      const ledgerId = (this.properties.ledgerId || "").trim();
+      const ledgerName = String(this.data.ledgerName || "").trim();
+      if (!ledgerId || this.data.sheetDeleting) {
+        return;
+      }
+      this.closeDetailSheet();
+      this._emitHostTabBarHidden(true);
+      wx.showModal({
+        title: "退出账本",
+        content: `确认退出「${
+          ledgerName || "该账本"
+        }」吗？退出后将无法继续查看该账本及其流水。`,
+        confirmText: "退出",
+        confirmColor: "#e54545",
+        success: (res) => {
+          if (!res.confirm) {
+            return;
+          }
+          this.setData({ sheetDeleting: true });
+          wx.cloud
+            .callFunction({
+              name: "ledgerFunctions",
+              data: { type: "exitLedger", ledgerId },
+            })
+            .then((resp) => {
+              const r = resp.result || {};
+              if (!r.success) {
+                wx.showToast({ title: r.errMsg || "退出失败", icon: "none" });
+                return;
+              }
+              wx.showToast({ title: "已退出" });
+              this._clearLedgerDetailCache(ledgerId);
+              this.triggerEvent("deleted", { ledgerId });
+            })
+            .catch(() => {
+              wx.showToast({ title: "退出失败", icon: "none" });
             })
             .finally(() => {
               this.setData({ sheetDeleting: false });

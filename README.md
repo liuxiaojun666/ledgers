@@ -30,6 +30,7 @@
 
 - 在微信开发者工具打开工程（`project.config.json` 指定了 `miniprogramRoot` 与 `cloudfunctionRoot`）。
 - 在 `miniprogram/app.js` 配置 `globalData.env` 为你的云环境 ID。
+- `miniprogram/app.js` 会在 `onLaunch` 自动注册 `UpdateManager`：检测到新版本后弹窗提示用户重启应用，下载失败时给出轻提示。
 - `miniprogram/app.json` 已启用分包：主包仅保留 3 个 Tab 页；其余业务页按目录拆到多个 `subPackages.root`（如 `pages/ledger-detail`、`pages/ledger-manage`、`pages/ledger-collaborators` 等），用于控制主包大小不超过 2MB。
 - `miniprogram/app.json` 已配置 `preloadRule`：进入任一 Tab 页后，在 `all` 网络下预下载上述业务分包，进一步降低首次进入业务页的等待时间。
 - `project.config.json` 的 `packOptions.ignore` 已忽略 `node_modules` 与未使用的大图素材（路径以 `miniprogramRoot` 为根），避免上传时把本地依赖和演示资源打进代码包。
@@ -44,9 +45,15 @@
 - 如果改了接口入参，先对照 `cloudfunctions/ledgerFunctions/index.js` 的 `switch(type)` 与页面调用处。
 - 统计页账本选择会记录到本地缓存（`lastAnalyzeLedgerId`），下次进入优先恢复；若该账本已删除/无权限会自动回退到可用账本。
 - 账本页（`pages/ledgers/ledgers`）的多账本介绍 banner 在**非加载态始终展示**，不再按账本数量决定显隐。
+- 新建账本默认分类已扩展为 18 项（如餐饮、三餐、买菜、交通、住房、水电燃气、通讯网络、日用、服饰、医疗、教育、人情、旅行、娱乐等），覆盖日常记账高频场景；仍可在「分类管理」中继续增删。
+- 分类显示层支持“分类名前 icon”映射（见 `miniprogram/category-icons.js`）：新增分类时可点选 icon 网格或输入自定义 emoji（emoji 优先）；保存值为“emoji + 分类名”文本，兼容历史流水与统计口径。
+- 记一笔页（`components/ledger-tx-form`）分类选择从系统 `picker` 改为底部弹窗：主表单仅展示当前分类与入口，弹窗内铺平双列网格（可滚动），长分类名与 emoji 分类可完整阅读。
+- 定时记账页（`pages/ledger-schedule-edit`）分类选择同样为底部弹窗 + 铺平网格，沿用同一套「icon + 分类名」显示口径；一次性任务 `status=completed` 时不打开弹窗。
+- 定时记账列表页（`pages/ledger-schedules`）底部提供固定主按钮「新家定时记账」，列表态与空态都可直接发起新建。
 - 我的页资料采用手动设置：点击圆头像触发 `chooseAvatar` 后会先上传云存储并调用 `updateMyProfile` 持久化（可只更新头像），点击昵称触发输入弹窗并保存；不依赖 `getUserProfile` 返回真实微信昵称。未设置昵称时，昵称展示与流水一致，回退为匿名 openid（`…` + 后 8 位）。
 - 我的页的「分类管理」「定时记账」入口点击后直接跳转，不在 `pages/mine` 预加载；目标页内自行展示 loading/加载态。
 - 自定义 TabBar 的立体感仅通过 `box-shadow` 增强：不新增额外覆盖层，避免影响点击区域；样式集中在 `miniprogram/custom-tab-bar/index.wxss` 的 `tabbar-pill` 和 `tab-item-active`。选中态由三个 Tab 页在 `onShow` 显式写入固定索引；`custom-tab-bar` 不再基于 route 做自动同步，点击 Tab 时先即时 `setData({ selected })`，最终以页面 `onShow` 为准。
+- 分享入口口径：全局页面默认隐藏微信分享菜单（`wx.hideShareMenu`），仅 `pages/ledger-collaborators` 与 `pages/mine` 放开 `shareAppMessage`；前者用于邀请协作者，后者提供“分享给朋友”卡片入口（`open-type="share"`）。
 
 ## 云函数与定时任务
 
@@ -73,6 +80,7 @@
   - `listLedgerCollaborators` -> `pages/ledger-collaborators`、`components/ledger-detail-view`（每个成员/待审批项含 `avatarUrl`）
   - `reviewJoinRequest` -> `pages/ledger-pending`
   - `removeCollaborator` -> `pages/ledger-collaborators`
+  - `exitLedger` -> `components/ledger-detail-view`
 - **分类与流水**
   - `listCategories` -> `pages/ledger-tx`、`pages/ledger-categories`、`pages/ledger-schedule-edit`
   - `addLedgerCategory` / `removeLedgerCategory` -> `pages/ledger-categories`、`components/ledger-tx-form`
@@ -102,11 +110,11 @@
   - 删除账本成功后统一 `switchTab` 回 `pages/ledgers/ledgers`，并清空 `showBillLedgerListOnce`；若仅剩一个账本将自动进入内嵌详情，多个账本则展示列表。
 - `pages/ledger-collaborators/ledger-collaborators`
   - `getLedger`、`createLedgerInvite`、`listLedgerCollaborators`、`removeCollaborator`
-  - 提供微信分享邀请和协作者列表管理，待审批入口跳转到 `pages/ledger-pending`。
+  - 提供微信分享邀请和协作者列表管理，待审批入口跳转到 `pages/ledger-pending`；与 `pages/mine` 一起属于允许分享的页面。
   - `onShareAppMessage` 自定义邀请卡片标题与封面图：标题使用「邀请你加入『账本名』一起记账」，封面图固定 `miniprogram/images/LmtpX.png`，并对超长账本名做截断避免分享文案被系统硬截断。
 - `components/ledger-detail-view`
-  - `enterLedger`、`createLedgerInvite`、`listLedgerCollaborators`、`getLedger`、`updateLedgerName`、`deleteLedger`、`listTransactions`
-  - 标题栏账本名称右侧仅创建者显示「⋯」并可打开底部抽屉：预算设置、修改名称、协作者管理、删除账本；删除成功会 `triggerEvent('deleted')`。
+  - `enterLedger`、`createLedgerInvite`、`listLedgerCollaborators`、`getLedger`、`updateLedgerName`、`deleteLedger`、`exitLedger`、`listTransactions`
+  - 标题栏账本名称右侧「⋯」对成员可见：创建者抽屉包含预算设置/修改名称/协作者管理/删除账本，非创建者仅显示「退出账本」；删除或退出成功后都会 `triggerEvent('deleted')`。
   - 嵌入 `pages/ledgers`（`record-inline`）时抽屉打开/关闭及删账本确认弹窗通过 `bind:hosttabbar` 同步自定义 TabBar 显隐。
   - 非 `record-inline` 模式下，底部 fixed「+ 记一笔」按钮保持水平居中显示。
   - 最近流水在前端按日期分组渲染：当日分组显示“今天”、前一日显示“昨天”、更早记录显示具体日期（`YYYY-MM-DD`）；分组内单条流水不再重复展示日期，仅保留时间（有时分时展示 `HH:mm`）。
@@ -121,10 +129,12 @@
   - `listGroupTransactions`
 - `pages/ledger-schedules/ledger-schedules`
   - `listMySchedules`、`updateSchedule`（启停）
+  - 页面底部固定主按钮「新家定时记账」统一走 `onAdd` 跳转到新建页
 - `pages/ledger-schedule-edit/ledger-schedule-edit`
   - `listLedgers`、`getSchedule`、`listCategories`、`createSchedule`、`updateSchedule`、`deleteSchedule`
 - `pages/mine/mine`
   - `listLedgers`、`getMyProfile`、`updateMyProfile`、`createLedger`
+  - 页面内新增“分享给朋友”卡片按钮（`open-type="share"`），分享卡片标题会优先使用当前昵称，并统一使用 `miniprogram/images/LmtpX.png` 作为封面图。
 
 ## 前端依赖（统计图表）
 
@@ -139,7 +149,7 @@
 - 改统计口径与展示：先改云函数，再改 `pages/ledger-analytics/*`
 - 改账本入口交互：`pages/ledgers/ledgers.js`、`components/ledger-detail-view/*`
 - 改管理分类页视觉：`pages/ledger-categories/*`，与 `pages/ledger-budget` / `pages/ledger-pending` 保持同一套 Pencil 蓝白卡片与胶囊按钮风格
-- 改空状态视觉：优先复用已有插画资源；`components/ledger-detail-view` 的“最近流水空状态”与 `pages/ledger-schedules` 共用 `miniprogram/images/LmtpX.png`；`components/ledger-detail-view` 与 `pages/ledger-categories` 的加载态都用 `miniprogram/images/ledger-detail-loading.png`（勿与空态混淆）
+- 改空状态视觉：优先复用已有插画资源；`components/ledger-detail-view` 的“最近流水空状态”与 `pages/ledger-schedules` 共用 `miniprogram/images/LmtpX.png`，且两处空态插图都支持点击直达新增入口（前者进“记一笔”，后者进“新建定时任务”）；`components/ledger-detail-view` 与 `pages/ledger-categories` 的加载态都用 `miniprogram/images/ledger-detail-loading.png`（勿与空态混淆）
 - 改 Tab 行为：优先改 `miniprogram/custom-tab-bar/*`（包含选中态同步与显隐）；业务页仅在需要临时遮挡时调用 `getTabBar().setData({ hidden })`
 
 ## 提测前自检清单

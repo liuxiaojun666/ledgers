@@ -28,12 +28,12 @@
         <view class="field-value">{{ledgerNames[ledgerIndex]}}</view>
       </view>
     </picker>
-    <picker mode="selector" range="{{categories}}" value="{{categoryIndex}}" bindchange="onCategoryChange" disabled="{{status === 'completed'}}">
-      <view class="field-row">
-        <text class="field-label">分类</text>
-        <view class="field-value">{{categories[categoryIndex]}}</view>
+    <view class="field-row category-panel-row {{status === 'completed' ? 'category-panel-row--disabled' : ''}}" bindtap="onOpenCategorySheet">
+      <text class="field-label">分类</text>
+      <view class="field-value category-panel-value">
+        <text class="category-panel-text">{{categoryDisplayList[categoryIndex] || "请选择"}}</text>
       </view>
-    </picker>
+    </view>
     <picker mode="selector" range="{{recurrenceLabels}}" value="{{recurrenceIndex}}" bindchange="onRecurrenceChange" disabled="{{status === 'completed'}}">
       <view class="field-row">
         <text class="field-label">重复</text>
@@ -75,5 +75,24 @@
         {{mode === "edit" ? "保存" : "创建"}}
       </button>
     </view>
+    <block wx:if="{{categorySheetOpen}}">
+      <view class="schedule-cat-sheet-mask" catchtap="closeCategorySheet"></view>
+      <view class="schedule-cat-sheet-panel">
+        <view class="schedule-cat-sheet-grabber"></view>
+        <view class="schedule-cat-sheet-head">
+          <view class="schedule-cat-sheet-title">选择分类</view>
+        </view>
+        <scroll-view scroll-y class="schedule-cat-sheet-scroll">
+          <view class="category-flat-grid">
+            <view class="schedule-category-chip {{categoryIndex === index ? 'schedule-category-chip-active' : ''}}" wx:for="{{categoryDisplayList}}" wx:key="index" data-index="{{index}}" bindtap="onCategoryTap">
+              {{item}}
+            </view>
+          </view>
+        </scroll-view>
+        <view class="schedule-cat-sheet-cancel-wrap">
+          <view class="schedule-cat-sheet-cancel" bindtap="closeCategorySheet">取消</view>
+        </view>
+      </view>
+    </block>
   </block>
 </view>

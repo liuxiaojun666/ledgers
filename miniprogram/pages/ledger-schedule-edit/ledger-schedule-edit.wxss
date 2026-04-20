@@ -99,12 +99,12 @@
 .amount-input-row {
   margin-top: 8rpx;
   display: flex;
-  align-items: baseline;
+  align-items: center;
 }
 
 .amount-prefix {
   font-size: 58rpx;
-  line-height: 1;
+  line-height: 1.5;
   color: #1f63ff;
   font-weight: 700;
 }
@@ -114,7 +114,8 @@
   margin-left: 8rpx;
   min-width: 0;
   font-size: 64rpx;
-  line-height: 1.1;
+  line-height: 1.2;
+  height: 1.2em;
   color: #1f4fbd;
   font-weight: 700;
 }
@@ -144,6 +145,147 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.category-panel-row {
+  margin-bottom: 14rpx;
+}
+
+.category-panel-row:active {
+  opacity: 0.94;
+}
+
+.category-panel-row--disabled {
+  opacity: 0.6;
+}
+
+.category-panel-row--disabled:active {
+  opacity: 0.6;
+}
+
+.category-panel-row .field-value.category-panel-value {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.category-panel-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12rpx;
+  max-width: 72%;
+}
+
+.category-panel-text {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
+  text-align: right;
+  line-height: 1.35;
+}
+
+.category-panel-chevron {
+  flex-shrink: 0;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #2a68ff;
+}
+
+.category-flat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  padding: 12rpx 28rpx 28rpx;
+  box-sizing: border-box;
+}
+
+.schedule-category-chip {
+  flex: 1 1 calc(50% - 8rpx);
+  min-width: calc(50% - 8rpx);
+  min-height: 76rpx;
+  padding: 12rpx 14rpx;
+  border-radius: 14rpx;
+  border: 1rpx solid #dce7ff;
+  background: #f8faff;
+  color: #5f6f8c;
+  font-size: 26rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+  word-break: break-word;
+}
+
+.schedule-category-chip-active {
+  color: #1f63ff;
+  border-color: #1f63ff;
+  background: #eaf1ff;
+  box-shadow: 0 0 0 2rpx rgba(31, 99, 255, 0.14) inset;
+}
+
+.schedule-cat-sheet-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+}
+
+.schedule-cat-sheet-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2001;
+  background: #ffffff;
+  border-radius: 24rpx 24rpx 0 0;
+  padding-bottom: calc(12rpx + env(safe-area-inset-bottom));
+  box-shadow: 0 -8rpx 32rpx rgba(0, 0, 0, 0.12);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.schedule-cat-sheet-grabber {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: #e0e0e0;
+  margin: 16rpx auto 8rpx;
+}
+
+.schedule-cat-sheet-head {
+  padding: 8rpx 32rpx 16rpx;
+  border-bottom: 1rpx solid #eeeeee;
+}
+
+.schedule-cat-sheet-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.schedule-cat-sheet-scroll {
+  height: 52vh;
+  min-height: 300rpx;
+  max-height: 620rpx;
+}
+
+.schedule-cat-sheet-cancel-wrap {
+  border-top: 12rpx solid #f0f2f6;
+  padding-top: 8rpx;
+}
+
+.schedule-cat-sheet-cancel {
+  padding: 24rpx 32rpx;
+  text-align: center;
+  font-size: 28rpx;
+  color: #666666;
 }
 
 .note-card {
