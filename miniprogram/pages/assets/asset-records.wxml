@@ -1,0 +1,28 @@
+<view class="page">
+  <view class="head">
+    <view class="title">账户：{{accountName || "全部账户"}}</view>
+    <button class="btn-add" bindtap="onCreate">+ 记录变动</button>
+  </view>
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <view wx:elif="{{!list.length}}" class="hint">暂无记录</view>
+  <view wx:else class="list">
+    <view class="row {{item.hasTransferPair ? 'row-transfer' : ''}} {{item.transferGroupPos ? ('row-transfer-' + item.transferGroupPos) : ''}}" wx:for="{{list}}" wx:key="_id" bindtap="onEdit" data-id="{{item._id}}">
+      <view class="row-left">
+        <view class="row-title">
+          {{item.actionLabel}} · ¥{{item.amountYuan}}
+          <text wx:if="{{item.hasTransferPair}}" class="transfer-pill">
+            转账{{item.transferDirection}}
+          </text>
+        </view>
+        <view class="row-sub">余额 ¥{{item.afterBalanceYuan}} · {{item.bookedAtLabel}}</view>
+        <view wx:if="{{item.hasTransferPair && item.counterpartyAccountName}}" class="row-sub">
+          对端账户：{{item.counterpartyAccountName}}
+        </view>
+        <view wx:if="{{item.note}}" class="row-note">{{item.note}}</view>
+      </view>
+      <view class="row-right">
+        <view class="del" catchtap="onDelete" data-id="{{item._id}}">删除</view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,54 @@
+.page {
+  min-height: 100vh;
+  background: #f6f8fc;
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+.hint {
+  color: #66758f;
+  font-size: 26rpx;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  padding-bottom: 180rpx;
+}
+.item {
+  background: #fff;
+  border: 1rpx solid #e7ecfb;
+  border-radius: 16rpx;
+  padding: 18rpx;
+}
+.label {
+  font-size: 24rpx;
+  color: #6d7d9b;
+  margin-bottom: 8rpx;
+}
+.picker,
+.input {
+  font-size: 28rpx;
+  color: #1f2940;
+}
+.textarea {
+  width: 100%;
+  min-height: 120rpx;
+  font-size: 28rpx;
+  color: #1f2940;
+}
+.btn {
+  position: fixed;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: calc(24rpx + env(safe-area-inset-bottom));
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: 999rpx;
+  background: #0066ff;
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+.btn::after {
+  border: none;
+}

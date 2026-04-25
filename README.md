@@ -1,6 +1,6 @@
 # 协同记账（微信小程序 + 云开发）
 
-微信原生小程序项目，核心能力包括：多账本、成员协作（邀请码/加入申请/审批）、流水与分类管理、统计分析（AntV F2）和定时记账（云函数定时触发）。
+微信原生小程序项目，核心能力包括：多账本、成员协作（邀请码/加入申请/审批）、流水与分类管理、全局资产管理、统计分析（AntV F2）和定时记账（云函数定时触发）。
 
 ## 给新同学/AI 的速读入口（30 秒）
 
@@ -31,7 +31,7 @@
 - 在微信开发者工具打开工程（`project.config.json` 指定了 `miniprogramRoot` 与 `cloudfunctionRoot`）。
 - 在 `miniprogram/app.js` 配置 `globalData.env` 为你的云环境 ID。
 - `miniprogram/app.js` 会在 `onLaunch` 自动注册 `UpdateManager`：检测到新版本后弹窗提示用户重启应用，下载失败时给出轻提示。
-- `miniprogram/app.json` 已启用分包：主包仅保留 3 个 Tab 页；其余业务页按目录拆到多个 `subPackages.root`（如 `pages/ledger-detail`、`pages/ledger-manage`、`pages/ledger-collaborators` 等），用于控制主包大小不超过 2MB。
+- `miniprogram/app.json` 已启用分包：主包仅保留 4 个 Tab 页（账本/资产/统计/我的）；其余业务页按目录拆到多个 `subPackages.root`（如 `pages/ledger-detail`、`pages/ledger-manage`、`pages/ledger-collaborators` 等），用于控制主包大小不超过 2MB。
 - `miniprogram/app.json` 已配置 `preloadRule`：进入任一 Tab 页后，在 `all` 网络下预下载上述业务分包，进一步降低首次进入业务页的等待时间。
 - `project.config.json` 的 `packOptions.ignore` 已忽略 `node_modules` 与未使用的大图素材（路径以 `miniprogramRoot` 为根），避免上传时把本地依赖和演示资源打进代码包。
 - 前端调用统一走：
@@ -52,7 +52,7 @@
 - 定时记账列表页（`pages/ledger-schedules`）底部提供固定主按钮「新家定时记账」，列表态与空态都可直接发起新建。
 - 我的页资料采用手动设置：点击圆头像触发 `chooseAvatar` 后会先上传云存储并调用 `updateMyProfile` 持久化（可只更新头像），点击昵称触发输入弹窗并保存；不依赖 `getUserProfile` 返回真实微信昵称。未设置昵称时，昵称展示与流水一致，回退为匿名 openid（`…` + 后 8 位）。
 - 我的页的「分类管理」「定时记账」入口点击后直接跳转，不在 `pages/mine` 预加载；目标页内自行展示 loading/加载态。
-- 自定义 TabBar 的立体感仅通过 `box-shadow` 增强：不新增额外覆盖层，避免影响点击区域；样式集中在 `miniprogram/custom-tab-bar/index.wxss` 的 `tabbar-pill` 和 `tab-item-active`。选中态由三个 Tab 页在 `onShow` 显式写入固定索引；`custom-tab-bar` 不再基于 route 做自动同步，点击 Tab 时先即时 `setData({ selected })`，最终以页面 `onShow` 为准。
+- 自定义 TabBar 的立体感仅通过 `box-shadow` 增强：不新增额外覆盖层，避免影响点击区域；样式集中在 `miniprogram/custom-tab-bar/index.wxss` 的 `tabbar-pill` 和 `tab-item-active`。选中态由四个 Tab 页在 `onShow` 显式写入固定索引（账本=0、资产=1、统计=2、我的=3）；`custom-tab-bar` 不再基于 route 做自动同步，点击 Tab 时先即时 `setData({ selected })`，最终以页面 `onShow` 为准。
 - 分享入口口径：全局页面默认隐藏微信分享菜单（`wx.hideShareMenu`），仅 `pages/ledger-collaborators` 与 `pages/mine` 放开 `shareAppMessage`；前者用于邀请协作者，后者提供“分享给朋友”卡片入口（`open-type="share"`）。
 
 ## 云函数与定时任务
@@ -95,6 +95,19 @@
   - `getSchedule` / `createSchedule` / `updateSchedule` / `deleteSchedule` -> `pages/ledger-schedule-edit`（部分状态切换也在 `pages/ledger-schedules`）
 - **用户资料**
   - `getMyProfile` / `updateMyProfile` -> `pages/mine`
+- **资产（全局）**
+  - `createAssetAccount` -> `pages/assets/asset-account-edit`
+  - `listAssetAccounts` -> `pages/assets/asset-accounts`
+  - `getAssetAccount` -> `pages/assets/asset-account-edit`
+  - `updateAssetAccount` -> `pages/assets/asset-account-edit`
+  - `archiveAssetAccount` / `deleteAssetAccount` -> `pages/assets/asset-accounts`
+  - `getAssetDashboard` -> `pages/assets/assets`
+  - `createAssetRecord` -> `pages/assets/asset-record-edit`
+  - `listAssetRecords` -> `pages/assets/asset-records`
+  - `getAssetRecord` / `updateAssetRecord` -> `pages/assets/asset-record-edit`
+  - `deleteAssetRecord` -> `pages/assets/asset-records`
+  - `createAssetTransfer` -> `pages/assets/asset-transfer`
+  - `listNetWorthTrend` -> `pages/assets/asset-trend`
 
 ## 页面索引（页面 -> `type`）
 
@@ -125,6 +138,23 @@
   - `listLedgers`（无 `id` 入参直达时先解析可用账本）、`listCategories`、`addLedgerCategory`、`removeLedgerCategory`
 - `pages/ledger-analytics/ledger-analytics`
   - `listLedgers`、`analyzeLedger`
+- `pages/assets/assets`
+  - `getAssetDashboard`（全局资产总览，不绑定账本）
+- `pages/assets/asset-accounts`
+  - `listAssetAccounts`、`archiveAssetAccount`、`deleteAssetAccount`
+- `pages/assets/asset-account-edit`
+  - `createAssetAccount`、`getAssetAccount`、`updateAssetAccount`
+- `pages/assets/asset-records`
+  - `listAssetRecords`、`deleteAssetRecord`
+- `pages/assets/asset-record-edit`
+  - `createAssetRecord`、`getAssetRecord`、`updateAssetRecord`
+- `pages/assets/asset-transfer`
+  - `listAssetAccounts`、`createAssetTransfer`
+- `pages/assets/asset-trend`
+  - `listNetWorthTrend`
+  - 资产记录改动口径：普通记录支持修改金额/类型/日期/备注，保存后自动重算该账户余额链；转账记录仅支持修改日期与备注。
+  - 资产转账口径：`createAssetTransfer` 采用云数据库事务写入双分录与双账户余额，失败会整体回滚。
+  - 趋势性能口径：`listNetWorthTrend` 优先读取 `asset_snapshots` 月快照；记录/转账变更后会自动重建当前用户快照。
 - `pages/ledger-analytics-drill/ledger-analytics-drill`
   - `listGroupTransactions`
 - `pages/ledger-schedules/ledger-schedules`
@@ -160,7 +190,7 @@
 - 定时链路：创建规则、启停规则、编辑规则后 `nextRunAt` 行为是否符合预期。
 - 我的页面：资料更新与账本概览（已加入数量/空态新建）是否生效。
 - 我的页面资料：仅选择头像后再次进入仍能回显；输入昵称后 `getMyProfile` 回显应与 `updateMyProfile` 保存值一致。
-- 若改了路由或 Tab：验证三个 Tab 选中态与返回逻辑（含 `showBillLedgerListOnce` 场景）。
+- 若改了路由或 Tab：验证四个 Tab 选中态与返回逻辑（含 `showBillLedgerListOnce` 场景）。
 
 ## 故障排查入口
 

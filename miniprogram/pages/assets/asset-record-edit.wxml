@@ -1,0 +1,34 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <view wx:else class="form">
+    <view class="item">
+      <view class="label">账户</view>
+      <view class="value">{{accountName || accountId}}</view>
+    </view>
+    <view wx:if="{{!recordId || !isTransferRecord}}" class="item">
+      <view class="label">变动类型</view>
+      <picker mode="selector" range="{{actionOptions}}" range-key="label" value="{{actionIndex}}" bindchange="onActionChange">
+        <view class="picker">{{actionOptions[actionIndex].label}}</view>
+      </picker>
+    </view>
+    <view wx:if="{{!recordId || !isTransferRecord}}" class="item">
+      <view class="label">金额（元）</view>
+      <input class="input" type="digit" value="{{amountYuan}}" bindinput="onAmountInput" placeholder="请输入金额" />
+    </view>
+    <view wx:if="{{recordId && isTransferRecord}}" class="item">
+      <view class="label">转账记录</view>
+      <view class="value">转账记录仅支持修改日期与备注</view>
+    </view>
+    <view class="item">
+      <view class="label">日期</view>
+      <picker mode="date" value="{{bookedAtDate}}" bindchange="onDateChange">
+        <view class="picker">{{bookedAtDate}}</view>
+      </picker>
+    </view>
+    <view class="item">
+      <view class="label">备注</view>
+      <textarea class="textarea" value="{{note}}" bindinput="onNoteInput" placeholder="可选备注" />
+    </view>
+  </view>
+  <button class="btn" loading="{{submitting}}" bindtap="onSubmit">保存</button>
+</view>

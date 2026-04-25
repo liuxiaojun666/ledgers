@@ -1,0 +1,36 @@
+.page {
+  min-height: 100vh;
+  background: #f6f8fc;
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+.hint {
+  color: #66758f;
+  font-size: 26rpx;
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+.row {
+  background: #fff;
+  border: 1rpx solid #e7ecfb;
+  border-radius: 16rpx;
+  padding: 18rpx;
+}
+.month {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1f2940;
+}
+.line {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #0f7a3d;
+}
+.sub {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #6f7f9d;
+}

@@ -1,0 +1,32 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <view wx:else class="form">
+    <view class="item">
+      <view class="label">转出账户</view>
+      <picker mode="selector" range="{{accountNames}}" value="{{fromIndex}}" bindchange="onFromChange">
+        <view class="picker">{{accountNames[fromIndex] || "请选择"}}</view>
+      </picker>
+    </view>
+    <view class="item">
+      <view class="label">转入账户</view>
+      <picker mode="selector" range="{{accountNames}}" value="{{toIndex}}" bindchange="onToChange">
+        <view class="picker">{{accountNames[toIndex] || "请选择"}}</view>
+      </picker>
+    </view>
+    <view class="item">
+      <view class="label">金额（元）</view>
+      <input class="input" type="digit" value="{{amountYuan}}" bindinput="onAmountInput" placeholder="请输入金额" />
+    </view>
+    <view class="item">
+      <view class="label">日期</view>
+      <picker mode="date" value="{{bookedAtDate}}" bindchange="onDateChange">
+        <view class="picker">{{bookedAtDate}}</view>
+      </picker>
+    </view>
+    <view class="item">
+      <view class="label">备注</view>
+      <textarea class="textarea" value="{{note}}" bindinput="onNoteInput" placeholder="可选备注" />
+    </view>
+  </view>
+  <button class="btn" loading="{{submitting}}" bindtap="onSubmit">确认转账</button>
+</view>

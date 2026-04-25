@@ -1,0 +1,11 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <view wx:elif="{{!points.length}}" class="hint">暂无趋势数据</view>
+  <view wx:else class="list">
+    <view class="row" wx:for="{{points}}" wx:key="month">
+      <view class="month">{{item.month}}</view>
+      <view class="line">净资产：¥{{item.netWorthYuan}}</view>
+      <view class="sub">资产 ¥{{item.assetsYuan}} · 负债 ¥{{item.liabilitiesYuan}}</view>
+    </view>
+  </view>
+</view>

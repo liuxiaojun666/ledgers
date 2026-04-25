@@ -1,0 +1,50 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:else>
+    <view class="summary-card">
+      <view class="summary-item">
+        <view class="summary-label">总资产</view>
+        <view class="summary-value">¥{{totalAssetsYuan}}</view>
+      </view>
+      <view class="summary-item">
+        <view class="summary-label">总负债</view>
+        <view class="summary-value summary-liability">¥{{totalLiabilitiesYuan}}</view>
+      </view>
+      <view class="summary-item">
+        <view class="summary-label">净资产</view>
+        <view class="summary-value {{netWorthSign ? 'summary-net-neg' : 'summary-net'}}">¥{{netWorthYuan}}</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">资产账户</view>
+      <view wx:if="{{!assetAccounts.length}}" class="empty">暂无资产账户</view>
+      <view wx:else class="account-list">
+        <view class="account-row" wx:for="{{assetAccounts}}" wx:key="_id">
+          <view class="account-name">{{item.name}}</view>
+          <view class="account-balance">¥{{item.balanceYuan}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">负债账户</view>
+      <view wx:if="{{!liabilityAccounts.length}}" class="empty">暂无负债账户</view>
+      <view wx:else class="account-list">
+        <view class="account-row" wx:for="{{liabilityAccounts}}" wx:key="_id">
+          <view class="account-name">{{item.name}}</view>
+          <view class="account-balance liability">¥{{item.balanceYuan}}</view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view class="bottom-actions">
+    <button class="btn-manage btn-outline" bindtap="openRecords">变动记录</button>
+    <button class="btn-manage" bindtap="openAccounts">账户管理</button>
+  </view>
+  <view class="bottom-actions bottom-actions-second">
+    <button class="btn-manage btn-outline" bindtap="openTransfer">账户转账</button>
+    <button class="btn-manage btn-outline" bindtap="openTrend">净资产趋势</button>
+  </view>
+</view>

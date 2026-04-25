@@ -4,7 +4,7 @@
 
 微信**小程序** + **云开发**（云数据库 + 云函数），应用名「**协同记账**」。
 
-当前能力覆盖：多账本、成员协作（邀请码 / 加入申请 / 审批）、流水、分类、统计（含 **AntV F2** 图表）、定时记账（云函数定时触发）。
+当前能力覆盖：多账本、成员协作（邀请码 / 加入申请 / 审批）、流水、分类、全局资产管理、统计（含 **AntV F2** 图表）、定时记账（云函数定时触发）。
 
 ## 给 Cursor 的速读入口（30 秒）
 
@@ -37,7 +37,7 @@
 
 - **原生**小程序（WXML / WXSS / JS），不是 Vue 工程。
 - 工程配置里 `nodeModules: true`；统计页 F2 使用已提交的 `miniprogram/miniprogram_npm/`（无需微信开发者工具「构建 npm」）。升级 `@antv/f2-canvas` 并在 `miniprogram` 下执行 `npm install` 后，可运行 `npm run vendor:f2` 重新同步 `miniprogram_npm`。
-- `miniprogram/app.json` 使用按目录分包：主包只放 3 个 Tab 页，其余业务页拆到多个 `subPackages.root`（避免将主包 Tab 页落入分包范围）。
+- `miniprogram/app.json` 使用按目录分包：主包只放 4 个 Tab 页（账本/资产/统计/我的），其余业务页拆到多个 `subPackages.root`（避免将主包 Tab 页落入分包范围）。
 - `miniprogram/app.json` 启用 `preloadRule`：进入任一 Tab 页后，在 `all` 网络预下载业务分包，优先保证后续页面打开速度。
 - `project.config.json` 的 `packOptions.ignore` 以 `miniprogramRoot` 为根目录生效：必须忽略 `node_modules`，并按需忽略未使用的演示素材，避免主包/分包上传时触发 2MB 限制。
 - 云环境 ID：`miniprogram/app.js` → `globalData.env`（示例值 `dev-4iov0`，上线请换成自己的环境）。
@@ -68,9 +68,13 @@
 - **账本页多账本引导条**：`pages/ledgers/ledgers` 的“多账本，账目更清晰”banner 在**非加载态始终展示**（单账本内嵌详情 / 多账本列表 / 空账本均显示），点击统一走 `createLedger`。
 - **统计账本记忆**：`pages/ledger-analytics` 通过本地缓存 `lastAnalyzeLedgerId` 记住用户上次选择的统计账本；若该账本已删除或无权限，会自动回退到当前可访问账本，避免报错。
 - **用户资料设置口径**：`pages/mine` 不依赖 `getUserProfile` 直接同步真实微信资料；点击圆头像触发 `chooseAvatar` 后会先上传云存储并调用 `updateMyProfile` 持久化（头像可单独保存），点击昵称触发弹窗输入并调用 `updateMyProfile` 保存展示名；未设置昵称时，昵称展示与流水页一致，回退匿名 openid（`…` + 后 8 位）。
+- **资产域口径（全局）**：资产账户与资产总览不绑定 `ledgerId`；一期开启独立 Tab `pages/assets/assets`，云函数按调用者 `openid` 隔离（`ownerOpenid`），暂不复用账本成员协作权限。
+- **资产记录口径（一期）**：先支持 `adjust` / `increase` / `decrease` 三类变动；写入/编辑/删除普通记录后会自动重算该账户余额链（按记录时间回放）。转账记录仅允许修改日期和备注，不允许改金额/类型。
+- **资产转账与趋势口径（一期增强）**：支持 `createAssetTransfer`（转出/转入双分录）；转账采用云数据库事务保证双分录与双账户余额原子提交。净资产趋势由 `listNetWorthTrend` 按月返回（优先读取月快照），用于全局资产趋势查看。
+- **资产趋势快照口径**：新增 `asset_snapshots`（按用户+月份存快照）；`listNetWorthTrend` 优先读快照，资产记录/转账变更后自动重建快照，降低趋势查询开销。
 - **我的页跳转体验**：`pages/mine` 的「分类管理」「定时记账」点击后直接跳转目标页，不在我的页预加载；加载态由 `pages/ledger-categories`、`pages/ledger-schedules` 各自承担。
 - **自定义 TabBar 视觉**：`miniprogram/custom-tab-bar` 的立体感优先用 `box-shadow`（`tabbar-pill`、`tab-item-active`）实现，不新增额外覆盖层，避免遮挡点击区域；改 Tab 视觉时优先在该目录调整，避免影响 Tab 选中同步逻辑。
-- **Tab 选中态口径**：`selected` 由三个 Tab 页在 `onShow` 明确写入固定索引（账本=0、统计=1、我的=2）；`miniprogram/custom-tab-bar/index.js` 不再基于 `getCurrentPages()` 做 route 同步，避免切 Tab 过渡期读到旧路由导致“抖”。组件在点击 Tab 时会先即时 `setData({ selected })`，视觉更快，最终以页面 `onShow` 为准。
+- **Tab 选中态口径**：`selected` 由四个 Tab 页在 `onShow` 明确写入固定索引（账本=0、资产=1、统计=2、我的=3）；`miniprogram/custom-tab-bar/index.js` 不再基于 `getCurrentPages()` 做 route 同步，避免切 Tab 过渡期读到旧路由导致“抖”。组件在点击 Tab 时会先即时 `setData({ selected })`，视觉更快，最终以页面 `onShow` 为准。
 
 ## 云函数与调度
 
@@ -85,6 +89,9 @@
 - 统计：`analyzeLedger`（`groups` / `groupsByPerson` 为**支出**维度的排行；汇总净额等仍含收支；另含 `trendPoints`、`pieGroups*` 等）、`listGroupTransactions`
 - 定时：`listMySchedules`、`createSchedule`、`getSchedule`、`updateSchedule`、`deleteSchedule`
 - 用户资料：`getMyProfile`、`updateMyProfile`
+- 资产（全局）：`createAssetAccount`、`listAssetAccounts`、`getAssetAccount`、`updateAssetAccount`、`archiveAssetAccount`、`deleteAssetAccount`、`getAssetDashboard`
+- 资产记录：`createAssetRecord`、`listAssetRecords`、`getAssetRecord`、`updateAssetRecord`、`deleteAssetRecord`
+- 资产转账/趋势：`createAssetTransfer`、`listNetWorthTrend`
 
 ## 云数据库集合（概念）
 
@@ -92,18 +99,21 @@
 
 - `ledgers`、`ledger_members`、`ledger_join_requests`、`ledger_invites`
 - `transactions`、`ledger_schedules`、`user_profiles`
+- `asset_accounts`、`asset_records`
+- `asset_snapshots`
 
 ## 页面（`miniprogram/app.json`）
 
 **Tab 页**（与 `custom-tab-bar` 中 `pagePath` 一致）：
 
 - `pages/ledgers/ledgers` — 账本（列表 / 入口；文案与 `app.json` tabBar、`custom-tab-bar` 一致）  
+- `pages/assets/assets` — 资产（全局资产总览，独立于账本）
 - `pages/ledger-analytics/ledger-analytics` — 统计  
 - `pages/mine/mine` — 我的  
 
-**其它业务页**（节选）：`ledger-detail`（单账本主页）、`ledger-manage`（账本管理入口与删账本）、`ledger-collaborators`（微信邀请与协作者列表）、`ledger-categories`、`ledger-tx`、`ledger-analytics-drill`、`ledger-schedules`、`ledger-schedule-edit`。
+**其它业务页**（节选）：`ledger-detail`（单账本主页）、`ledger-manage`（账本管理入口与删账本）、`ledger-collaborators`（微信邀请与协作者列表）、`ledger-categories`、`ledger-tx`、`ledger-analytics-drill`、`ledger-schedules`、`ledger-schedule-edit`、`assets/asset-accounts`、`assets/asset-account-edit`、`assets/asset-records`、`assets/asset-record-edit`、`assets/asset-transfer`、`assets/asset-trend`。
 
-`app.json` 里 **`pages` 数组第一项**为小程序冷启动首屏（当前为 `ledgers`）；第二项为 `mine`（非首 Tab，仅路由顺序）。
+`app.json` 里 **`pages` 数组第一项**为小程序冷启动首屏（当前为 `ledgers`）；后续按 Tab 顺序依次为 `assets`、`ledger-analytics`、`mine`。
 
 **模板 / 示例**：`pages/index/index`、`pages/example/index`（按需保留或清理）。
 

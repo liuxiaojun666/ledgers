@@ -1,0 +1,109 @@
+.page {
+  min-height: 100vh;
+  background: #f6f8fc;
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14rpx;
+  margin-bottom: 20rpx;
+}
+
+.switch-item {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.switch-label {
+  font-size: 24rpx;
+  color: #5f6f8d;
+}
+
+.btn-create {
+  margin: 0;
+  height: 62rpx;
+  line-height: 62rpx;
+  padding: 0 22rpx;
+  border-radius: 999rpx;
+  background: #0066ff;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.btn-create::after {
+  border: none;
+}
+
+.hint {
+  color: #66758f;
+  font-size: 26rpx;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 20rpx;
+  border: 1rpx solid #e7ecfb;
+  padding: 20rpx;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1f2940;
+}
+
+.kind {
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  color: #0066ff;
+  background: rgba(0, 102, 255, 0.08);
+}
+
+.meta {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #7082a3;
+}
+
+.balance {
+  margin-top: 10rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #0f7a3d;
+}
+
+.actions {
+  margin-top: 12rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.action-link {
+  font-size: 24rpx;
+  color: #2e62cc;
+}
+
+.action-link.danger {
+  color: #d64b4b;
+}

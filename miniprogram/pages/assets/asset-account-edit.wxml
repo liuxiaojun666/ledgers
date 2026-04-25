@@ -1,0 +1,45 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <view wx:else class="form">
+    <view class="form-item">
+      <view class="label">账户名称</view>
+      <input class="input" value="{{name}}" bindinput="onNameInput" placeholder="例如：招商银行卡" />
+    </view>
+
+    <view class="form-item">
+      <view class="label">账户属性</view>
+      <picker mode="selector" range="{{kindOptions}}" range-key="label" value="{{kindIndex}}" bindchange="onKindChange">
+        <view class="picker">{{kindOptions[kindIndex].label}}</view>
+      </picker>
+    </view>
+
+    <view class="form-item">
+      <view class="label">账户分类</view>
+      <picker mode="selector" range="{{typeOptions}}" range-key="label" value="{{typeIndex}}" bindchange="onTypeChange">
+        <view class="picker">{{typeOptions[typeIndex].label}}</view>
+      </picker>
+    </view>
+
+    <view class="form-item">
+      <view class="label">当前余额（元）</view>
+      <input class="input" type="digit" value="{{balanceYuan}}" bindinput="onBalanceInput" placeholder="请输入金额" />
+    </view>
+
+    <view class="form-item">
+      <view class="label">排序</view>
+      <input class="input" type="number" value="{{sortOrder}}" bindinput="onSortInput" placeholder="默认 100，数字越小越靠前" />
+    </view>
+
+    <view class="form-item">
+      <view class="label">备注</view>
+      <textarea class="textarea" value="{{remark}}" bindinput="onRemarkInput" placeholder="可选" />
+    </view>
+
+    <view class="form-item inline">
+      <view class="label">计入净资产</view>
+      <switch checked="{{includeInNetWorth}}" bindchange="onNetWorthChange" />
+    </view>
+  </view>
+
+  <button class="btn-submit" loading="{{submitting}}" bindtap="onSubmit">保存账户</button>
+</view>

@@ -1,8 +1,15 @@
 {
   "pages": [
     "pages/ledgers/ledgers",
-    "pages/mine/mine",
-    "pages/ledger-analytics/ledger-analytics"
+    "pages/assets/assets",
+    "pages/assets/asset-accounts",
+    "pages/assets/asset-account-edit",
+    "pages/assets/asset-records",
+    "pages/assets/asset-record-edit",
+    "pages/assets/asset-transfer",
+    "pages/assets/asset-trend",
+    "pages/ledger-analytics/ledger-analytics",
+    "pages/mine/mine"
   ],
   "subPackages": [
     {
@@ -83,6 +90,12 @@
       {
         "pagePath": "pages/ledgers/ledgers",
         "text": "账本",
+        "iconPath": "images/tab/bill.png",
+        "selectedIconPath": "images/tab/bill-active.png"
+      },
+      {
+        "pagePath": "pages/assets/assets",
+        "text": "资产",
         "iconPath": "images/tab/bill.png",
         "selectedIconPath": "images/tab/bill-active.png"
       },

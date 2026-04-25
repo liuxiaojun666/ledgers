@@ -50,6 +50,9 @@ const COLLECTION_NAMES = [
   "transactions",
   "ledger_schedules",
   "user_profiles",
+  "asset_accounts",
+  "asset_records",
+  "asset_snapshots",
 ];
 const MAX_SCHEDULES_PER_USER = 40;
 const INVITE_CODE_LEN = 8;
@@ -134,6 +137,22 @@ const MAX_LEDGER_CATEGORIES = 24;
 const CATEGORY_NAME_MAX_LEN = 16;
 const LEDGER_NAME_MAX_LEN = 24;
 const MAX_MONTHLY_BUDGET_CENTS = 1e12;
+const ASSET_NAME_MAX_LEN = 24;
+const ASSET_REMARK_MAX_LEN = 120;
+const MAX_ASSET_BALANCE_CENTS = 1e14;
+const ASSET_ACCOUNT_KINDS = ["asset", "liability"];
+const ASSET_ACCOUNT_TYPES = [
+  "cash",
+  "bank",
+  "ewallet",
+  "receivable",
+  "fixed_asset",
+  "credit_card",
+  "loan",
+  "payable",
+  "other",
+];
+const ASSET_RECORD_ACTIONS = ["adjust", "increase", "decrease"];
 
 function readMonthlyBudgetCents(ledger) {
   if (!ledger || ledger.monthlyBudgetCents == null) {
@@ -150,6 +169,895 @@ function normalizeLedgerName(raw) {
   return String(raw == null ? "" : raw)
     .trim()
     .slice(0, LEDGER_NAME_MAX_LEN);
+}
+
+function normalizeAssetAccountName(raw) {
+  return String(raw == null ? "" : raw)
+    .trim()
+    .slice(0, ASSET_NAME_MAX_LEN);
+}
+
+function normalizeAssetAccountRemark(raw) {
+  return String(raw == null ? "" : raw)
+    .trim()
+    .slice(0, ASSET_REMARK_MAX_LEN);
+}
+
+function normalizeAssetAccountKind(raw) {
+  const kind = String(raw == null ? "" : raw).trim().toLowerCase();
+  return ASSET_ACCOUNT_KINDS.includes(kind) ? kind : "";
+}
+
+function normalizeAssetAccountType(raw) {
+  const type = String(raw == null ? "" : raw).trim().toLowerCase();
+  return ASSET_ACCOUNT_TYPES.includes(type) ? type : "";
+}
+
+function readAssetBalanceCents(raw) {
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || Math.abs(n) > MAX_ASSET_BALANCE_CENTS) {
+    return NaN;
+  }
+  return n;
+}
+
+function readAssetSortOrder(raw) {
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n)) {
+    return 100;
+  }
+  return Math.max(0, Math.min(9999, n));
+}
+
+function normalizeAssetRecordAction(raw) {
+  const action = String(raw == null ? "" : raw).trim().toLowerCase();
+  return ASSET_RECORD_ACTIONS.includes(action) ? action : "";
+}
+
+function normalizeAssetRecordNote(raw) {
+  return String(raw == null ? "" : raw)
+    .trim()
+    .slice(0, 200);
+}
+
+function parseAssetRecordBookedAt(event) {
+  const raw = event.bookedAtMs != null ? Number(event.bookedAtMs) : Date.now();
+  if (!Number.isFinite(raw)) {
+    return null;
+  }
+  const ms = Math.floor(raw);
+  const MIN = Date.UTC(2000, 0, 1);
+  const MAX = Date.now() + 60 * 60 * 1000;
+  if (ms < MIN || ms > MAX) {
+    return null;
+  }
+  return new Date(ms);
+}
+
+async function getAssetAccountById(ownerOpenid, accountId) {
+  const id = String(accountId == null ? "" : accountId).trim();
+  if (!id) {
+    return null;
+  }
+  try {
+    const res = await db
+      .collection("asset_accounts")
+      .where({ _id: id, ownerOpenid })
+      .limit(1)
+      .get();
+    return (res.data && res.data[0]) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function assetRecordTimeMs(row) {
+  const booked = readDateMs(row && row.bookedAt);
+  if (Number.isFinite(booked)) {
+    return booked;
+  }
+  const created = readDateMs(row && row.createdAt);
+  return Number.isFinite(created) ? created : 0;
+}
+
+function calcAssetBalanceAfter(actionType, amountCents, beforeBalanceCents) {
+  const before = Number(beforeBalanceCents) || 0;
+  const amount = Number(amountCents) || 0;
+  if (actionType === "adjust") {
+    return amount;
+  }
+  if (actionType === "increase") {
+    return before + amount;
+  }
+  if (actionType === "decrease") {
+    return before - amount;
+  }
+  return before;
+}
+
+async function rebuildAssetAccountBalanceChain(openid, accountId) {
+  const account = await getAssetAccountById(openid, accountId);
+  if (!account) {
+    return { ok: false, errMsg: "资产账户不存在" };
+  }
+  const res = await db
+    .collection("asset_records")
+    .where({ ownerOpenid: openid, accountId: String(account._id) })
+    .limit(2000)
+    .get();
+  const rows = (res.data || []).slice();
+  rows.sort((a, b) => {
+    const ta = assetRecordTimeMs(a);
+    const tb = assetRecordTimeMs(b);
+    if (ta !== tb) {
+      return ta - tb;
+    }
+    const ida = String(a._id || "");
+    const idb = String(b._id || "");
+    return ida.localeCompare(idb);
+  });
+  let balance = 0;
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const actionType = normalizeAssetRecordAction(row.actionType);
+    const amountCents = Number(row.amountCents) || 0;
+    const beforeBalanceCents = balance;
+    const afterBalanceCents = calcAssetBalanceAfter(
+      actionType,
+      amountCents,
+      beforeBalanceCents
+    );
+    const needPatch =
+      Number(row.beforeBalanceCents) !== beforeBalanceCents ||
+      Number(row.afterBalanceCents) !== afterBalanceCents;
+    if (needPatch) {
+      await db.collection("asset_records").doc(String(row._id)).update({
+        data: {
+          beforeBalanceCents,
+          afterBalanceCents,
+          updatedAt: db.serverDate(),
+        },
+      });
+    }
+    balance = afterBalanceCents;
+  }
+  await db.collection("asset_accounts").doc(String(account._id)).update({
+    data: {
+      balanceCents: balance,
+      updatedAt: db.serverDate(),
+    },
+  });
+  return { ok: true, balanceCents: balance };
+}
+
+function assetSnapshotDocId(openid, monthKey) {
+  return `${openid}_${monthKey}`;
+}
+
+function monthDateStart(monthKey) {
+  const y = Number(String(monthKey || "").slice(0, 4));
+  const m = Number(String(monthKey || "").slice(5, 7));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
+    return null;
+  }
+  return new Date(y, m - 1, 1, 0, 0, 0, 0);
+}
+
+async function rebuildAssetSnapshots(openid) {
+  const accRes = await db
+    .collection("asset_accounts")
+    .where({ ownerOpenid: openid })
+    .limit(500)
+    .get();
+  const accounts = accRes.data || [];
+  const accountMeta = {};
+  for (let i = 0; i < accounts.length; i += 1) {
+    const a = accounts[i];
+    accountMeta[a._id] = {
+      kind: a.kind === "liability" ? "liability" : "asset",
+      includeInNetWorth: a.includeInNetWorth !== false,
+      currentBalanceCents: Number(a.balanceCents) || 0,
+    };
+  }
+
+  const recRes = await db
+    .collection("asset_records")
+    .where({ ownerOpenid: openid })
+    .limit(2000)
+    .get();
+  const rows = (recRes.data || []).slice();
+  rows.sort((a, b) => {
+    const ta = assetRecordTimeMs(a);
+    const tb = assetRecordTimeMs(b);
+    if (ta !== tb) {
+      return ta - tb;
+    }
+    const ida = String(a._id || "");
+    const idb = String(b._id || "");
+    return ida.localeCompare(idb);
+  });
+
+  const monthPoints = [];
+  if (!rows.length) {
+    let totalAssets = 0;
+    let totalLiabilities = 0;
+    const ids = Object.keys(accountMeta);
+    for (let i = 0; i < ids.length; i += 1) {
+      const meta = accountMeta[ids[i]];
+      if (!meta || !meta.includeInNetWorth) {
+        continue;
+      }
+      const amt = Number(meta.currentBalanceCents) || 0;
+      if (meta.kind === "liability") {
+        totalLiabilities += amt;
+      } else {
+        totalAssets += amt;
+      }
+    }
+    const nowKey = monthKeyByDate(new Date());
+    monthPoints.push({
+      month: nowKey,
+      totalAssetsCents: totalAssets,
+      totalLiabilitiesCents: totalLiabilities,
+      netWorthCents: totalAssets - totalLiabilities,
+    });
+  } else {
+    const stateByAccount = {};
+    const firstMs = assetRecordTimeMs(rows[0]) || Date.now();
+    const first = new Date(firstMs);
+    const now = new Date();
+    const walk = new Date(first.getFullYear(), first.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const monthKeys = [];
+    while (walk.getTime() <= end.getTime()) {
+      monthKeys.push(monthKeyByDate(walk));
+      walk.setMonth(walk.getMonth() + 1);
+    }
+    const monthEndMsByKey = {};
+    for (let i = 0; i < monthKeys.length; i += 1) {
+      const key = monthKeys[i];
+      const y = Number(key.slice(0, 4));
+      const m = Number(key.slice(5, 7));
+      monthEndMsByKey[key] = new Date(y, m, 0, 23, 59, 59, 999).getTime();
+    }
+    let idx = 0;
+    for (let i = 0; i < monthKeys.length; i += 1) {
+      const mk = monthKeys[i];
+      const endMs = monthEndMsByKey[mk];
+      while (idx < rows.length) {
+        const row = rows[idx];
+        const t = assetRecordTimeMs(row);
+        if (!Number.isFinite(t) || t > endMs) {
+          break;
+        }
+        stateByAccount[row.accountId] = Number(row.afterBalanceCents) || 0;
+        idx += 1;
+      }
+      let totalAssets = 0;
+      let totalLiabilities = 0;
+      const ids = Object.keys(stateByAccount);
+      for (let j = 0; j < ids.length; j += 1) {
+        const aid = ids[j];
+        const meta = accountMeta[aid];
+        if (!meta || !meta.includeInNetWorth) {
+          continue;
+        }
+        const amt = Number(stateByAccount[aid]) || 0;
+        if (meta.kind === "liability") {
+          totalLiabilities += amt;
+        } else {
+          totalAssets += amt;
+        }
+      }
+      monthPoints.push({
+        month: mk,
+        totalAssetsCents: totalAssets,
+        totalLiabilitiesCents: totalLiabilities,
+        netWorthCents: totalAssets - totalLiabilities,
+      });
+    }
+  }
+
+  const snapColl = db.collection("asset_snapshots");
+  await removeDocumentsWhere("asset_snapshots", { ownerOpenid: openid }, 200);
+  for (let i = 0; i < monthPoints.length; i += 1) {
+    const point = monthPoints[i];
+    const month = point.month;
+    await snapColl.doc(assetSnapshotDocId(openid, month)).set({
+      data: {
+        ownerOpenid: openid,
+        month,
+        monthStartAt: monthDateStart(month),
+        totalAssetsCents: point.totalAssetsCents,
+        totalLiabilitiesCents: point.totalLiabilitiesCents,
+        netWorthCents: point.netWorthCents,
+        createdAt: db.serverDate(),
+        updatedAt: db.serverDate(),
+      },
+    });
+  }
+  return { ok: true, points: monthPoints };
+}
+
+async function createAssetAccount(openid, event) {
+  const name = normalizeAssetAccountName(event.name);
+  if (!name) {
+    return { success: false, errMsg: "请输入账户名称" };
+  }
+  const kind = normalizeAssetAccountKind(event.kind);
+  if (!kind) {
+    return { success: false, errMsg: "账户类型无效" };
+  }
+  const type = normalizeAssetAccountType(
+    event.accountType != null ? event.accountType : event.type
+  );
+  if (!type) {
+    return { success: false, errMsg: "账户分类无效" };
+  }
+  const balanceCents = readAssetBalanceCents(event.balanceCents);
+  if (!Number.isFinite(balanceCents)) {
+    return { success: false, errMsg: "账户余额无效" };
+  }
+  const sortOrder = readAssetSortOrder(event.sortOrder);
+  const includeInNetWorth = event.includeInNetWorth !== false;
+  const remark = normalizeAssetAccountRemark(event.remark);
+  const addRes = await db.collection("asset_accounts").add({
+    data: {
+      ownerOpenid: openid,
+      name,
+      kind,
+      type,
+      balanceCents,
+      currency: "CNY",
+      includeInNetWorth,
+      visibility: "private",
+      archived: false,
+      sortOrder,
+      remark,
+      createdAt: db.serverDate(),
+      updatedAt: db.serverDate(),
+    },
+  });
+  return { success: true, accountId: addRes._id };
+}
+
+async function listAssetAccounts(openid, event) {
+  const includeArchived = !!(event && event.includeArchived);
+  const where = { ownerOpenid: openid };
+  if (!includeArchived) {
+    where.archived = _.neq(true);
+  }
+  const res = await db
+    .collection("asset_accounts")
+    .where(where)
+    .limit(200)
+    .get();
+  const rows = (res.data || []).slice();
+  rows.sort((a, b) => {
+    const sa = Number(a.sortOrder) || 0;
+    const sb = Number(b.sortOrder) || 0;
+    if (sa !== sb) {
+      return sa - sb;
+    }
+    const ta = readDateMs(a.updatedAt);
+    const tb = readDateMs(b.updatedAt);
+    return tb - ta;
+  });
+  return { success: true, list: rows };
+}
+
+async function getAssetAccount(openid, event) {
+  const account = await getAssetAccountById(openid, event.accountId);
+  if (!account) {
+    return { success: false, errMsg: "资产账户不存在" };
+  }
+  return { success: true, account };
+}
+
+async function updateAssetAccount(openid, event) {
+  const account = await getAssetAccountById(openid, event.accountId);
+  if (!account) {
+    return { success: false, errMsg: "资产账户不存在" };
+  }
+  const patch = {};
+  if (event.name != null) {
+    const name = normalizeAssetAccountName(event.name);
+    if (!name) {
+      return { success: false, errMsg: "请输入账户名称" };
+    }
+    patch.name = name;
+  }
+  if (event.kind != null) {
+    const kind = normalizeAssetAccountKind(event.kind);
+    if (!kind) {
+      return { success: false, errMsg: "账户类型无效" };
+    }
+    patch.kind = kind;
+  }
+  if (event.accountType != null || event.type != null) {
+    const type = normalizeAssetAccountType(
+      event.accountType != null ? event.accountType : event.type
+    );
+    if (!type) {
+      return { success: false, errMsg: "账户分类无效" };
+    }
+    patch.type = type;
+  }
+  if (event.balanceCents != null) {
+    const balanceCents = readAssetBalanceCents(event.balanceCents);
+    if (!Number.isFinite(balanceCents)) {
+      return { success: false, errMsg: "账户余额无效" };
+    }
+    patch.balanceCents = balanceCents;
+  }
+  if (event.sortOrder != null) {
+    patch.sortOrder = readAssetSortOrder(event.sortOrder);
+  }
+  if (event.includeInNetWorth != null) {
+    patch.includeInNetWorth = !!event.includeInNetWorth;
+  }
+  if (event.remark != null) {
+    patch.remark = normalizeAssetAccountRemark(event.remark);
+  }
+  if (Object.keys(patch).length === 0) {
+    return { success: false, errMsg: "没有可更新内容" };
+  }
+  patch.updatedAt = db.serverDate();
+  await db.collection("asset_accounts").doc(String(account._id)).update({ data: patch });
+  return { success: true };
+}
+
+async function archiveAssetAccount(openid, event) {
+  const account = await getAssetAccountById(openid, event.accountId);
+  if (!account) {
+    return { success: false, errMsg: "资产账户不存在" };
+  }
+  const archived = event.archived !== false;
+  await db.collection("asset_accounts").doc(String(account._id)).update({
+    data: {
+      archived,
+      updatedAt: db.serverDate(),
+    },
+  });
+  return { success: true };
+}
+
+async function deleteAssetAccount(openid, event) {
+  const account = await getAssetAccountById(openid, event.accountId);
+  if (!account) {
+    return { success: false, errMsg: "资产账户不存在" };
+  }
+  const countRes = await db
+    .collection("asset_records")
+    .where({ ownerOpenid: openid, accountId: String(account._id) })
+    .count();
+  if ((countRes && countRes.total) > 0) {
+    return { success: false, errMsg: "该账户已有变动记录，请先归档" };
+  }
+  await db.collection("asset_accounts").doc(String(account._id)).remove();
+  return { success: true };
+}
+
+async function getAssetDashboard(openid) {
+  const res = await db
+    .collection("asset_accounts")
+    .where({ ownerOpenid: openid, archived: _.neq(true) })
+    .limit(200)
+    .get();
+  const rows = (res.data || []).slice();
+  rows.sort((a, b) => {
+    const sa = Number(a.sortOrder) || 0;
+    const sb = Number(b.sortOrder) || 0;
+    if (sa !== sb) {
+      return sa - sb;
+    }
+    const ta = readDateMs(a.updatedAt);
+    const tb = readDateMs(b.updatedAt);
+    return tb - ta;
+  });
+  let totalAssetsCents = 0;
+  let totalLiabilitiesCents = 0;
+  const assetTypeMap = {};
+  const liabilityTypeMap = {};
+  const assetAccounts = [];
+  const liabilityAccounts = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const amount = Number(row.balanceCents) || 0;
+    const type = normalizeAssetAccountType(row.type) || "other";
+    if (row.kind === "liability") {
+      liabilityAccounts.push(row);
+      totalLiabilitiesCents += amount;
+      liabilityTypeMap[type] = (liabilityTypeMap[type] || 0) + amount;
+    } else {
+      assetAccounts.push(row);
+      totalAssetsCents += amount;
+      assetTypeMap[type] = (assetTypeMap[type] || 0) + amount;
+    }
+  }
+  const netWorthCents = totalAssetsCents - totalLiabilitiesCents;
+  const toGroups = (typeMap, total) =>
+    Object.keys(typeMap)
+      .map((k) => {
+        const amount = Number(typeMap[k]) || 0;
+        const percent = total > 0 ? Math.round((amount * 1000) / total) / 10 : 0;
+        return { key: k, label: k, amountCents: amount, percent };
+      })
+      .sort((a, b) => b.amountCents - a.amountCents);
+  return {
+    success: true,
+    totalAssetsCents,
+    totalLiabilitiesCents,
+    netWorthCents,
+    assetAccounts,
+    liabilityAccounts,
+    assetTypeGroups: toGroups(assetTypeMap, totalAssetsCents),
+    liabilityTypeGroups: toGroups(liabilityTypeMap, totalLiabilitiesCents),
+  };
+}
+
+async function listAssetRecords(openid, event) {
+  const where = { ownerOpenid: openid };
+  const accountId = String(event.accountId == null ? "" : event.accountId).trim();
+  if (accountId) {
+    where.accountId = accountId;
+  }
+  const res = await db
+    .collection("asset_records")
+    .where(where)
+    .limit(500)
+    .get();
+  const rows = (res.data || []).slice();
+  const accountIds = [
+    ...new Set(
+      rows
+        .map((r) => String(r.counterpartyAccountId || "").trim())
+        .filter(Boolean)
+    ),
+  ];
+  const accountNameMap = {};
+  if (accountIds.length) {
+    const accRes = await db
+      .collection("asset_accounts")
+      .where({ ownerOpenid: openid, _id: _.in(accountIds) })
+      .field({ _id: true, name: true })
+      .limit(200)
+      .get();
+    const accRows = accRes.data || [];
+    for (let i = 0; i < accRows.length; i += 1) {
+      const row = accRows[i];
+      accountNameMap[String(row._id)] = String(row.name || "").trim();
+    }
+  }
+  rows.sort((a, b) => {
+    const ta = readDateMs(a.bookedAt) || readDateMs(a.createdAt);
+    const tb = readDateMs(b.bookedAt) || readDateMs(b.createdAt);
+    return tb - ta;
+  });
+  const list = rows.map((row) => ({
+    ...row,
+    counterpartyAccountName: row.counterpartyAccountId
+      ? accountNameMap[String(row.counterpartyAccountId)] || ""
+      : "",
+  }));
+  return { success: true, list };
+}
+
+async function createAssetRecord(openid, event) {
+  const accountId = String(event.accountId == null ? "" : event.accountId).trim();
+  if (!accountId) {
+    return { success: false, errMsg: "缺少账户" };
+  }
+  const account = await getAssetAccountById(openid, accountId);
+  if (!account) {
+    return { success: false, errMsg: "资产账户不存在" };
+  }
+  if (account.archived) {
+    return { success: false, errMsg: "归档账户不可记变动" };
+  }
+  const actionType = normalizeAssetRecordAction(event.actionType);
+  if (!actionType) {
+    return { success: false, errMsg: "变动类型无效" };
+  }
+  const amountCents = readAssetBalanceCents(event.amountCents);
+  if (!Number.isFinite(amountCents) || amountCents < 0) {
+    return { success: false, errMsg: "变动金额无效" };
+  }
+  if (actionType !== "adjust" && amountCents <= 0) {
+    return { success: false, errMsg: "请输入大于 0 的金额" };
+  }
+  const bookedAt = parseAssetRecordBookedAt(event);
+  if (!bookedAt) {
+    return { success: false, errMsg: "记账时间不合法" };
+  }
+  const note = normalizeAssetRecordNote(event.note);
+  const beforeBalanceCents = Number(account.balanceCents) || 0;
+  let afterBalanceCents = beforeBalanceCents;
+  if (actionType === "adjust") {
+    afterBalanceCents = amountCents;
+  } else if (actionType === "increase") {
+    afterBalanceCents = beforeBalanceCents + amountCents;
+  } else if (actionType === "decrease") {
+    afterBalanceCents = beforeBalanceCents - amountCents;
+  }
+  const addRes = await db.collection("asset_records").add({
+    data: {
+      ownerOpenid: openid,
+      accountId: String(account._id),
+      actionType,
+      amountCents,
+      bookedAt,
+      note,
+      beforeBalanceCents,
+      afterBalanceCents,
+      createdAt: db.serverDate(),
+      updatedAt: db.serverDate(),
+    },
+  });
+  await db.collection("asset_accounts").doc(String(account._id)).update({
+    data: { balanceCents: afterBalanceCents, updatedAt: db.serverDate() },
+  });
+  const rebuilt = await rebuildAssetAccountBalanceChain(openid, String(account._id));
+  if (!rebuilt.ok) {
+    return { success: false, errMsg: rebuilt.errMsg || "余额重算失败" };
+  }
+  await rebuildAssetSnapshots(openid);
+  return { success: true, recordId: addRes._id, latestBalanceCents: rebuilt.balanceCents };
+}
+
+async function getAssetRecord(openid, event) {
+  const id = String(event.recordId == null ? "" : event.recordId).trim();
+  if (!id) {
+    return { success: false, errMsg: "缺少记录" };
+  }
+  const res = await db
+    .collection("asset_records")
+    .where({ _id: id, ownerOpenid: openid })
+    .limit(1)
+    .get();
+  const row = (res.data && res.data[0]) || null;
+  if (!row) {
+    return { success: false, errMsg: "记录不存在" };
+  }
+  return { success: true, record: row };
+}
+
+async function updateAssetRecord(openid, event) {
+  // 转账记录不允许改金额与类型，避免破坏双分录一致性。
+  const id = String(event.recordId == null ? "" : event.recordId).trim();
+  if (!id) {
+    return { success: false, errMsg: "缺少记录" };
+  }
+  const res = await db
+    .collection("asset_records")
+    .where({ _id: id, ownerOpenid: openid })
+    .limit(1)
+    .get();
+  const row = (res.data && res.data[0]) || null;
+  if (!row) {
+    return { success: false, errMsg: "记录不存在" };
+  }
+  const patch = {};
+  if (row.transferPairId) {
+    if (event.actionType != null || event.amountCents != null) {
+      return { success: false, errMsg: "转账记录不支持修改金额或类型" };
+    }
+  } else {
+    if (event.actionType != null) {
+      const actionType = normalizeAssetRecordAction(event.actionType);
+      if (!actionType) {
+        return { success: false, errMsg: "变动类型无效" };
+      }
+      patch.actionType = actionType;
+    }
+    if (event.amountCents != null) {
+      const amountCents = readAssetBalanceCents(event.amountCents);
+      if (!Number.isFinite(amountCents) || amountCents < 0) {
+        return { success: false, errMsg: "金额无效" };
+      }
+      const nextActionType = patch.actionType || normalizeAssetRecordAction(row.actionType);
+      if (nextActionType !== "adjust" && amountCents <= 0) {
+        return { success: false, errMsg: "请输入大于 0 的金额" };
+      }
+      patch.amountCents = amountCents;
+    }
+  }
+  if (event.note != null) {
+    patch.note = normalizeAssetRecordNote(event.note);
+  }
+  if (event.bookedAtMs != null) {
+    const bookedAt = parseAssetRecordBookedAt(event);
+    if (!bookedAt) {
+      return { success: false, errMsg: "记账时间不合法" };
+    }
+    patch.bookedAt = bookedAt;
+  }
+  if (Object.keys(patch).length === 0) {
+    return { success: false, errMsg: "没有可更新内容" };
+  }
+  patch.updatedAt = db.serverDate();
+  await db.collection("asset_records").doc(String(row._id)).update({ data: patch });
+  const rebuilt = await rebuildAssetAccountBalanceChain(openid, String(row.accountId));
+  if (!rebuilt.ok) {
+    return { success: false, errMsg: rebuilt.errMsg || "余额重算失败" };
+  }
+  await rebuildAssetSnapshots(openid);
+  return { success: true };
+}
+
+async function deleteAssetRecord(openid, event) {
+  const id = String(event.recordId == null ? "" : event.recordId).trim();
+  if (!id) {
+    return { success: false, errMsg: "缺少记录" };
+  }
+  const res = await db
+    .collection("asset_records")
+    .where({ _id: id, ownerOpenid: openid })
+    .limit(1)
+    .get();
+  const row = (res.data && res.data[0]) || null;
+  if (!row) {
+    return { success: false, errMsg: "记录不存在" };
+  }
+  if (row.transferPairId) {
+    return { success: false, errMsg: "转账记录请在转账页新增反向转账修正" };
+  }
+  await db.collection("asset_records").doc(String(row._id)).remove();
+  const rebuilt = await rebuildAssetAccountBalanceChain(openid, String(row.accountId));
+  if (!rebuilt.ok) {
+    return { success: false, errMsg: rebuilt.errMsg || "余额重算失败" };
+  }
+  await rebuildAssetSnapshots(openid);
+  return { success: true };
+}
+
+async function createAssetTransfer(openid, event) {
+  const fromAccountId = String(event.fromAccountId == null ? "" : event.fromAccountId).trim();
+  const toAccountId = String(event.toAccountId == null ? "" : event.toAccountId).trim();
+  if (!fromAccountId || !toAccountId) {
+    return { success: false, errMsg: "请选择转出和转入账户" };
+  }
+  if (fromAccountId === toAccountId) {
+    return { success: false, errMsg: "转入转出账户不能相同" };
+  }
+  const amountCents = readAssetBalanceCents(event.amountCents);
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return { success: false, errMsg: "请输入大于 0 的转账金额" };
+  }
+  const bookedAt = parseAssetRecordBookedAt(event);
+  if (!bookedAt) {
+    return { success: false, errMsg: "记账时间不合法" };
+  }
+  const fromAccount = await getAssetAccountById(openid, fromAccountId);
+  const toAccount = await getAssetAccountById(openid, toAccountId);
+  if (!fromAccount || !toAccount) {
+    return { success: false, errMsg: "账户不存在" };
+  }
+  if (fromAccount.archived || toAccount.archived) {
+    return { success: false, errMsg: "归档账户不可转账" };
+  }
+  const transferPairId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const note = normalizeAssetRecordNote(event.note);
+  let fromAfter = 0;
+  let toAfter = 0;
+  try {
+    await db.runTransaction(async (transaction) => {
+      const fromDoc = await transaction
+        .collection("asset_accounts")
+        .doc(String(fromAccount._id))
+        .get();
+      const toDoc = await transaction
+        .collection("asset_accounts")
+        .doc(String(toAccount._id))
+        .get();
+      const fromRow = fromDoc && fromDoc.data;
+      const toRow = toDoc && toDoc.data;
+      const txFromBefore = Number((fromRow && fromRow.balanceCents) || 0);
+      const txToBefore = Number((toRow && toRow.balanceCents) || 0);
+      if (txFromBefore < amountCents) {
+        throw new Error("转出账户余额不足");
+      }
+      fromAfter = txFromBefore - amountCents;
+      toAfter = txToBefore + amountCents;
+      await transaction.collection("asset_records").add({
+        data: {
+          ownerOpenid: openid,
+          accountId: String(fromAccount._id),
+          actionType: "decrease",
+          amountCents,
+          bookedAt,
+          note: note ? `[转账转出] ${note}`.slice(0, 200) : "[转账转出]",
+          beforeBalanceCents: txFromBefore,
+          afterBalanceCents: fromAfter,
+          transferPairId,
+          counterpartyAccountId: String(toAccount._id),
+          createdAt: db.serverDate(),
+          updatedAt: db.serverDate(),
+        },
+      });
+      await transaction.collection("asset_records").add({
+        data: {
+          ownerOpenid: openid,
+          accountId: String(toAccount._id),
+          actionType: "increase",
+          amountCents,
+          bookedAt,
+          note: note ? `[转账转入] ${note}`.slice(0, 200) : "[转账转入]",
+          beforeBalanceCents: txToBefore,
+          afterBalanceCents: toAfter,
+          transferPairId,
+          counterpartyAccountId: String(fromAccount._id),
+          createdAt: db.serverDate(),
+          updatedAt: db.serverDate(),
+        },
+      });
+      await transaction.collection("asset_accounts").doc(String(fromAccount._id)).update({
+        data: { balanceCents: fromAfter, updatedAt: db.serverDate() },
+      });
+      await transaction.collection("asset_accounts").doc(String(toAccount._id)).update({
+        data: { balanceCents: toAfter, updatedAt: db.serverDate() },
+      });
+    });
+  } catch (e) {
+    const msg = e && e.message ? String(e.message) : "转账失败";
+    return { success: false, errMsg: msg };
+  }
+
+  // 转账可能是补录历史日期，需重算两边余额链确保一致。
+  const rebuiltFrom = await rebuildAssetAccountBalanceChain(openid, String(fromAccount._id));
+  if (!rebuiltFrom.ok) {
+    return { success: false, errMsg: rebuiltFrom.errMsg || "转账后重算失败" };
+  }
+  const rebuiltTo = await rebuildAssetAccountBalanceChain(openid, String(toAccount._id));
+  if (!rebuiltTo.ok) {
+    return { success: false, errMsg: rebuiltTo.errMsg || "转账后重算失败" };
+  }
+  await rebuildAssetSnapshots(openid);
+  if (rebuiltFrom.balanceCents < 0) {
+    return { success: false, errMsg: "转出账户余额不足" };
+  }
+  return {
+    success: true,
+    transferPairId,
+    fromBalanceCents: rebuiltFrom.balanceCents,
+    toBalanceCents: rebuiltTo.balanceCents,
+  };
+}
+
+function monthKeyByDate(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) {
+    return "";
+  }
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+async function listNetWorthTrend(openid) {
+  let res = await db
+    .collection("asset_snapshots")
+    .where({ ownerOpenid: openid })
+    .limit(200)
+    .get();
+  let rows = (res.data || []).slice();
+  if (!rows.length) {
+    await rebuildAssetSnapshots(openid);
+    res = await db
+      .collection("asset_snapshots")
+      .where({ ownerOpenid: openid })
+      .limit(200)
+      .get();
+    rows = (res.data || []).slice();
+  }
+  rows.sort((a, b) => String(a.month || "").localeCompare(String(b.month || "")));
+  const points = rows.map((row) => ({
+    month: row.month,
+    totalAssetsCents: Number(row.totalAssetsCents) || 0,
+    totalLiabilitiesCents: Number(row.totalLiabilitiesCents) || 0,
+    netWorthCents: Number(row.netWorthCents) || 0,
+  }));
+  return { success: true, points };
 }
 
 function normalizeLedgerCategoryName(raw) {
@@ -586,6 +1494,34 @@ exports.main = async (event) => {
         return await getMyProfile(openid);
       case "updateMyProfile":
         return await updateMyProfile(openid, event);
+      case "createAssetAccount":
+        return await createAssetAccount(openid, event);
+      case "listAssetAccounts":
+        return await listAssetAccounts(openid, event);
+      case "getAssetAccount":
+        return await getAssetAccount(openid, event);
+      case "updateAssetAccount":
+        return await updateAssetAccount(openid, event);
+      case "archiveAssetAccount":
+        return await archiveAssetAccount(openid, event);
+      case "deleteAssetAccount":
+        return await deleteAssetAccount(openid, event);
+      case "getAssetDashboard":
+        return await getAssetDashboard(openid);
+      case "createAssetRecord":
+        return await createAssetRecord(openid, event);
+      case "listAssetRecords":
+        return await listAssetRecords(openid, event);
+      case "getAssetRecord":
+        return await getAssetRecord(openid, event);
+      case "updateAssetRecord":
+        return await updateAssetRecord(openid, event);
+      case "deleteAssetRecord":
+        return await deleteAssetRecord(openid, event);
+      case "createAssetTransfer":
+        return await createAssetTransfer(openid, event);
+      case "listNetWorthTrend":
+        return await listNetWorthTrend(openid);
       default:
         return { success: false, errMsg: "未知 type" };
     }

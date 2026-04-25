@@ -40,7 +40,7 @@ Page({
   },
 
   onShow() {
-    this.setTabBarState({ selected: 2, hidden: false });
+    this.setTabBarState({ selected: 3, hidden: false });
     this.loadMyProfile();
     this.refreshLedgerOverview();
   },
