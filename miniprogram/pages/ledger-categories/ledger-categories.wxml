@@ -9,13 +9,32 @@
       <view class="hero-lead">建议优先创建常用分类，记账时录入更快、统计更清晰。</view>
       <view class="hero-meta">
         <text class="hero-meta-key">当前数量</text>
-        <text class="hero-meta-value">{{categories.length}} / 24</text>
+        <text class="hero-meta-value">{{categories.length}} / {{categoryMax}}</text>
       </view>
     </view>
     <view class="section section-tight">
       <view class="card">
         <view class="label">新增分类</view>
-        <view class="tip">名称最多 16 个字；至少保留 1 个分类。</view>
+        <view class="tip">名称最多 16 个字；至少保留 1 个分类。自定义类请点选该分类属于「支出」或「收入」后再添加。</view>
+        <view class="add-flow-row">
+          <text class="add-flow-label">用于</text>
+          <view class="add-flow-pill">
+            <view
+              class="add-flow-item {{newCategoryFlowIndex === 0 ? 'add-flow-item-active' : ''}}"
+              data-index="0"
+              bindtap="onNewCategoryFlowTap"
+            >
+              支出
+            </view>
+            <view
+              class="add-flow-item {{newCategoryFlowIndex === 1 ? 'add-flow-item-active' : ''}}"
+              data-index="1"
+              bindtap="onNewCategoryFlowTap"
+            >
+              收入
+            </view>
+          </view>
+        </view>
         <input class="input" placeholder="例如：餐饮、房租、交通" maxlength="16" value="{{newName}}" bindinput="onNewName" />
         <view class="icon-section">
           <view class="icon-label">预置 icon</view>
@@ -51,6 +70,7 @@
         <view class="row" wx:for="{{categoryRows}}" wx:key="name">
           <view class="name-wrap">
             <text class="name">{{item.displayName}}</text>
+            <text class="kind-badge">{{item.kindLabel}}</text>
           </view>
           <button class="btn-pill btn-pill-danger" data-name="{{item.name}}" bindtap="remove">删除</button>
         </view>

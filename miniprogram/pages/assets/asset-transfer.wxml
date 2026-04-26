@@ -19,7 +19,7 @@
     </view>
     <view class="item">
       <view class="label">日期</view>
-      <picker mode="date" value="{{bookedAtDate}}" bindchange="onDateChange">
+      <picker mode="date" value="{{bookedAtDate}}" start="{{transferDateStart}}" bindchange="onDateChange">
         <view class="picker">{{bookedAtDate}}</view>
       </picker>
     </view>

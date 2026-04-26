@@ -9,10 +9,22 @@ const {
   decorateCategoryList,
   buildCategoryNameWithIcon,
 } = require("../../category-icons");
+const {
+  readAccountBookedAtFloorMs,
+  msToYmdLocal,
+  clampYmdToMin,
+  clampBookedAtMsToFloor,
+  ASSET_BOOKED_AT_FLOOR_FALLBACK_MS,
+} = require("../../utils/asset-account-time");
 
 function msToBookDate(ms) {
   const d = new Date(ms);
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function msToBookTime(ms) {
+  const d = new Date(ms);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 const CATEGORY_NAME_MAX_LEN = 16;
@@ -31,32 +43,48 @@ Component({
       type: String,
       value: "",
     },
+    assetAccounts: {
+      type: Array,
+      value: [],
+    },
     categories: {
       type: Array,
       value: [],
-      observer(cats) {
-        if (!Array.isArray(cats) || cats.length === 0) {
-          this.setData({ categoryDisplayList: [] });
-          return;
-        }
-        const ci = Math.min(
-          Math.max(0, this.data.categoryIndex),
-          cats.length - 1
-        );
-        const patch = {
-          categoryDisplayList: decorateCategoryList(cats),
-        };
-        if (ci !== this.data.categoryIndex) {
-          patch.categoryIndex = ci;
-        }
-        this.setData(patch);
-      },
+    },
+    /** 与云函数 `listCategories` 的 expenseList 一致，用于选择「支出」时展示 */
+    expenseCategories: {
+      type: Array,
+      value: [],
+    },
+    /** 与 `incomeList` 一致，用于选择「收入」时展示 */
+    incomeCategories: {
+      type: Array,
+      value: [],
     },
   },
 
   lifetimes: {
     attached() {
-      this.setData({ bookDate: msToBookDate(Date.now()) });
+      const now = Date.now();
+      this.setData({
+        bookDate: msToBookDate(now),
+        bookTime: msToBookTime(now),
+        bookDateStart: msToYmdLocal(ASSET_BOOKED_AT_FLOOR_FALLBACK_MS),
+      });
+      this._origBookedAtMs = null;
+      this.buildAssetPickerState();
+    },
+  },
+
+  observers: {
+    assetAccounts() {
+      this.buildAssetPickerState();
+    },
+    "expenseCategories, incomeCategories, categories"() {
+      this.rebuildActiveCategoryList();
+    },
+    "selectedAssetId, assetAccounts"() {
+      this.applyAssetBookDateConstraints();
     },
   },
 
@@ -64,11 +92,13 @@ Component({
     amountInput: "",
     note: "",
     categoryIndex: 0,
-    flowLabels: ["支出", "收入"],
     flowIndex: 0,
     saving: false,
     deleting: false,
     bookDate: "",
+    bookTime: "00:00",
+    /** 已选资产时 = 该户开户日（本地）；未关联时为 2000-01-01，与全局限定一致 */
+    bookDateStart: "2000-01-01",
     showAddCategory: false,
     newCategoryName: "",
     addingCategory: false,
@@ -78,46 +108,181 @@ Component({
     iconIndex: 0,
     customEmojiInput: "",
     categorySheetOpen: false,
+    selectedAssetId: "",
+    assetPickerOrphan: null,
+    assetPickerRange: ["不关联"],
+    assetPickerIndex: 0,
+    assetPickerAccountIds: [],
   },
 
   methods: {
-    /** 编辑页在拉取 getTransaction 后调用，categories 需已由父页面合并「孤儿分类」 */
-    fillForEdit({ amountInput, note, category, flow, bookedAtMs }) {
-      const cats = this.properties.categories || [];
-      let idx = cats.indexOf(category);
-      if (idx < 0) {
-        idx = 0;
+    getListForCurrentFlow() {
+      const fi = this.data.flowIndex;
+      const exp = this.properties.expenseCategories;
+      const inc = this.properties.incomeCategories;
+      const all = this.properties.categories;
+      if (fi === 1) {
+        if (Array.isArray(inc) && inc.length) {
+          return inc.slice();
+        }
+      } else if (Array.isArray(exp) && exp.length) {
+        return exp.slice();
       }
-      const flowIndex = flow === "income" ? 1 : 0;
-      const ms = Number(bookedAtMs);
-      const bookDate =
-        Number.isFinite(ms) && ms > 0 ? msToBookDate(ms) : msToBookDate(Date.now());
+      if (Array.isArray(all) && all.length) {
+        return all.slice();
+      }
+      return [];
+    },
+    rebuildActiveCategoryList(preferredName) {
+      const list = this.getListForCurrentFlow();
+      const dec = decorateCategoryList(list);
+      let ci = 0;
+      if (typeof preferredName === "string" && preferredName) {
+        const j = list.indexOf(preferredName);
+        if (j >= 0) {
+          ci = j;
+        }
+      } else {
+        const prev = this.data.categoryIndex;
+        ci = list.length
+          ? Math.min(Math.max(0, prev), list.length - 1)
+          : 0;
+      }
       this.setData({
-        amountInput: amountInput != null ? String(amountInput) : "",
-        note: note != null ? String(note) : "",
-        categoryIndex: idx,
-        flowIndex,
-        bookDate,
+        categoryDisplayList: dec,
+        categoryIndex: ci,
       });
+    },
+    buildAssetPickerState() {
+      const base = (this.properties.assetAccounts || [])
+        .filter((a) => a && a._id)
+        .map((a) => ({
+          _id: String(a._id),
+          name: (a.name && String(a.name).trim()) || "未命名",
+        }));
+      const sel =
+        (this.data.selectedAssetId && String(this.data.selectedAssetId).trim()) || "";
+      const or = this.data.assetPickerOrphan;
+      let accounts = base.slice();
+      if (sel && !accounts.some((a) => a._id === sel) && or && or._id === sel) {
+        accounts = [
+          {
+            _id: sel,
+            name: (or.name && String(or.name).trim()) || "已移除的账户",
+          },
+          ...accounts,
+        ];
+      }
+      const range = ["不关联", ...accounts.map((a) => a.name)];
+      let idx = 0;
+      if (sel) {
+        const j = accounts.findIndex((a) => a._id === sel);
+        idx = j >= 0 ? j + 1 : 0;
+      }
+      this.setData({
+        assetPickerRange: range,
+        assetPickerIndex: idx,
+        assetPickerAccountIds: accounts.map((a) => a._id),
+      });
+    },
+    /** 编辑页在拉取 getTransaction 后调用，categories 需已由父页面合并「孤儿分类」 */
+    fillForEdit({
+      amountInput,
+      note,
+      category,
+      flow,
+      bookedAtMs,
+      assetAccountId,
+      assetAccountName,
+    }) {
+      const flowIndex = flow === "income" ? 1 : 0;
+      const pick = String(category != null ? category : "");
+      const ms = Number(bookedAtMs);
+      const now = Date.now();
+      const hasMs = Number.isFinite(ms) && ms > 0;
+      const bookDate = hasMs ? msToBookDate(ms) : msToBookDate(now);
+      const bookTime = hasMs ? msToBookTime(ms) : msToBookTime(now);
+      this._origBookedAtMs = hasMs ? ms : null;
+      const rawAid =
+        assetAccountId != null ? String(assetAccountId).trim() : "";
+      const accList = (this.properties.assetAccounts || [])
+        .filter((a) => a && a._id)
+        .map((a) => String(a._id));
+      let assetPickerOrphan = null;
+      if (rawAid && accList.indexOf(rawAid) < 0) {
+        assetPickerOrphan = {
+          _id: rawAid,
+          name:
+            (assetAccountName && String(assetAccountName).trim()) || "已移除的账户",
+        };
+      }
+      this.setData(
+        {
+          amountInput: amountInput != null ? String(amountInput) : "",
+          note: note != null ? String(note) : "",
+          flowIndex,
+          bookDate,
+          bookTime,
+          selectedAssetId: rawAid,
+          assetPickerOrphan,
+        },
+        () => {
+          this.rebuildActiveCategoryList(pick);
+          this.buildAssetPickerState();
+          this.applyAssetBookDateConstraints();
+        }
+      );
     },
 
     resetAddForm() {
-      this.setData({
-        amountInput: "",
-        note: "",
-        categoryIndex: 0,
-        flowIndex: 0,
-        bookDate: msToBookDate(Date.now()),
-        showAddCategory: false,
-        newCategoryName: "",
-        iconIndex: 0,
-        customEmojiInput: "",
-        categorySheetOpen: false,
-      });
+      const now = Date.now();
+      this._origBookedAtMs = null;
+      this.setData(
+        {
+          amountInput: "",
+          note: "",
+          categoryIndex: 0,
+          flowIndex: 0,
+          bookDate: msToBookDate(now),
+          bookTime: msToBookTime(now),
+          showAddCategory: false,
+          newCategoryName: "",
+          iconIndex: 0,
+          customEmojiInput: "",
+          categorySheetOpen: false,
+          selectedAssetId: "",
+          assetPickerOrphan: null,
+        },
+        () => {
+          this.rebuildActiveCategoryList();
+          this.buildAssetPickerState();
+          this.applyAssetBookDateConstraints();
+        }
+      );
+    },
+
+    applyAssetBookDateConstraints() {
+      const id = String(this.data.selectedAssetId || "").trim();
+      const accounts = this.properties.assetAccounts || [];
+      let floorMs = ASSET_BOOKED_AT_FLOOR_FALLBACK_MS;
+      if (id) {
+        const acc = accounts.find((a) => a && String(a._id) === id);
+        if (acc) {
+          floorMs = readAccountBookedAtFloorMs(acc);
+        }
+      }
+      const startY = msToYmdLocal(floorMs);
+      const { bookDate } = this.data;
+      const next = clampYmdToMin(bookDate, startY);
+      const patch = { bookDateStart: startY };
+      if (next !== bookDate) {
+        patch.bookDate = next;
+      }
+      this.setData(patch);
     },
 
     openCategorySheet() {
-      const list = this.properties.categories || [];
+      const list = this.getListForCurrentFlow();
       if (!Array.isArray(list) || !list.length) {
         wx.showToast({ title: "暂无分类", icon: "none" });
         return;
@@ -152,11 +317,9 @@ Component({
       this.setData({ customEmojiInput: v });
     },
 
-    /** 父页面在 categories 更新后调用，用于选中新加的分类 */
+    /** 父页面在 categories 更新后调用，用于选中新加的分类（下标为当前收支下列表） */
     selectCategoryIndex(idx) {
-      const list = Array.isArray(this.properties.categories)
-        ? this.properties.categories
-        : [];
+      const list = this.getListForCurrentFlow();
       if (!list.length) {
         return;
       }
@@ -169,6 +332,7 @@ Component({
 
     onAddCategory() {
       const { ledgerId } = this.properties;
+      const { flowIndex } = this.data;
       const name = String(this.data.newCategoryName || "").trim();
       const iconOptions = this.data.iconOptions || [];
       const selectedIcon = iconOptions[this.data.iconIndex] || DEFAULT_ICON;
@@ -185,6 +349,7 @@ Component({
         wx.showToast({ title: "请输入分类名称", icon: "none" });
         return;
       }
+      const forFlow = Number(flowIndex) === 1 ? "income" : "expense";
       this.setData({ addingCategory: true });
       wx.cloud
         .callFunction({
@@ -193,6 +358,7 @@ Component({
             type: "addLedgerCategory",
             ledgerId,
             name: categoryName,
+            forFlow,
           },
         })
         .then((resp) => {
@@ -202,7 +368,10 @@ Component({
             return;
           }
           const list = Array.isArray(r.list) ? r.list : [];
-          const newIdx = list.indexOf(categoryName);
+          const exp = Array.isArray(r.expenseList) ? r.expenseList : list;
+          const inc = Array.isArray(r.incomeList) ? r.incomeList : list;
+          const inFlow = forFlow === "income" ? inc : exp;
+          const newIdx = inFlow.indexOf(categoryName);
           this.setData({
             newCategoryName: "",
             showAddCategory: false,
@@ -211,7 +380,9 @@ Component({
           });
           this.triggerEvent("categoriesupdated", {
             categories: list,
-            selectedIndex: newIdx >= 0 ? newIdx : list.length - 1,
+            expenseCategories: exp,
+            incomeCategories: inc,
+            selectedIndex: newIdx >= 0 ? newIdx : 0,
           });
           wx.showToast({ title: "已添加" });
         })
@@ -231,10 +402,6 @@ Component({
       this.setData({ note: e.detail.value });
     },
 
-    onCategoryChange(e) {
-      this.setData({ categoryIndex: Number(e.detail.value) });
-    },
-
     onCategoryTap(e) {
       const idx = Number(e.currentTarget.dataset.index);
       const list = this.data.categoryDisplayList || [];
@@ -247,16 +414,48 @@ Component({
       });
     },
 
-    onFlowChange(e) {
-      this.setData({ flowIndex: Number(e.detail.value) });
+    onSegFlowTap(e) {
+      const raw = e.currentTarget.dataset.index;
+      const idx = raw != null ? parseInt(String(raw), 10) : NaN;
+      if (idx !== 0 && idx !== 1) {
+        return;
+      }
+      const prev = this.getListForCurrentFlow();
+      const keep =
+        (prev[this.data.categoryIndex] &&
+          String(prev[this.data.categoryIndex])) ||
+        "";
+      this.setData({ flowIndex: idx }, () => {
+        this.rebuildActiveCategoryList(keep);
+      });
     },
 
     onBookDateChange(e) {
-      this.setData({ bookDate: e.detail.value });
+      const v = e.detail.value;
+      const { bookDateStart } = this.data;
+      this.setData({ bookDate: clampYmdToMin(v, bookDateStart) });
+    },
+
+    onBookTimeChange(e) {
+      const v = (e.detail && e.detail.value) || "";
+      this.setData({ bookTime: v || "00:00" });
+    },
+
+    onAssetAccountPickerChange(e) {
+      const raw = e.detail && e.detail.value;
+      const idx = raw != null ? parseInt(raw, 10) : 0;
+      const safe = Number.isFinite(idx) && idx > 0 ? idx : 0;
+      const ids = this.data.assetPickerAccountIds || [];
+      const id = safe > 0 ? ids[safe - 1] || "" : "";
+      this.setData({
+        assetPickerIndex: safe,
+        selectedAssetId: id || "",
+      });
     },
 
     readBookedAtMs() {
-      const { bookDate } = this.data;
+      const { bookDate, bookTime } = this.data;
+      const { mode } = this.properties;
       if (!bookDate) {
         return null;
       }
@@ -268,15 +467,37 @@ Component({
       if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
         return null;
       }
-      return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+      const tp = String(bookTime || "00:00").split(":");
+      let hh = parseInt(tp[0], 10);
+      let min = parseInt(tp[1], 10);
+      if (!Number.isFinite(hh) || !Number.isFinite(min)) {
+        return null;
+      }
+      hh = Math.min(23, Math.max(0, hh));
+      min = Math.min(59, Math.max(0, min));
+      if (mode === "edit" && this._origBookedAtMs != null) {
+        const o = new Date(this._origBookedAtMs);
+        if (Number.isNaN(o.getTime())) {
+          return null;
+        }
+        return new Date(
+          y,
+          m - 1,
+          d,
+          hh,
+          min,
+          o.getSeconds(),
+          o.getMilliseconds()
+        ).getTime();
+      }
+      const s = new Date();
+      return new Date(y, m - 1, d, hh, min, s.getSeconds(), s.getMilliseconds()).getTime();
     },
 
     onSubmit() {
       const { mode, ledgerId, txId } = this.properties;
       const { amountInput, categoryIndex, note, flowIndex } = this.data;
-      const list = Array.isArray(this.properties.categories)
-        ? this.properties.categories
-        : [];
+      const list = this.getListForCurrentFlow();
       if (!ledgerId) {
         wx.showToast({ title: "缺少账本", icon: "none" });
         return;
@@ -294,10 +515,23 @@ Component({
       const amountCents = Math.round(yuan * 100);
       const category = list[ci];
       const flow = Number(flowIndex) === 1 ? "income" : "expense";
-      const bookedAtMs = this.readBookedAtMs();
+      let bookedAtMs = this.readBookedAtMs();
       if (bookedAtMs == null) {
         wx.showToast({ title: "请选择记账日期", icon: "none" });
         return;
+      }
+
+      const linkId = (this.data.selectedAssetId || "").trim();
+      if (linkId) {
+        const acc = (this.properties.assetAccounts || []).find(
+          (a) => a && String(a._id) === linkId
+        );
+        if (acc) {
+          bookedAtMs = clampBookedAtMsToFloor(
+            bookedAtMs,
+            readAccountBookedAtFloorMs(acc)
+          );
+        }
       }
 
       if (mode === "edit") {
@@ -318,6 +552,7 @@ Component({
               category,
               note,
               bookedAtMs,
+              assetAccountId: linkId,
             },
           })
           .then((resp) => {
@@ -350,6 +585,7 @@ Component({
             category,
             note,
             bookedAtMs,
+            assetAccountId: linkId,
           },
         })
         .then((resp) => {

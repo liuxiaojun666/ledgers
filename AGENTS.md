@@ -37,25 +37,27 @@
 
 - **原生**小程序（WXML / WXSS / JS），不是 Vue 工程。
 - 工程配置里 `nodeModules: true`；统计页 F2 使用已提交的 `miniprogram/miniprogram_npm/`（无需微信开发者工具「构建 npm」）。升级 `@antv/f2-canvas` 并在 `miniprogram` 下执行 `npm install` 后，可运行 `npm run vendor:f2` 重新同步 `miniprogram_npm`。
-- `miniprogram/app.json` 使用按目录分包：主包只放 4 个 Tab 页（账本/资产/统计/我的），其余业务页拆到多个 `subPackages.root`（避免将主包 Tab 页落入分包范围）。
+- `miniprogram/app.json` 使用按目录分包：主包只放 4 个 Tab 页（账本/统计/资产/我的），其余业务页拆到多个 `subPackages.root`（避免将主包 Tab 页落入分包范围）。
 - `miniprogram/app.json` 启用 `preloadRule`：进入任一 Tab 页后，在 `all` 网络预下载业务分包，优先保证后续页面打开速度。
 - `project.config.json` 的 `packOptions.ignore` 以 `miniprogramRoot` 为根目录生效：必须忽略 `node_modules`，并按需忽略未使用的演示素材，避免主包/分包上传时触发 2MB 限制。
 - 云环境 ID：`miniprogram/app.js` → `globalData.env`（示例值 `dev-4iov0`，上线请换成自己的环境）。
 - 版本更新：`miniprogram/app.js` 在 `onLaunch` 自动注册 `wx.getUpdateManager()`；有新版本时弹窗确认后 `applyUpdate`，下载失败时 `toast` 提示。
 - 小程序调云函数：`wx.cloud.callFunction({ name: "ledgerFunctions", data: { type: "...", ... } })`。
 - 云函数首次运行会 `ensureCollections` 尝试创建集合（已存在则忽略错误）。
-- **流水时间**：`transactions` 可有 `bookedAt`（用户选的记账日）；列表与统计按 `bookedAt ?? createdAt`（见 `ledgerFunctions/index.js` 顶部注释）。
-- **默认分类**：新建账本默认注入 18 个高频分类（餐饮、早餐、午餐、晚餐、买菜、交通、住房、水电燃气、通讯网络、日用、服饰、购物、医疗、教育、人情、旅行、娱乐、其他）；若账本历史数据无分类，`listCategories` 迁移时也回填同一套默认值。
-- **分类 icon 显示层**：分类名前 icon 统一由 `miniprogram/category-icons.js` 映射；新增分类可点选 icon 网格或输入自定义 emoji（emoji 优先），保存为“emoji + 分类名”文本，页面展示与云函数口径保持一致（记一笔、定时记账、分类管理）。
-- **记一笔分类选择交互**：`components/ledger-tx-form` 不再使用系统 `picker`；主表单点击「分类」打开底部弹窗，弹窗内铺平双列可滚动网格点选，长分类名与 emoji 分类可完整阅读。
-- **定时记账分类选择交互**：`pages/ledger-schedule-edit` 同为底部弹窗 + 铺平网格；`status=completed` 时不打开弹窗并保持整行禁用观感。
+- **流水时间**：`transactions` 可有 `bookedAt`（记一笔中用户选的日期+时刻，落库为毫秒；列表按该时间倒序。新建时“秒/毫秒”在确认瞬间取自当前时间以区分同分钟内连续记账；UI 上详情列表仍可按日分组，仅必要时分、不展示秒）。列表与统计按 `bookedAt ?? createdAt`（见 `ledgerFunctions/index.js` 顶部注释）。
+- **默认分类**：新建/空账本默认注入 **18 个支出** + **6 个收入**（支出为餐饮、早/午/晚餐、买菜、交通、住房、水电燃气、通讯网络、日用、服饰、购物、医疗、教育、人情、旅行、娱乐、其他；收入为工资、奖金、理财、收租、红包、其他收入），预置 24 类，单账本分类总数上限制为 **48**；无分类的旧账本在迁移/拉取时也会补全预置**收入**类。云函数在 `ledgers` 上可选 `categoryByFlow: { 分类名: "income"|"expense" }`，用于**非预置**自定义名的收支归属；未标记的历史自定义名在记一笔中收支两侧均可选（`both`）。`listCategories` / `getTransaction` / `getLedger` / `enterLedger` 除 `list` / `categories` 外带 `expenseList`、`incomeList`。
+- **分类 icon 显示层**：分类名前 icon 统一由 `miniprogram/category-icons.js` 映射；预置支出/预置收入类名（如餐饮、工资、收租等）有固定 emoji，新增分类可点选 icon 网格或输入自定义 emoji（emoji 优先），保存为“emoji + 分类名”文本，页面展示与云函数口径保持一致（记一笔、定时记账、分类管理）。
+- **记一笔分类选择交互**：`components/ledger-tx-form` 不再使用系统 `picker`；主表单点击「分类」打开底部弹窗，弹窗内铺平双列可滚动网格点选，长分类名与 emoji 分类可完整阅读。顶部「支出 / 收入」为分段点选，直接切换、不弹系统选单；**弹窗与当前选中的收入/支出一致，只展示 `expenseList` 或 `incomeList`**，与流水 `flow` 提交前在云函数侧一致校验。内联「新增分类」会随当前收支柱调用 `addLedgerCategory` 并传 `forFlow`。
+- **记一笔关联资产（可选）**：`pages/ledger-tx/ledger-tx` 加载 `listAssetAccounts`（非归档）并传入 `ledger-tx-form`；表单项「资产账户」默认「不关联」。若选择则 `addTransaction` 成功后再写 `asset_records`（增/减随收支）、更新该账户余额，并在 `transactions` 写入 `assetAccountId`/`assetAccountName`、`sourceAssetEffectCents`（有符号分）、`primaryAssetRecordId`；**编辑/删除**该流水时资产侧**再追加**一条 `asset_records`（不删改历史行），并带 `sourceLedgerId`/`sourceLedgerName`/`sourceLedgerTxId`/`sourceOperation`（`ledger_create`/`ledger_update`/`ledger_delete`）等字段；删除流水时按 `sourceAssetEffectCents` 冲销。仅展示标签、从未成功落过资产动的历史条（无 `sourceAssetEffectCents`）删除时不再产生资产行。
+- **定时记账关联资产（可选）**：`pages/ledger-schedule-edit` 同样拉取 `listAssetAccounts`，规则上可选 `assetAccountId`；`createSchedule`/`updateSchedule` 落库到 `ledger_schedules`，`executeScheduleDoc` 入账时走 `insertLedgerTransaction` + `applyLedgerCreateAssetLink`（与记一笔同链路，资产备注侧用「定时记账」文案）。列表页 `listMySchedules` 可展示 `assetAccountName` 便于辨识。
+- **定时记账分类选择交互**：`pages/ledger-schedule-edit` 同为底部弹窗 + 铺平网格，且随「支出/收入」切换仅展示对应 `expenseList`/`incomeList`；`status=completed` 时不打开弹窗并保持整行禁用观感。
 - **定时记账列表页新增入口**：`pages/ledger-schedules` 底部固定主按钮文案为「新家定时记账」，列表态与空态都可直接进入新建定时任务页。
 - **月支出预算**：`ledgers.monthlyBudgetCents`（可选，分，自然月支出上限）；由创建者在 `pages/ledger-budget` 或 `components/ledger-detail-view` 标题「⋯」抽屉中维护，云函数 `updateLedgerMonthlyBudget`。
 - **账本改名入口**：仅创建者可见 `components/ledger-detail-view` 标题栏账本名称右侧「⋯」底部抽屉中的「修改账本名称」；`pages/ledger-manage` 不提供改名入口。
 - **多账本列表行**：`listLedgers` 返回每条 `monthIncomeCents` / `monthExpenseCents` / `monthSummaryLabel`（当月北京时间自然月，流水时间 `bookedAt ?? createdAt`；每账本最多 1000 条流水参与汇总，与 `analyzeLedger` 一致）；`design-exports-v2/jizhang.pen` 画板「01-账本列表」中卡片示意与列表布局对齐。列表卡片右侧仅保留「记一笔」按钮，并在右侧区域上下居中，不再展示「⋯」菜单。
 - **账本列表 / 详情底部抽屉与 TabBar**：`pages/ledgers` 多账本列表不再展示「⋯」操作菜单；`ledger-detail-view` 标题「⋯」仅创建者可见。创建者在详情页打开操作抽屉期间隐藏自定义 TabBar（嵌入 Tab 时详情组件 `triggerEvent('hosttabbar')`，由 `pages/ledgers` 消费）；独立打开 `pages/ledger-detail` 时组件内直接 `getTabBar()`。关闭抽屉、`pageLifetimes.hide` 离页或改名/删账本确认弹窗 `complete` 时恢复；列表页 `onShow` 仍按页内 `sheetOpen` 同步 `hidden`。
 - **详情页固定「记一笔」按钮**：`components/ledger-detail-view` 在非 `recordInline` 模式下使用底部 fixed 按钮，默认保持水平居中显示。
-- **详情页最近流水分组**：`components/ledger-detail-view` 将 `listTransactions` 结果按记账日期分组展示（今天 / 昨天 / 具体日期 `YYYY-MM-DD`）；分组内单条流水不再展示日期，仅在有时分时显示 `HH:mm`。
+- **详情页最近流水分组**：`components/ledger-detail-view` 将 `listTransactions` 结果按记账日期分组展示（今天 / 昨天 / 具体日期 `YYYY-MM-DD`）；**同一日组内**按 `bookedAt ?? createdAt` 倒序（新在上；时刻相同或同毫秒时再用 `createdAt`、最后 `_id` 稳定序）。分组内单条流水不再展示日期，仅在有时分时显示 `HH:mm`。
 - **协作者管理页拆分**：`pages/ledger-manage` 仅保留管理入口与删账本；微信邀请与协作者列表统一放在 `pages/ledger-collaborators`。
 - **协作者邀请卡片样式**：`pages/ledger-collaborators` 的 `onShareAppMessage` 使用自定义标题（含账本名，超长自动截断）+ 固定封面图 `miniprogram/images/LmtpX.png`，分享出去的微信卡片视觉与文案保持稳定。
 - **我的页分享入口**：`pages/mine` 新增「分享给朋友」卡片按钮（`open-type="share"`）；`onShareAppMessage` 标题优先带当前昵称，封面图固定 `miniprogram/images/LmtpX.png`。
@@ -66,15 +68,20 @@
 - **删账本返回落点**：`pages/ledger-manage` 删除账本成功后统一 `switchTab` 到 `pages/ledgers/ledgers`，并清空 `showBillLedgerListOnce`；因此仅剩一个账本时会自动进入详情，多个账本时显示列表。
 - **账本列表缓存**：`pages/ledgers/ledgers.js` 的 `refresh` 使用 `ledgers_list_snap_v1` 本地键先展示上一屏 `listLedgers` 数据，接口成功后再覆盖并写回缓存；应用缓存时**不**清零 `showBillLedgerListOnce`（与云函数返回后的消费逻辑一致）。
 - **账本页多账本引导条**：`pages/ledgers/ledgers` 的“多账本，账目更清晰”banner 在**非加载态始终展示**（单账本内嵌详情 / 多账本列表 / 空账本均显示），点击统一走 `createLedger`。
-- **统计账本记忆**：`pages/ledger-analytics` 通过本地缓存 `lastAnalyzeLedgerId` 记住用户上次选择的统计账本；若该账本已删除或无权限，会自动回退到当前可访问账本，避免报错。
+- **统计范围与记忆**：`pages/ledger-analytics` 默认**全部账本**汇总；可选「全部账本」或单一账本。本地缓存键 `lastAnalyzeLedgerId` 存**字面量 `__ALL__`**（或空值时按全部处理）或某一账本的 `_id`；若已保存的账本已删除或无权限，回退为「全部账本」汇总，避免报错。下钻页 `pages/ledger-analytics-drill` 与云函数 `listGroupTransactions` 使用 `scope: "all"` 时与之一致，明细行带 `ledgerId`。
 - **用户资料设置口径**：`pages/mine` 不依赖 `getUserProfile` 直接同步真实微信资料；点击圆头像触发 `chooseAvatar` 后会先上传云存储并调用 `updateMyProfile` 持久化（头像可单独保存），点击昵称触发弹窗输入并调用 `updateMyProfile` 保存展示名；未设置昵称时，昵称展示与流水页一致，回退匿名 openid（`…` + 后 8 位）。
 - **资产域口径（全局）**：资产账户与资产总览不绑定 `ledgerId`；一期开启独立 Tab `pages/assets/assets`，云函数按调用者 `openid` 隔离（`ownerOpenid`），暂不复用账本成员协作权限。
-- **资产记录口径（一期）**：先支持 `adjust` / `increase` / `decrease` 三类变动；写入/编辑/删除普通记录后会自动重算该账户余额链（按记录时间回放）。转账记录仅允许修改日期和备注，不允许改金额/类型。
+- **账户列表交互**：`pages/assets/asset-accounts` 顶部为 **「未归档」/「已归档」** 分段切换，**不同列表**：未归档仅展示 `archived` 非真账户，已归档仅展示 `archived === true`，不再用开关在同一列表里混排。卡片主区域不点击进入编辑；卡片右侧「资产变动/调整」跳转 `asset-record-edit` 记一笔；底部操作区提供「编辑」跳转账户编辑页、「记录」查看 `asset-records`、**「归档/恢复」**（不在列表提供删除：只要存在任意 `asset_records`——含期初非零开户、转账、账本关联——云函数即拒绝物理删除；日常用归档从总览与选单中隐藏即可）。列表请求 `listAssetAccounts` 传 `archivedOnly: true` 拉已归档；未传或 `false` 时为未归档。`listAssetAccounts` 与 `getAssetDashboard` 分栏内的账户均按**当前余额降序**（同额新更新在前），不再使用手动 `sortOrder` 排序展示。
+- **账户编辑页分类联动**：`pages/assets/asset-account-edit` 中「账户分类」选项随「账户属性」过滤——资产仅现金/银行卡/电子钱包/应收款/固定资产/其他；负债仅信用卡/借款/应付款/其他；切换属性时原分类若不在新列表内则回退为「其他」。**无「排序」表单项**；`updateAssetAccount` 仍支持传入 `sortOrder` 以兼容旧数据，但前端不再编辑。
+- **变动记录全部账户**：从资产 Tab 总览进「变动记录」未带 `accountId` 时，列表每行展示 `listAssetRecords` 返回的 `accountName`（本侧账户）；单账户筛选时不重复展示标题已载明的账户名。
+- **资产变动记录只读**：`pages/assets/asset-records` 仅展示，不提供编辑/删除；列表按 `bookedAt ?? createdAt` **倒序**（最新在上），行内时间展示到**秒**；`pages/assets/asset-record-edit` 只用于**新建** `createAssetRecord`：日期+系统 `time` 选**时分**，保存时 `bookedAtMs` 合并**当前秒/毫秒**（与记一笔同口径，便于同分钟内连续多条区分）（若打开时带 `recordId` 会提示并回列表）。记一笔/资产变动/资产转账的日期选择受「不早于该账户 `openedAtMs`/`createdAt`」约束：`miniprogram/utils/asset-account-time.js` 与 `picker mode="date"` 的 `start`、以及提交时 `clampBookedAtMsToFloor` 与云函数一致。云函数 `updateAssetRecord` / `deleteAssetRecord` 恒返回失败，与前端策略一致；错账需通过**新增**变动/调整或转账等修正。
+- **资产记录口径（一期）**：先支持 `adjust` / `increase` / `decrease` 三类变动与余额链重算。`rebuildAssetAccountBalanceChain` 从 0 按时间重放全部 `asset_records` 后写回 `asset_accounts.balanceCents`，因此 **新建账户时若期初余额非零**，`createAssetAccount` 会同时落一条「期初余额（开户）」的 `adjust` 记录，**`bookedAt` 与 `openedAtMs`（与开户同一时刻）** 一致，避免首笔记账后重算把开户金额冲掉。云函数在写入侧强制：**同一账户下新产生的 `asset_records.bookedAt` 不得早于该账户的创建时刻**（`openedAtMs` 或 `createdAt`）；`createAssetRecord` / `createAssetTransfer` / 记一笔/编辑流水**关联资产**（`insertLedgerTransaction` + `appendAssetRecordFromLedgerSource`）等路径均校验。旧数据若曾把期初锚在 2000-01-01，在「其余非期初行时间不早于 `createdAt`」可安全对齐时，重算链会把该期初的 `bookedAt` 修正为创建时刻。新建时 `increase/decrease` 可选同步到指定账本分类（分别生成收入/支出流水）。历史行不在客户端改删。
 - **资产转账与趋势口径（一期增强）**：支持 `createAssetTransfer`（转出/转入双分录）；转账采用云数据库事务保证双分录与双账户余额原子提交。净资产趋势由 `listNetWorthTrend` 按月返回（优先读取月快照），用于全局资产趋势查看。
-- **资产趋势快照口径**：新增 `asset_snapshots`（按用户+月份存快照）；`listNetWorthTrend` 优先读快照，资产记录/转账变更后自动重建快照，降低趋势查询开销。
+- **资产趋势快照口径**：新增 `asset_snapshots`（按用户+月份存快照）；`listNetWorthTrend` 优先读快照，资产记录/转账变更后自动重建快照，降低趋势查询开销。`rebuildAssetSnapshots` 全量重算时**仅落库最近 200 个自然月**（与 `listNetWorthTrend` 的 `.limit(200)` 一致），月跨度过大时逐月写库易触发云函数默认 20s 时限，故做上限与截断；随期初行改为「开户时刻」、净跨度缩短，可减轻该压力。
+- **资产页快捷入口样式**：`pages/assets/assets` 底部操作入口采用单行四宫格（账户管理/变动记录/账户转账/净资产趋势），每个入口统一“icon 在上、文案在下”的点击区，不再使用两行 fixed 按钮。
 - **我的页跳转体验**：`pages/mine` 的「分类管理」「定时记账」点击后直接跳转目标页，不在我的页预加载；加载态由 `pages/ledger-categories`、`pages/ledger-schedules` 各自承担。
 - **自定义 TabBar 视觉**：`miniprogram/custom-tab-bar` 的立体感优先用 `box-shadow`（`tabbar-pill`、`tab-item-active`）实现，不新增额外覆盖层，避免遮挡点击区域；改 Tab 视觉时优先在该目录调整，避免影响 Tab 选中同步逻辑。
-- **Tab 选中态口径**：`selected` 由四个 Tab 页在 `onShow` 明确写入固定索引（账本=0、资产=1、统计=2、我的=3）；`miniprogram/custom-tab-bar/index.js` 不再基于 `getCurrentPages()` 做 route 同步，避免切 Tab 过渡期读到旧路由导致“抖”。组件在点击 Tab 时会先即时 `setData({ selected })`，视觉更快，最终以页面 `onShow` 为准。
+- **Tab 选中态口径**：`selected` 由四个 Tab 页在 `onShow` 明确写入固定索引（账本=0、统计=1、资产=2、我的=3）；`miniprogram/custom-tab-bar/index.js` 不再基于 `getCurrentPages()` 做 route 同步，避免切 Tab 过渡期读到旧路由导致“抖”。组件在点击 Tab 时会先即时 `setData({ selected })`，视觉更快，最终以页面 `onShow` 为准。
 
 ## 云函数与调度
 
@@ -86,11 +93,11 @@
 - 账本：`createLedger`、`listLedgers`、`updateLedgerName`、`updateLedgerMonthlyBudget`、`getLedger`、`deleteLedger`
 - 协作：`enterLedger`、`joinLedger`、`createLedgerInvite`、`listLedgerCollaborators`、`reviewJoinRequest`、`removeCollaborator`、`exitLedger`
 - 分类与流水：`listCategories`、`addLedgerCategory`、`removeLedgerCategory`、`listTransactions`、`addTransaction`、`getTransaction`、`updateTransaction`、`deleteTransaction`
-- 统计：`analyzeLedger`（`groups` / `groupsByPerson` 为**支出**维度的排行；汇总净额等仍含收支；另含 `trendPoints`、`pieGroups*` 等）、`listGroupTransactions`
+- 统计：`analyzeLedger`（`groups` / `groupsByPerson` 为**支出**维度的排行；汇总净额等仍含收支；另含 `trendPoints`、`pieGroups*` 等；可选 `scope: "all"` 汇总全部可访问账本，不传 `ledgerId`；全量模式下不返回月预算对比）、`listGroupTransactions`（可选 `scope: "all"`；明细行带 `ledgerId`）
 - 定时：`listMySchedules`、`createSchedule`、`getSchedule`、`updateSchedule`、`deleteSchedule`
 - 用户资料：`getMyProfile`、`updateMyProfile`
-- 资产（全局）：`createAssetAccount`、`listAssetAccounts`、`getAssetAccount`、`updateAssetAccount`、`archiveAssetAccount`、`deleteAssetAccount`、`getAssetDashboard`
-- 资产记录：`createAssetRecord`、`listAssetRecords`、`getAssetRecord`、`updateAssetRecord`、`deleteAssetRecord`
+- 资产（全局）：`createAssetAccount`、`listAssetAccounts`、`getAssetAccount`、`updateAssetAccount`、`archiveAssetAccount`、`deleteAssetAccount`（仅当该户无任何 `asset_records` 时可删库；**小程序不调用**）、`getAssetDashboard`
+- 资产记录：`createAssetRecord`、`listAssetRecords`、`getAssetRecord`（`getAssetRecord` 暂未被小程序调用）——`updateAssetRecord` / `deleteAssetRecord` 仍挂 `type` 但恒失败（历史只读）
 - 资产转账/趋势：`createAssetTransfer`、`listNetWorthTrend`
 
 ## 云数据库集合（概念）
@@ -107,13 +114,13 @@
 **Tab 页**（与 `custom-tab-bar` 中 `pagePath` 一致）：
 
 - `pages/ledgers/ledgers` — 账本（列表 / 入口；文案与 `app.json` tabBar、`custom-tab-bar` 一致）  
-- `pages/assets/assets` — 资产（全局资产总览，独立于账本）
 - `pages/ledger-analytics/ledger-analytics` — 统计  
+- `pages/assets/assets` — 资产（全局资产总览，独立于账本）
 - `pages/mine/mine` — 我的  
 
 **其它业务页**（节选）：`ledger-detail`（单账本主页）、`ledger-manage`（账本管理入口与删账本）、`ledger-collaborators`（微信邀请与协作者列表）、`ledger-categories`、`ledger-tx`、`ledger-analytics-drill`、`ledger-schedules`、`ledger-schedule-edit`、`assets/asset-accounts`、`assets/asset-account-edit`、`assets/asset-records`、`assets/asset-record-edit`、`assets/asset-transfer`、`assets/asset-trend`。
 
-`app.json` 里 **`pages` 数组第一项**为小程序冷启动首屏（当前为 `ledgers`）；后续按 Tab 顺序依次为 `assets`、`ledger-analytics`、`mine`。
+`app.json` 里 **`pages` 数组第一项**为小程序冷启动首屏（当前为 `ledgers`）；后续按 Tab 顺序依次为 `ledger-analytics`、`assets`（及资产子页）、`mine`。
 
 **模板 / 示例**：`pages/index/index`、`pages/example/index`（按需保留或清理）。
 

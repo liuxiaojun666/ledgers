@@ -17,6 +17,7 @@
           <view class="item-title">{{item.ledgerName}} · {{item.category}}</view>
           <view class="meta">
             <view class="meta-line">{{item.recurrenceText}} · 下次 {{item.nextRunAtText}}</view>
+            <view class="meta-line" wx:if="{{item.assetAccountName}}">资产 {{item.assetAccountName}}</view>
             <view class="meta-line" wx:if="{{item.note}}">备注 {{item.note}}</view>
             <view class="meta-line err" wx:if="{{item.lastError}}">{{item.lastError}}</view>
           </view>

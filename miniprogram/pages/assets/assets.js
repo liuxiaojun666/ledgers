@@ -22,7 +22,7 @@ Page({
   },
 
   onShow() {
-    this.setTabBarState({ selected: 1, hidden: false });
+    this.setTabBarState({ selected: 2, hidden: false });
     this.refreshDashboard();
   },
 

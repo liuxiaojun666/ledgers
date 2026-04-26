@@ -233,8 +233,56 @@
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.add-flow-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16rpx;
+  margin: 12rpx 0 8rpx;
+}
+
+.add-flow-label {
+  font-size: 24rpx;
+  color: #4b5563;
+  flex-shrink: 0;
+}
+
+.add-flow-pill {
+  display: flex;
+  flex-direction: row;
+  background: #eef2f8;
+  border-radius: 999rpx;
+  padding: 4rpx;
   gap: 4rpx;
+}
+
+.add-flow-item {
+  padding: 8rpx 24rpx;
+  font-size: 24rpx;
+  color: #64748b;
+  border-radius: 999rpx;
+}
+
+.add-flow-item-active {
+  background: #fff;
+  color: #1e56f5;
+  font-weight: 600;
+  box-shadow: 0 2rpx 8rpx rgba(30, 86, 245, 0.12);
+}
+
+.kind-badge {
+  font-size: 20rpx;
+  color: #94a3b8;
+  flex-shrink: 0;
+  padding: 2rpx 10rpx;
+  border-radius: 8rpx;
+  background: #f1f5f9;
 }
 
 .name-sub {

@@ -22,7 +22,8 @@ function typeLabel(type) {
 Page({
   data: {
     loading: false,
-    includeArchived: false,
+    /** 未归档 | 已归档，与云函数 archivedOnly 对应 */
+    accountTab: "active",
     list: [],
   },
 
@@ -35,7 +36,10 @@ Page({
     wx.cloud
       .callFunction({
         name: "ledgerFunctions",
-        data: { type: "listAssetAccounts", includeArchived: this.data.includeArchived },
+        data: {
+          type: "listAssetAccounts",
+          archivedOnly: this.data.accountTab === "archived",
+        },
       })
       .then((resp) => {
         const r = resp.result || {};
@@ -62,8 +66,15 @@ Page({
       });
   },
 
-  onToggleArchived(e) {
-    this.setData({ includeArchived: !!e.detail.value }, () => this.refreshList());
+  onAccountTab(e) {
+    const tab = String((e.currentTarget.dataset || {}).tab || "").trim();
+    if (tab !== "active" && tab !== "archived") {
+      return;
+    }
+    if (tab === this.data.accountTab) {
+      return;
+    }
+    this.setData({ accountTab: tab }, () => this.refreshList());
   },
 
   onCreate() {
@@ -77,6 +88,20 @@ Page({
     }
     wx.navigateTo({
       url: `/pages/assets/asset-account-edit?accountId=${encodeURIComponent(accountId)}`,
+    });
+  },
+
+  onAssetChange(e) {
+    const ds = e.currentTarget.dataset || {};
+    const accountId = String(ds.id || "").trim();
+    const accountName = String(ds.name || "").trim();
+    if (!accountId) {
+      return;
+    }
+    wx.navigateTo({
+      url: `/pages/assets/asset-record-edit?accountId=${encodeURIComponent(
+        accountId
+      )}&accountName=${encodeURIComponent(accountName)}`,
     });
   },
 
@@ -118,39 +143,5 @@ Page({
       .catch(() => {
         wx.showToast({ title: "操作失败", icon: "none" });
       });
-  },
-
-  onDelete(e) {
-    const accountId = String((e.currentTarget.dataset || {}).id || "").trim();
-    if (!accountId) {
-      return;
-    }
-    wx.showModal({
-      title: "删除账户",
-      content: "删除后不可恢复，且有记录的账户不允许删除。",
-      confirmColor: "#e54545",
-      success: (res) => {
-        if (!res.confirm) {
-          return;
-        }
-        wx.cloud
-          .callFunction({
-            name: "ledgerFunctions",
-            data: { type: "deleteAssetAccount", accountId },
-          })
-          .then((resp) => {
-            const r = resp.result || {};
-            if (!r.success) {
-              wx.showToast({ title: r.errMsg || "删除失败", icon: "none" });
-              return;
-            }
-            wx.showToast({ title: "已删除" });
-            this.refreshList();
-          })
-          .catch(() => {
-            wx.showToast({ title: "删除失败", icon: "none" });
-          });
-      },
-    });
   },
 });

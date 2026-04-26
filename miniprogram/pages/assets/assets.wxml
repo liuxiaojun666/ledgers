@@ -12,10 +12,31 @@
       </view>
       <view class="summary-item">
         <view class="summary-label">净资产</view>
-        <view class="summary-value {{netWorthSign ? 'summary-net-neg' : 'summary-net'}}">¥{{netWorthYuan}}</view>
+        <view class="summary-value {{netWorthSign ? 'summary-net-neg' : 'summary-net'}}">
+          ¥{{netWorthYuan}}
+        </view>
       </view>
     </view>
-
+    <view class="action-panel">
+      <view class="action-grid">
+        <view class="action-item" bindtap="openAccounts">
+          <view class="action-icon">🏦</view>
+          <view class="action-name">账户管理</view>
+        </view>
+        <view class="action-item" bindtap="openRecords">
+          <view class="action-icon">🧾</view>
+          <view class="action-name">变动记录</view>
+        </view>
+        <view class="action-item" bindtap="openTransfer">
+          <view class="action-icon">🔁</view>
+          <view class="action-name">账户转账</view>
+        </view>
+        <view class="action-item" bindtap="openTrend">
+          <view class="action-icon">📈</view>
+          <view class="action-name">净资产趋势</view>
+        </view>
+      </view>
+    </view>
     <view class="section">
       <view class="section-title">资产账户</view>
       <view wx:if="{{!assetAccounts.length}}" class="empty">暂无资产账户</view>
@@ -26,7 +47,6 @@
         </view>
       </view>
     </view>
-
     <view class="section">
       <view class="section-title">负债账户</view>
       <view wx:if="{{!liabilityAccounts.length}}" class="empty">暂无负债账户</view>
@@ -38,13 +58,4 @@
       </view>
     </view>
   </block>
-
-  <view class="bottom-actions">
-    <button class="btn-manage btn-outline" bindtap="openRecords">变动记录</button>
-    <button class="btn-manage" bindtap="openAccounts">账户管理</button>
-  </view>
-  <view class="bottom-actions bottom-actions-second">
-    <button class="btn-manage btn-outline" bindtap="openTransfer">账户转账</button>
-    <button class="btn-manage btn-outline" bindtap="openTrend">净资产趋势</button>
-  </view>
 </view>

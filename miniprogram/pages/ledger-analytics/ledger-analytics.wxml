@@ -3,17 +3,17 @@
   <block wx:else>
     <view wx:if="{{!ledgers.length}}" class="empty">暂无可统计账本，请先在「账本」创建或加入账本。</view>
     <block wx:else>
-      <view wx:if="{{ledgers.length > 1}}" class="ledger-picker-wrap">
+      <view wx:if="{{ledgers.length}}" class="ledger-picker-wrap">
         <picker
           mode="selector"
-          range="{{ledgerNameList}}"
-          value="{{ledgerIndex}}"
+          range="{{ledgerDisplayNames}}"
+          value="{{ledgerPickerIndex}}"
           bindtap="onLedgerPickerOpen"
           bindchange="onLedgerChange"
           bindcancel="onLedgerPickerClose"
         >
           <view class="ledger-picker-label">
-            <text class="ledger-picker-text">统计账本：{{ledgerName || "请选择账本"}}</text>
+            <text class="ledger-picker-text">统计：{{ledgerName || "全部账本"}}</text>
             <text class="ledger-picker-caret">▼</text>
           </view>
         </picker>

@@ -8,12 +8,12 @@ Component({
         text: "账本",
       },
       {
-        pagePath: "/pages/assets/assets",
-        text: "资产",
-      },
-      {
         pagePath: "/pages/ledger-analytics/ledger-analytics",
         text: "统计",
+      },
+      {
+        pagePath: "/pages/assets/assets",
+        text: "资产",
       },
       {
         pagePath: "/pages/mine/mine",

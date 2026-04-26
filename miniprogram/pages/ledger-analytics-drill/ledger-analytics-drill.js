@@ -136,6 +136,8 @@ function parseWeekAnchor(raw) {
 Page({
   data: {
     loading: true,
+    /** 与统计页「全部账本」一致，为 true 时云函数传 scope: all */
+    analyzeAll: false,
     ledgerId: "",
     ledgerName: "",
     range: "week",
@@ -159,6 +161,7 @@ Page({
 
   onLoad(options) {
     const launchQ = safeEnterQuery(wx.getLaunchOptionsSync);
+    const analyzeAll = options.scope === "all" || options.all === "1";
     const ledgerId = pickLedgerId(options, launchQ);
     const range =
       options.range === "month" || options.range === "year"
@@ -177,13 +180,14 @@ Page({
     const month = toInt(options.month) || now.getMonth() + 1;
     const weekAnchorDate = parseWeekAnchor(options.weekAnchorDate);
     const groupKey = decodeKey(options.key);
-    if (!ledgerId || !groupKey) {
+    if (!groupKey || (!analyzeAll && !ledgerId)) {
       wx.showToast({ title: "参数不完整", icon: "none" });
       this.setData({ loading: false });
       return;
     }
     this.setData({
-      ledgerId,
+      analyzeAll,
+      ledgerId: analyzeAll ? "" : ledgerId,
       range,
       selectedYear: year,
       selectedMonth: month,
@@ -219,6 +223,7 @@ Page({
       return;
     }
     const {
+      analyzeAll,
       ledgerId,
       range,
       groupBy,
@@ -229,22 +234,27 @@ Page({
       subGroupBy,
       subGroupKey,
     } = this.data;
+    const payload = {
+      type: "listGroupTransactions",
+      range,
+      year: selectedYear,
+      month: selectedMonth,
+      weekAnchorDate,
+      groupBy,
+      groupKey,
+      subGroupBy,
+      subGroupKey,
+    };
+    if (analyzeAll) {
+      payload.scope = "all";
+    } else {
+      payload.ledgerId = ledgerId;
+    }
     this.setData({ loading: true });
     wx.cloud
       .callFunction({
         name: "ledgerFunctions",
-        data: {
-          type: "listGroupTransactions",
-          ledgerId,
-          range,
-          year: selectedYear,
-          month: selectedMonth,
-          weekAnchorDate,
-          groupBy,
-          groupKey,
-          subGroupBy,
-          subGroupKey,
-        },
+        data: payload,
       })
       .then((resp) => {
         const r = resp.result || {};
@@ -361,6 +371,7 @@ Page({
   onSubGroupTap(e) {
     const subGroupKey = e.currentTarget.dataset.key;
     const {
+      analyzeAll,
       ledgerId,
       range,
       groupBy,
@@ -370,11 +381,14 @@ Page({
       weekAnchorDate,
       subGroupBy,
     } = this.data;
-    if (!ledgerId || !groupKey || !subGroupKey || groupBy !== "person" || subGroupBy !== "category") {
+    if ((!analyzeAll && !ledgerId) || !groupKey || !subGroupKey || groupBy !== "person" || subGroupBy !== "category") {
       return;
     }
+    const idPart = analyzeAll
+      ? "scope=all"
+      : `id=${encodeURIComponent(ledgerId)}`;
     wx.navigateTo({
-      url: `/pages/ledger-analytics-drill/ledger-analytics-drill?id=${ledgerId}&range=${range}&groupBy=${groupBy}&year=${selectedYear}&month=${selectedMonth}&weekAnchorDate=${encodeURIComponent(
+      url: `/pages/ledger-analytics-drill/ledger-analytics-drill?${idPart}&range=${range}&groupBy=${groupBy}&year=${selectedYear}&month=${selectedMonth}&weekAnchorDate=${encodeURIComponent(
         weekAnchorDate
       )}&key=${encodeURIComponent(String(groupKey))}&subGroupBy=category&subGroupKey=${encodeURIComponent(
         String(subGroupKey)
@@ -383,22 +397,27 @@ Page({
   },
 
   onTxTap(e) {
-    const { id: txId, editable } = e.currentTarget.dataset || {};
+    const ds = e.currentTarget.dataset || {};
+    const txId = ds.id;
+    const rowLedger = ds.lid;
     const { ledgerId } = this.data;
-    if (!txId || !ledgerId) {
+    const targetLedger = String(
+      (rowLedger != null && String(rowLedger).trim()) || ledgerId || ""
+    ).trim();
+    if (!txId || !targetLedger) {
       return;
     }
     const ok =
-      editable === true ||
-      editable === 1 ||
-      editable === "true" ||
-      editable === "1";
+      ds.editable === true ||
+      ds.editable === 1 ||
+      ds.editable === "true" ||
+      ds.editable === "1";
     if (!ok) {
       wx.showToast({ title: "仅可编辑自己记录的流水", icon: "none" });
       return;
     }
     wx.navigateTo({
-      url: `/pages/ledger-tx/ledger-tx?ledgerId=${ledgerId}&txId=${txId}`,
+      url: `/pages/ledger-tx/ledger-tx?ledgerId=${targetLedger}&txId=${txId}`,
     });
   },
 

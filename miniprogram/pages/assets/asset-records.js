@@ -1,17 +1,30 @@
-const { safeDecodeParam, safeEncodeParam } = require("../../utils/route-params");
+const { safeDecodeParam } = require("../../utils/route-params");
 
 function formatYuan(cents) {
   const n = Number(cents) || 0;
   return (n / 100).toFixed(2);
 }
 
-function formatBookedAt(v) {
-  const d = new Date(v || Date.now());
-  if (Number.isNaN(d.getTime())) {
+function readDateMs(v) {
+  if (v == null || v === "") return NaN;
+  const t = new Date(v).getTime();
+  return Number.isFinite(t) && !Number.isNaN(t) ? t : NaN;
+}
+
+function getRecordTimeMs(item) {
+  return readDateMs(item.bookedAt) || readDateMs(item.createdAt) || 0;
+}
+
+function formatRecordTimeLabel(item) {
+  const ms = readDateMs(item.bookedAt) || readDateMs(item.createdAt);
+  if (!Number.isFinite(ms) || ms === 0) {
     return "";
   }
+  const d = new Date(ms);
   const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(
+    d.getDate()
+  )} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 function actionLabel(actionType) {
@@ -65,8 +78,13 @@ Page({
           hasTransferPair: !!item.transferPairId,
           amountYuan: formatYuan(item.amountCents),
           afterBalanceYuan: formatYuan(item.afterBalanceCents),
-          bookedAtLabel: formatBookedAt(item.bookedAt),
+          bookedAtLabel: formatRecordTimeLabel(item),
         }));
+        list.sort((a, b) => {
+          const diff = getRecordTimeMs(b) - getRecordTimeMs(a);
+          if (diff !== 0) return diff;
+          return String(b._id || "").localeCompare(String(a._id || ""));
+        });
         const decorated = list.map((item, idx, arr) => {
           if (!item.hasTransferPair) {
             return { ...item, transferGroupPos: "" };
@@ -96,53 +114,4 @@ Page({
       });
   },
 
-  onCreate() {
-    const accountId = safeEncodeParam(this.data.accountId || "");
-    const accountName = safeEncodeParam(this.data.accountName || "");
-    wx.navigateTo({
-      url: `/pages/assets/asset-record-edit?accountId=${accountId}&accountName=${accountName}`,
-    });
-  },
-
-  onEdit(e) {
-    const recordId = String((e.currentTarget.dataset || {}).id || "").trim();
-    if (!recordId) return;
-    const accountId = safeEncodeParam(this.data.accountId || "");
-    const accountName = safeEncodeParam(this.data.accountName || "");
-    wx.navigateTo({
-      url: `/pages/assets/asset-record-edit?recordId=${safeEncodeParam(
-        recordId
-      )}&accountId=${accountId}&accountName=${accountName}`,
-    });
-  },
-
-  onDelete(e) {
-    const recordId = String((e.currentTarget.dataset || {}).id || "").trim();
-    if (!recordId) return;
-    wx.showModal({
-      title: "删除记录",
-      content: "删除后会自动重算该账户余额链，确认删除这条记录吗？",
-      confirmColor: "#e54545",
-      success: (res) => {
-        if (!res.confirm) return;
-        wx.cloud
-          .callFunction({
-            name: "ledgerFunctions",
-            data: { type: "deleteAssetRecord", recordId },
-          })
-          .then((resp) => {
-            const r = resp.result || {};
-            if (!r.success) {
-              wx.showToast({ title: r.errMsg || "删除失败", icon: "none" });
-              return;
-            }
-            wx.showToast({ title: "已删除" });
-            this.refresh();
-          })
-          .catch(() => {
-            wx.showToast({ title: "删除失败", icon: "none" });
-          });
-      },
-    });
-  },
 });

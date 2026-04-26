@@ -7,13 +7,45 @@ function txTimeMs(doc) {
   return Number.isFinite(c) ? c : 0;
 }
 
+function createdOnlyMs(doc) {
+  if (!doc || doc.createdAt == null) {
+    return 0;
+  }
+  const t = new Date(doc.createdAt).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function compareTxOrderRaw(a, b) {
+  const t = txTimeMs(b) - txTimeMs(a);
+  if (t !== 0) {
+    return t;
+  }
+  const c = createdOnlyMs(b) - createdOnlyMs(a);
+  if (c !== 0) {
+    return c;
+  }
+  return String(b._id || "").localeCompare(String(a._id || ""), "en");
+}
+
+function compareTxOrderRow(a, b) {
+  const t = (b.rowTimeMs || 0) - (a.rowTimeMs || 0);
+  if (t !== 0) {
+    return t;
+  }
+  const c = (b.rowCreatedOnlyMs || 0) - (a.rowCreatedOnlyMs || 0);
+  if (c !== 0) {
+    return c;
+  }
+  return String(b._id || "").localeCompare(String(a._id || ""), "en");
+}
+
 function txOccurredAt(doc) {
   const ms = txTimeMs(doc);
   return ms ? new Date(ms) : null;
 }
 
 function sortTx(docs) {
-  return (docs || []).slice().sort((a, b) => txTimeMs(b) - txTimeMs(a));
+  return (docs || []).slice().sort(compareTxOrderRaw);
 }
 
 function normalizeTxFlow(tx) {
@@ -142,6 +174,12 @@ function buildTxGroups(transactions) {
     }
     last.items.push(tx);
   });
+  for (let i = 0; i < groups.length; i += 1) {
+    const g = groups[i];
+    if (g && Array.isArray(g.items) && g.items.length > 1) {
+      g.items.sort(compareTxOrderRow);
+    }
+  }
   return groups;
 }
 
@@ -474,7 +512,9 @@ Component({
       const at = txOccurredAt(doc);
       const cat = doc.category || "其他";
       const note = String(doc.note || "").trim();
-      const lineLeft = note ? `${note} · ${cat}` : cat;
+      const assetTag = String(doc.assetAccountName || "").trim();
+      const base = note ? `${note} · ${cat}` : cat;
+      const lineLeft = assetTag ? `${base} · ${assetTag}` : base;
       return {
         _id: doc._id,
         category: doc.category,
@@ -490,6 +530,8 @@ Component({
         dayKey: at ? formatDateOnly(at) : "unknown",
         dayText: at ? formatDateOnly(at) : "",
         dayStartMs: at ? dayStartMs(at) : 0,
+        rowTimeMs: txTimeMs(doc),
+        rowCreatedOnlyMs: createdOnlyMs(doc),
       };
     },
 

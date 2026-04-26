@@ -1,6 +1,6 @@
 .page {
   min-height: 100vh;
-  padding: 28rpx 28rpx calc(220rpx + env(safe-area-inset-bottom));
+  padding: 28rpx 28rpx calc(208rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
   background: #f4f7ff;
 }
@@ -97,38 +97,48 @@
   color: #d45a0a;
 }
 
-.bottom-actions {
-  position: fixed;
-  left: 28rpx;
-  right: 28rpx;
-  bottom: calc(220rpx + env(safe-area-inset-bottom));
-  display: flex;
-  gap: 16rpx;
-}
-
-.bottom-actions-second {
-  bottom: calc(320rpx + env(safe-area-inset-bottom));
-}
-
-.btn-manage {
-  flex: 1;
-  height: 84rpx;
-  line-height: 84rpx;
-  background: #0066ff;
-  color: #ffffff;
-  border-radius: 999rpx;
-  font-size: 30rpx;
-  font-weight: 700;
-  box-shadow: 0 12rpx 30rpx rgba(0, 102, 255, 0.25);
-}
-
-.btn-outline {
+.action-panel {
+  margin-top: 20rpx;
   background: #ffffff;
-  color: #0066ff;
-  border: 1rpx solid #0066ff;
-  box-shadow: none;
+  border-radius: 20rpx;
+  padding: 20rpx 12rpx;
+  border: 1rpx solid #e5ebff;
 }
 
-.btn-manage::after {
-  border: none;
+.action-grid {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+}
+
+.action-item {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  padding: 14rpx 4rpx;
+  border-radius: 16rpx;
+}
+
+.action-item:active {
+  background: #f1f5ff;
+}
+
+.action-icon {
+  width: 72rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  text-align: center;
+  font-size: 38rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(180deg, #edf3ff 0%, #f7f9ff 100%);
+}
+
+.action-name {
+  font-size: 22rpx;
+  line-height: 30rpx;
+  color: #2a3650;
+  text-align: center;
 }

@@ -21,6 +21,11 @@ const PRESET_CATEGORY_ICONS = [
   "✈️",
   "🎮",
   "📦",
+  "💼",
+  "🏆",
+  "📈",
+  "🏡",
+  "💰",
 ];
 
 const CATEGORY_ICON_MAP = {
@@ -42,6 +47,12 @@ const CATEGORY_ICON_MAP = {
   旅行: "✈️",
   娱乐: "🎮",
   其他: "📦",
+  工资: "💼",
+  奖金: "🏆",
+  理财: "📈",
+  收租: "🏡",
+  红包: "🧧",
+  其他收入: "💰",
 };
 
 function getCategoryIcon(name) {

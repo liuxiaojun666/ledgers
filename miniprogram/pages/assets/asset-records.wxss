@@ -6,10 +6,6 @@
 }
 
 .head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
   margin-bottom: 14rpx;
 }
 
@@ -19,18 +15,10 @@
   color: #1f2940;
 }
 
-.btn-add {
-  margin: 0;
-  height: 62rpx;
-  line-height: 62rpx;
-  padding: 0 20rpx;
-  border-radius: 999rpx;
-  background: #0066ff;
-  color: #fff;
+.sub {
+  margin-top: 8rpx;
   font-size: 24rpx;
-}
-.btn-add::after {
-  border: none;
+  color: #6f7f9d;
 }
 
 .hint {
@@ -100,9 +88,4 @@
   margin-top: 8rpx;
   font-size: 24rpx;
   color: #2d3a57;
-}
-
-.del {
-  color: #d94b4b;
-  font-size: 24rpx;
 }

@@ -35,7 +35,7 @@
     </view>
     <view wx:if="{{viewMode !== 'groups' && !list.length}}" class="empty">暂无记录。</view>
     <view wx:if="{{viewMode !== 'groups' && list.length}}" class="list">
-      <view class="tx {{item.canEdit ? 'tx-tap' : ''}}" wx:for="{{list}}" wx:key="_id" data-id="{{item._id}}" data-editable="{{item.canEdit}}" bindtap="onTxTap">
+      <view class="tx {{item.canEdit ? 'tx-tap' : ''}}" wx:for="{{list}}" wx:key="_id" data-id="{{item._id}}" data-lid="{{item.ledgerId}}" data-editable="{{item.canEdit}}" bindtap="onTxTap">
         <view class="tx-top">
           <text class="tx-cat">{{item.category || "其他"}}</text>
           <text class="tx-amt {{item.flow === 'income' ? 'tx-amt-income' : 'tx-amt-expense'}}">

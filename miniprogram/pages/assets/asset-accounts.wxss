@@ -13,15 +13,31 @@
   margin-bottom: 20rpx;
 }
 
-.switch-item {
+.segment {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 10rpx;
+  align-items: stretch;
+  padding: 4rpx;
+  border-radius: 999rpx;
+  background: #e8edf7;
+  box-sizing: border-box;
 }
 
-.switch-label {
-  font-size: 24rpx;
+.seg-item {
+  flex: 1;
+  text-align: center;
+  padding: 14rpx 12rpx;
+  font-size: 26rpx;
+  font-weight: 600;
   color: #5f6f8d;
+  border-radius: 999rpx;
+}
+
+.seg-item.seg-on {
+  color: #1f2940;
+  background: #ffffff;
+  box-shadow: 0 2rpx 8rpx rgba(31, 41, 64, 0.08);
 }
 
 .btn-create {
@@ -52,23 +68,58 @@
 }
 
 .card {
+  position: relative;
   background: #ffffff;
   border-radius: 20rpx;
   border: 1rpx solid #e7ecfb;
   padding: 20rpx;
 }
 
-.title-row {
+.card-body {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.card-left {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 与左侧信息区同高，按钮在右侧列内垂直居中 */
+.card-btn-col {
+  flex-shrink: 0;
+  align-self: stretch;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12rpx;
+  justify-content: flex-end;
+}
+
+.btn-asset-change {
+  margin: 0;
+  flex-shrink: 0;
+  max-width: 200rpx;
+  padding: 12rpx 16rpx;
+  line-height: 1.35;
+  border-radius: 999rpx;
+  background: #0066ff;
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 600;
+  text-align: center;
+}
+
+.btn-asset-change::after {
+  border: none;
 }
 
 .title {
   font-size: 30rpx;
   font-weight: 700;
   color: #1f2940;
+  padding-right: 120rpx;
+  box-sizing: border-box;
 }
 
 .kind {
@@ -77,6 +128,13 @@
   font-size: 20rpx;
   color: #0066ff;
   background: rgba(0, 102, 255, 0.08);
+}
+
+.kind-corner {
+  position: absolute;
+  top: 20rpx;
+  right: 20rpx;
+  z-index: 1;
 }
 
 .meta {

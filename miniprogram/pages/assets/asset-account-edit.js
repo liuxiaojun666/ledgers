@@ -5,17 +5,45 @@ const KIND_OPTIONS = [
   { value: "liability", label: "负债" },
 ];
 
-const TYPE_OPTIONS = [
+/** 与「资产」属性对应的账户分类（不含负债类） */
+const ASSET_TYPE_OPTIONS = [
   { value: "cash", label: "现金" },
   { value: "bank", label: "银行卡" },
   { value: "ewallet", label: "电子钱包" },
   { value: "receivable", label: "应收款" },
   { value: "fixed_asset", label: "固定资产" },
+  { value: "other", label: "其他" },
+];
+
+/** 与「负债」属性对应的账户分类（不含资产侧类型） */
+const LIABILITY_TYPE_OPTIONS = [
   { value: "credit_card", label: "信用卡" },
   { value: "loan", label: "借款" },
   { value: "payable", label: "应付款" },
   { value: "other", label: "其他" },
 ];
+
+function typeOptionsForKind(kind) {
+  return kind === "liability" ? LIABILITY_TYPE_OPTIONS : ASSET_TYPE_OPTIONS;
+}
+
+/** 在指定属性下可展示的账户分类；不兼容时回退为「其他」或列表首项 */
+function resolveTypeForKind(kind, rawType) {
+  const list = typeOptionsForKind(kind);
+  if (list.some((o) => o.value === rawType)) {
+    return rawType;
+  }
+  if (list.some((o) => o.value === "other")) {
+    return "other";
+  }
+  return list[0].value;
+}
+
+function typeLabelFor(kind, type) {
+  const list = typeOptionsForKind(kind);
+  const found = list.find((o) => o.value === type);
+  return (found && found.label) || list[0].label;
+}
 
 function centsFromYuanText(raw) {
   const s = String(raw == null ? "" : raw).trim();
@@ -42,12 +70,12 @@ Page({
     name: "",
     kind: "asset",
     type: "cash",
-    balanceYuan: "0.00",
+    typeLabel: "现金",
+    balanceYuan: "0",
     includeInNetWorth: true,
-    sortOrder: "100",
     remark: "",
     kindOptions: KIND_OPTIONS,
-    typeOptions: TYPE_OPTIONS,
+    typeOptions: ASSET_TYPE_OPTIONS,
     kindIndex: 0,
     typeIndex: 0,
   },
@@ -81,19 +109,19 @@ Page({
         }
         const account = r.account;
         const kind = account.kind === "liability" ? "liability" : "asset";
-        const type = TYPE_OPTIONS.some((item) => item.value === account.type)
-          ? account.type
-          : "other";
+        const typeOptions = typeOptionsForKind(kind);
+        const type = resolveTypeForKind(kind, account.type);
         this.setData({
           name: account.name || "",
           kind,
           type,
+          typeLabel: typeLabelFor(kind, type),
+          typeOptions,
           balanceYuan: yuanTextFromCents(account.balanceCents),
           includeInNetWorth: account.includeInNetWorth !== false,
-          sortOrder: String(account.sortOrder == null ? 100 : account.sortOrder),
           remark: account.remark || "",
           kindIndex: KIND_OPTIONS.findIndex((item) => item.value === kind),
-          typeIndex: TYPE_OPTIONS.findIndex((item) => item.value === type),
+          typeIndex: typeOptions.findIndex((item) => item.value === type),
         });
       })
       .catch(() => {
@@ -114,24 +142,37 @@ Page({
     if (!item) {
       return;
     }
-    this.setData({ kind: item.value, kindIndex: idx });
+    const newKind = item.value;
+    const typeOptions = typeOptionsForKind(newKind);
+    const type = resolveTypeForKind(newKind, this.data.type);
+    const typeIndex = typeOptions.findIndex((o) => o.value === type);
+    this.setData({
+      kind: newKind,
+      kindIndex: idx,
+      typeOptions,
+      type,
+      typeLabel: typeLabelFor(newKind, type),
+      typeIndex: typeIndex >= 0 ? typeIndex : 0,
+    });
   },
 
   onTypeChange(e) {
     const idx = Number(e.detail.value);
-    const item = TYPE_OPTIONS[idx];
+    const list = this.data.typeOptions || typeOptionsForKind(this.data.kind);
+    const item = list[idx];
     if (!item) {
       return;
     }
-    this.setData({ type: item.value, typeIndex: idx });
+    const kind = this.data.kind;
+    this.setData({
+      type: item.value,
+      typeIndex: idx,
+      typeLabel: typeLabelFor(kind, item.value),
+    });
   },
 
   onBalanceInput(e) {
     this.setData({ balanceYuan: e.detail.value || "" });
-  },
-
-  onSortInput(e) {
-    this.setData({ sortOrder: e.detail.value || "" });
   },
 
   onRemarkInput(e) {
@@ -157,7 +198,6 @@ Page({
       accountType: this.data.type,
       balanceCents,
       includeInNetWorth: this.data.includeInNetWorth,
-      sortOrder: Number(this.data.sortOrder || 100),
       remark: this.data.remark,
     };
     const isEdit = !!this.data.accountId;

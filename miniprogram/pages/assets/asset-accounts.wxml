@@ -1,30 +1,52 @@
 <view class="page">
   <view class="toolbar">
-    <label class="switch-item">
-      <switch checked="{{includeArchived}}" bindchange="onToggleArchived" />
-      <text class="switch-label">显示归档账户</text>
-    </label>
+    <view class="segment">
+      <view
+        class="seg-item {{accountTab === 'active' ? 'seg-on' : ''}}"
+        bindtap="onAccountTab"
+        data-tab="active"
+      >
+        未归档
+      </view>
+      <view
+        class="seg-item {{accountTab === 'archived' ? 'seg-on' : ''}}"
+        bindtap="onAccountTab"
+        data-tab="archived"
+      >
+        已归档
+      </view>
+    </view>
     <button class="btn-create" bindtap="onCreate">+ 新建账户</button>
   </view>
-
   <view wx:if="{{loading}}" class="hint">加载中…</view>
-  <view wx:elif="{{!list.length}}" class="hint">暂无账户，先新建一个。</view>
+  <view wx:elif="{{!list.length}}" class="hint">
+    {{accountTab === 'archived' ? '暂无已归档账户' : '暂无账户，先新建一个。'}}
+  </view>
   <view wx:else class="list">
     <view class="card" wx:for="{{list}}" wx:key="_id">
-      <view class="card-main" bindtap="onEdit" data-id="{{item._id}}">
-        <view class="title-row">
-          <view class="title">{{item.name}}</view>
-          <view class="kind">{{item.kind === 'liability' ? '负债' : '资产'}}</view>
+      <view class="kind kind-corner">{{item.kind === 'liability' ? '负债' : '资产'}}</view>
+      <view class="card-body">
+        <view class="card-left">
+          <view class="card-main">
+            <view class="title">{{item.name}}</view>
+            <view class="meta">分类：{{item.typeLabel}}</view>
+            <view class="balance">¥{{item.balanceYuan}}</view>
+          </view>
+          <view class="actions">
+            <view class="action-link" bindtap="onEdit" data-id="{{item._id}}">编辑</view>
+            <view class="action-link" bindtap="onRecords" data-id="{{item._id}}" data-name="{{item.name}}">
+              记录
+            </view>
+            <view class="action-link" bindtap="onArchive" data-id="{{item._id}}" data-archived="{{item.archived}}">
+              {{item.archived ? "恢复" : "归档"}}
+            </view>
+          </view>
         </view>
-        <view class="meta">分类：{{item.typeLabel}}</view>
-        <view class="balance">¥{{item.balanceYuan}}</view>
-      </view>
-      <view class="actions">
-        <view class="action-link" bindtap="onRecords" data-id="{{item._id}}" data-name="{{item.name}}">记录</view>
-        <view class="action-link" bindtap="onArchive" data-id="{{item._id}}" data-archived="{{item.archived}}">
-          {{item.archived ? "恢复" : "归档"}}
+        <view class="card-btn-col">
+          <button class="btn-asset-change" bindtap="onAssetChange" data-id="{{item._id}}" data-name="{{item.name}}">
+            变动/调整
+          </button>
         </view>
-        <view class="action-link danger" bindtap="onDelete" data-id="{{item._id}}">删除</view>
       </view>
     </view>
   </view>

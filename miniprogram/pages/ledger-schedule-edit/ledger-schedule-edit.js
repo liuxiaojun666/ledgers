@@ -26,6 +26,9 @@ Page({
     ledgerNames: [],
     ledgerIndex: 0,
     categories: ["其他"],
+    expenseCategories: ["其他"],
+    incomeCategories: ["其他"],
+    _flowCategoryList: ["其他"],
     categoryDisplayList: ["📦 其他"],
     categoryIndex: 0,
     amountInput: "",
@@ -45,6 +48,12 @@ Page({
     saving: false,
     deleting: false,
     categorySheetOpen: false,
+    assetAccounts: [],
+    assetPickerRange: ["不关联"],
+    assetPickerIndex: 0,
+    assetPickerAccountIds: [],
+    selectedAssetId: "",
+    assetPickerOrphan: null,
   },
 
   onLoad(options) {
@@ -87,6 +96,26 @@ Page({
       const ledgerNames = ledgers.map((x) => x.name || "未命名");
       this.setData({ ledgers, ledgerNames });
 
+      let arList = [];
+      try {
+        const arResp = await wx.cloud.callFunction({
+          name: "ledgerFunctions",
+          data: { type: "listAssetAccounts", includeArchived: false },
+        });
+        const ar = arResp.result || {};
+        if (ar.success && Array.isArray(ar.list)) {
+          arList = ar.list
+            .map((row) => ({
+              _id: row && row._id,
+              name: (row && row.name) || "未命名",
+            }))
+            .filter((a) => a._id);
+        }
+      } catch (e) {
+        arList = [];
+      }
+      this.setData({ assetAccounts: arList });
+
       if (scheduleId) {
         const gr = await wx.cloud.callFunction({
           name: "ledgerFunctions",
@@ -113,6 +142,37 @@ Page({
     }
   },
 
+  refreshCategoryView(preferredName) {
+    const { flowIndex, expenseCategories, incomeCategories, categories } = this.data;
+    const all = Array.isArray(categories) && categories.length ? categories : ["其他"];
+    const list =
+      flowIndex === 1
+        ? Array.isArray(incomeCategories) && incomeCategories.length
+          ? incomeCategories
+          : all
+        : Array.isArray(expenseCategories) && expenseCategories.length
+          ? expenseCategories
+          : all;
+    const categoryDisplayList = decorateCategoryList(list);
+    let categoryIndex = 0;
+    if (typeof preferredName === "string" && preferredName) {
+      const j = list.indexOf(preferredName);
+      if (j >= 0) {
+        categoryIndex = j;
+      }
+    } else {
+      const prev = this.data.categoryIndex;
+      categoryIndex = list.length
+        ? Math.min(Math.max(0, prev), list.length - 1)
+        : 0;
+    }
+    this.setData({
+      categoryDisplayList,
+      categoryIndex,
+      _flowCategoryList: list,
+    });
+  },
+
   applyLedgerIndex(ledgerIndex) {
     const { ledgers } = this.data;
     const idx = Math.min(Math.max(0, ledgerIndex), ledgers.length - 1);
@@ -124,53 +184,138 @@ Page({
       })
       .then((resp) => {
         const r = resp.result || {};
-        const cats =
+        const full =
           Array.isArray(r.list) && r.list.length ? r.list : ["其他"];
-        this.setData({
-          ledgerIndex: idx,
-          categories: cats,
-          categoryDisplayList: decorateCategoryList(cats),
-          categoryIndex: 0,
-          categorySheetOpen: false,
-        });
+        const exp =
+          Array.isArray(r.expenseList) && r.expenseList.length
+            ? r.expenseList
+            : full;
+        const inc =
+          Array.isArray(r.incomeList) && r.incomeList.length
+            ? r.incomeList
+            : full;
+        this.setData(
+          {
+            ledgerIndex: idx,
+            categories: full,
+            expenseCategories: exp,
+            incomeCategories: inc,
+            categorySheetOpen: false,
+          },
+          () => {
+            this.refreshCategoryView();
+            this.buildAssetPickerState();
+          }
+        );
       })
       .catch(() => {
         const fallback = ["其他"];
-        this.setData({
-          ledgerIndex: idx,
-          categories: fallback,
-          categoryDisplayList: decorateCategoryList(fallback),
-          categoryIndex: 0,
-          categorySheetOpen: false,
-        });
+        this.setData(
+          {
+            ledgerIndex: idx,
+            categories: fallback,
+            expenseCategories: fallback,
+            incomeCategories: fallback,
+            categorySheetOpen: false,
+          },
+          () => {
+            this.refreshCategoryView();
+            this.buildAssetPickerState();
+          }
+        );
       });
   },
 
-  fillFromRaw(raw, schedule) {
-    const cats = this.data.categories || [];
-    let ci = cats.indexOf(raw.category);
-    if (ci < 0) {
-      ci = 0;
+  buildAssetPickerState() {
+    const base = (this.data.assetAccounts || [])
+      .filter((a) => a && a._id)
+      .map((a) => ({
+        _id: String(a._id),
+        name: (a.name && String(a.name).trim()) || "未命名",
+      }));
+    const sel =
+      (this.data.selectedAssetId && String(this.data.selectedAssetId).trim()) || "";
+    const or = this.data.assetPickerOrphan;
+    let accounts = base.slice();
+    if (sel && !accounts.some((a) => a._id === sel) && or && or._id === sel) {
+      accounts = [
+        {
+          _id: sel,
+          name: (or.name && String(or.name).trim()) || "已移除的账户",
+        },
+        ...accounts,
+      ];
     }
+    const range = ["不关联", ...accounts.map((a) => a.name)];
+    let idx = 0;
+    if (sel) {
+      const j = accounts.findIndex((a) => a._id === sel);
+      idx = j >= 0 ? j + 1 : 0;
+    }
+    this.setData({
+      assetPickerRange: range,
+      assetPickerIndex: idx,
+      assetPickerAccountIds: accounts.map((a) => a._id),
+    });
+  },
+
+  onAssetAccountPickerChange(e) {
+    if (this.data.status === "completed") {
+      return;
+    }
+    const raw = e.detail && e.detail.value;
+    const pickIdx = raw != null ? parseInt(String(raw), 10) : 0;
+    const safe = Number.isFinite(pickIdx) && pickIdx > 0 ? pickIdx : 0;
+    const ids = this.data.assetPickerAccountIds || [];
+    const id = safe > 0 ? ids[safe - 1] || "" : "";
+    this.setData({
+      assetPickerIndex: safe,
+      selectedAssetId: id || "",
+    });
+  },
+
+  fillFromRaw(raw, schedule) {
     const riv = this.data.recurrenceValues.indexOf(raw.recurrence);
     const wd = raw.weekday != null ? Number(raw.weekday) : 1;
     const weekdayIndex = ((wd % 7) + 7) % 7;
     const md = raw.monthDay != null ? Number(raw.monthDay) : 1;
     const monthDayIndex = Math.min(27, Math.max(0, md - 1));
-    this.setData({
-      mode: "edit",
-      scheduleId: schedule._id || this._scheduleId,
-      amountInput: raw.amountYuan || "",
-      note: raw.note || "",
-      flowIndex: raw.flow === "income" ? 1 : 0,
-      recurrenceIndex: riv >= 0 ? riv : 1,
-      categoryIndex: ci,
-      onceDate: raw.onceDate || todayStr(),
-      weekdayIndex,
-      monthDayIndex,
-      enabled: raw.enabled !== false,
-      status: raw.status || "active",
-    });
+    const pick = raw.category ? String(raw.category) : "";
+    const rawAid =
+      raw.assetAccountId != null ? String(raw.assetAccountId).trim() : "";
+    const accList = (this.data.assetAccounts || [])
+      .filter((a) => a && a._id)
+      .map((a) => String(a._id));
+    let assetPickerOrphan = null;
+    if (rawAid && accList.indexOf(rawAid) < 0) {
+      assetPickerOrphan = {
+        _id: rawAid,
+        name:
+          (raw.assetAccountName && String(raw.assetAccountName).trim()) ||
+          "已移除的账户",
+      };
+    }
+    this.setData(
+      {
+        mode: "edit",
+        scheduleId: schedule._id || this._scheduleId,
+        amountInput: raw.amountYuan || "",
+        note: raw.note || "",
+        flowIndex: raw.flow === "income" ? 1 : 0,
+        recurrenceIndex: riv >= 0 ? riv : 1,
+        onceDate: raw.onceDate || todayStr(),
+        weekdayIndex,
+        monthDayIndex,
+        enabled: raw.enabled !== false,
+        status: raw.status || "active",
+        selectedAssetId: rawAid,
+        assetPickerOrphan,
+      },
+      () => {
+        this.refreshCategoryView(pick);
+        this.buildAssetPickerState();
+      }
+    );
   },
 
   onLedgerChange(e) {
@@ -191,11 +336,11 @@ Page({
   },
 
   onOpenCategorySheet() {
-    const { status, categories } = this.data;
+    const { status, _flowCategoryList } = this.data;
     if (status === "completed") {
       return;
     }
-    const list = categories || [];
+    const list = _flowCategoryList || [];
     if (!list.length) {
       wx.showToast({ title: "暂无分类", icon: "none" });
       return;
@@ -215,7 +360,9 @@ Page({
     if (idx !== 0 && idx !== 1) {
       return;
     }
-    this.setData({ flowIndex: idx });
+    const list = this.data._flowCategoryList || [];
+    const keep = list[this.data.categoryIndex] || "";
+    this.setData({ flowIndex: idx }, () => this.refreshCategoryView(keep));
   },
 
   onCategoryTap(e) {
@@ -223,7 +370,7 @@ Page({
       return;
     }
     const idx = Number(e.currentTarget.dataset.index);
-    const list = this.data.categories || [];
+    const list = this.data._flowCategoryList || [];
     if (!list.length) {
       return;
     }
@@ -264,6 +411,8 @@ Page({
       ledgers,
       ledgerIndex,
       categories,
+      expenseCategories,
+      incomeCategories,
       categoryIndex,
       amountInput,
       note,
@@ -291,11 +440,24 @@ Page({
       return;
     }
     const recurrence = recurrenceValues[recurrenceIndex] || "daily";
+    const all = Array.isArray(categories) && categories.length ? categories : ["其他"];
+    const sub =
+      flowIndex === 1
+        ? Array.isArray(incomeCategories) && incomeCategories.length
+          ? incomeCategories
+          : all
+        : Array.isArray(expenseCategories) && expenseCategories.length
+          ? expenseCategories
+          : all;
+    if (!sub.length) {
+      wx.showToast({ title: "分类未就绪", icon: "none" });
+      return;
+    }
     const payload = {
       ledgerId,
       amountYuan: String(amountInput).trim(),
       flow: flowIndex === 1 ? "income" : "expense",
-      category: categories[Math.min(categoryIndex, categories.length - 1)],
+      category: sub[Math.min(categoryIndex, sub.length - 1)],
       note: String(note || "").trim(),
       recurrence,
     };
@@ -307,6 +469,12 @@ Page({
     }
     if (recurrence === "once") {
       payload.onceDate = onceDate;
+    }
+    const aid = (this.data.selectedAssetId && String(this.data.selectedAssetId).trim()) || "";
+    if (mode === "edit") {
+      payload.assetAccountId = aid;
+    } else if (aid) {
+      payload.assetAccountId = aid;
     }
     this.setData({ saving: true });
     const fn =

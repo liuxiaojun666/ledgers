@@ -7,10 +7,17 @@ const {
   buildCategoryNameWithIcon,
 } = require("../../category-icons");
 
+/** 与云函数 `MAX_LEDGER_CATEGORIES` 保持一致 */
+const LEDGER_CATEGORY_MAX = 48;
+
 Page({
   data: {
+    categoryMax: LEDGER_CATEGORY_MAX,
     ledgerId: "",
     categories: [],
+    expenseList: [],
+    incomeList: [],
+    newCategoryFlowIndex: 0,
     categoryRows: [],
     loading: true,
     newName: "",
@@ -98,10 +105,15 @@ Page({
           this.setData({ loading: false });
           return;
         }
+        const list = Array.isArray(r.list) ? r.list : [];
+        const exp = Array.isArray(r.expenseList) ? r.expenseList : list;
+        const inc = Array.isArray(r.incomeList) ? r.incomeList : list;
         this.setData({
           loading: false,
-          categories: Array.isArray(r.list) ? r.list : [],
-          categoryRows: this.buildCategoryRows(r.list),
+          categories: list,
+          expenseList: exp,
+          incomeList: inc,
+          categoryRows: this.buildCategoryRows(list, exp, inc),
         });
       })
       .catch(() => {
@@ -128,19 +140,44 @@ Page({
     this.setData({ customEmojiInput: cleanCustomEmoji(e.detail.value) });
   },
 
-  buildCategoryRows(list) {
+  buildCategoryRows(list, expenseList, incomeList) {
     if (!Array.isArray(list)) {
       return [];
     }
-    return list.map((name) => ({
-      name,
-      displayName: decorateCategoryName(name),
-    }));
+    const exp = new Set(
+      Array.isArray(expenseList) && expenseList.length ? expenseList : list
+    );
+    const inc = new Set(
+      Array.isArray(incomeList) && incomeList.length ? incomeList : list
+    );
+    return list.map((name) => {
+      const e0 = exp.has(name);
+      const i0 = inc.has(name);
+      let kindLabel = "通用";
+      if (e0 && !i0) {
+        kindLabel = "支出";
+      } else if (i0 && !e0) {
+        kindLabel = "收入";
+      }
+      return {
+        name,
+        displayName: decorateCategoryName(name),
+        kindLabel,
+      };
+    });
+  },
+
+  onNewCategoryFlowTap(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    if (idx === 0 || idx === 1) {
+      this.setData({ newCategoryFlowIndex: idx });
+    }
   },
 
   add() {
     const name = (this.data.newName || "").trim();
-    const { ledgerId, iconOptions, iconIndex, customEmojiInput } = this.data;
+    const { ledgerId, iconOptions, iconIndex, customEmojiInput, newCategoryFlowIndex } =
+      this.data;
     const selectedIcon = iconOptions[iconIndex] || DEFAULT_ICON;
     const categoryName = buildCategoryNameWithIcon(name, {
       selectedIcon,
@@ -155,6 +192,7 @@ Page({
       return;
     }
     this.setData({ saving: true });
+    const forFlow = newCategoryFlowIndex === 1 ? "income" : "expense";
     wx.cloud
       .callFunction({
         name: "ledgerFunctions",
@@ -162,17 +200,23 @@ Page({
           type: "addLedgerCategory",
           ledgerId,
           name: categoryName,
+          forFlow,
         },
       })
       .then((resp) => {
         const r = resp.result || {};
         if (r.success) {
+          const list = Array.isArray(r.list) ? r.list : this.data.categories;
+          const exp = Array.isArray(r.expenseList) ? r.expenseList : list;
+          const inc = Array.isArray(r.incomeList) ? r.incomeList : list;
           this.setData({
             newName: "",
             iconIndex: 0,
             customEmojiInput: "",
-            categories: Array.isArray(r.list) ? r.list : this.data.categories,
-            categoryRows: this.buildCategoryRows(r.list),
+            categories: list,
+            expenseList: exp,
+            incomeList: inc,
+            categoryRows: this.buildCategoryRows(list, exp, inc),
           });
           wx.showToast({ title: "已添加" });
         } else {
@@ -213,9 +257,14 @@ Page({
           .then((resp) => {
             const r = resp.result || {};
             if (r.success) {
+              const list = Array.isArray(r.list) ? r.list : [];
+              const exp = Array.isArray(r.expenseList) ? r.expenseList : list;
+              const inc = Array.isArray(r.incomeList) ? r.incomeList : list;
               this.setData({
-                categories: Array.isArray(r.list) ? r.list : [],
-                categoryRows: this.buildCategoryRows(r.list),
+                categories: list,
+                expenseList: exp,
+                incomeList: inc,
+                categoryRows: this.buildCategoryRows(list, exp, inc),
               });
               wx.showToast({ title: "已删除" });
             } else {

@@ -34,6 +34,12 @@
         <text class="category-panel-text">{{categoryDisplayList[categoryIndex] || "请选择"}}</text>
       </view>
     </view>
+    <picker mode="selector" range="{{assetPickerRange}}" value="{{assetPickerIndex}}" bindchange="onAssetAccountPickerChange" disabled="{{status === 'completed'}}">
+      <view class="field-row">
+        <text class="field-label">资产账户</text>
+        <view class="field-value">{{assetPickerRange[assetPickerIndex] || "不关联"}}</view>
+      </view>
+    </picker>
     <picker mode="selector" range="{{recurrenceLabels}}" value="{{recurrenceIndex}}" bindchange="onRecurrenceChange" disabled="{{status === 'completed'}}">
       <view class="field-row">
         <text class="field-label">重复</text>

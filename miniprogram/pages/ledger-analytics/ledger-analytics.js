@@ -29,6 +29,8 @@ const INSIGHT_POLICY = {
   },
 };
 const LAST_ANALYZE_LEDGER_STORAGE_KEY = "lastAnalyzeLedgerId";
+/** 与本地存储中「全部账本」统计范围对应，勿与普通账本 _id 冲突 */
+const LAST_ANALYZE_ALL_SENTINEL = "__ALL__";
 
 function pickLedgerId(...queryObjs) {
   for (let i = 0; i < queryObjs.length; i += 1) {
@@ -686,10 +688,15 @@ Page({
     loading: true,
     ledgersLoading: false,
     listLoading: false,
+    /** true：汇总全部可访问账本；false：仅当前 ledgerId 所属账本 */
+    analyzeAll: true,
     ledgerId: "",
     ledgerName: "",
     ledgers: [],
     ledgerNameList: [],
+    /** 与 picker 的「全部 + 各账本」项一致，下标 0 为全部 */
+    ledgerDisplayNames: [],
+    ledgerPickerIndex: 0,
     ledgerIndex: -1,
     range: "month",
     selectedYear: 0,
@@ -748,7 +755,7 @@ Page({
   },
 
   onShow() {
-    this.setTabBarState({ selected: 2, hidden: false });
+    this.setTabBarState({ selected: 1, hidden: false });
     if (!this.ensureEnv()) {
       return;
     }
@@ -798,6 +805,7 @@ Page({
         }
         const ledgers = r.list || [];
         const ledgerNameList = ledgers.map((x) => x.name || "未命名账本");
+        const ledgerDisplayNames = ["全部账本"].concat(ledgerNameList);
         if (!ledgers.length) {
           this.destroyF2Charts();
           this.setData({
@@ -805,9 +813,12 @@ Page({
             listLoading: false,
             ledgers,
             ledgerNameList,
+            ledgerDisplayNames: [],
+            analyzeAll: true,
             ledgerId: "",
             ledgerName: "",
             ledgerIndex: -1,
+            ledgerPickerIndex: 0,
             groupsCategory: [],
             groupsPerson: [],
             showLineChart: false,
@@ -823,26 +834,52 @@ Page({
           return;
         }
         const preferredId = String(this._preferredLedgerId || "").trim();
-        const lastPickedId = String(this._lastAnalyzeLedgerId || "").trim();
-        const currentId = String(this.data.ledgerId || "").trim();
-        let pickedId =
-          preferredId || currentId || lastPickedId || String(ledgers[0]._id || "");
-        if (!ledgers.some((x) => x._id === pickedId)) {
-          pickedId = String(ledgers[0]._id || "");
+        const lastPicked = String(this._lastAnalyzeLedgerId || "").trim();
+        const lastWasAll = !lastPicked || lastPicked === LAST_ANALYZE_ALL_SENTINEL;
+        const lastIdValid = lastPicked && lastPicked !== LAST_ANALYZE_ALL_SENTINEL
+          && ledgers.some((x) => x._id === lastPicked);
+
+        let analyzeAll = true;
+        let nextLedgerId = "";
+        let nextLedgerName = "全部账本";
+        let ledgerPickerIndex = 0;
+
+        if (preferredId && ledgers.some((x) => x._id === preferredId)) {
+          analyzeAll = false;
+          nextLedgerId = preferredId;
+          const idx = ledgers.findIndex((x) => x._id === preferredId);
+          const picked = idx >= 0 ? ledgers[idx] : ledgers[0];
+          nextLedgerName = String((picked && picked.name) || "");
+          ledgerPickerIndex = 1 + (idx >= 0 ? idx : 0);
+        } else if (!preferredId && !lastWasAll && lastIdValid) {
+          analyzeAll = false;
+          nextLedgerId = lastPicked;
+          const idx = ledgers.findIndex((x) => x._id === lastPicked);
+          const picked = idx >= 0 ? ledgers[idx] : ledgers[0];
+          nextLedgerName = String((picked && picked.name) || "");
+          ledgerPickerIndex = 1 + (idx >= 0 ? idx : 0);
+        } else {
+          analyzeAll = true;
+          nextLedgerId = "";
+          nextLedgerName = "全部账本";
+          ledgerPickerIndex = 0;
         }
-        const ledgerIndex = ledgers.findIndex((x) => x._id === pickedId);
-        const picked = ledgerIndex >= 0 ? ledgers[ledgerIndex] : ledgers[0];
-        const nextLedgerId = picked ? String(picked._id || "") : "";
-        const nextLedgerName = picked ? String(picked.name || "") : "";
+
+        const ledgerIndex = analyzeAll
+          ? -1
+          : ledgers.findIndex((x) => x._id === nextLedgerId);
         this._preferredLedgerId = "";
-        this.writeLastAnalyzeLedgerId(nextLedgerId);
+        this.writeLastAnalyzeScope(analyzeAll, nextLedgerId);
         this.setData(
           {
             ledgers,
             ledgerNameList,
+            ledgerDisplayNames,
+            analyzeAll,
             ledgerId: nextLedgerId,
             ledgerName: nextLedgerName,
             ledgerIndex: ledgerIndex >= 0 ? ledgerIndex : 0,
+            ledgerPickerIndex,
           },
           () => this.rebuildPeriodChips({ defaultToCurrent: true })
         );
@@ -877,20 +914,43 @@ Page({
     if (!Number.isFinite(nextIndex) || nextIndex < 0) {
       return;
     }
-    const picked = this.data.ledgers[nextIndex];
+    if (nextIndex === 0) {
+      if (this.data.analyzeAll) {
+        return;
+      }
+      this.writeLastAnalyzeScope(true, "");
+      this.setData(
+        {
+          analyzeAll: true,
+          ledgerId: "",
+          ledgerName: "全部账本",
+          ledgerPickerIndex: 0,
+          ledgerIndex: -1,
+        },
+        () => this.rebuildPeriodChips({ defaultToCurrent: true })
+      );
+      return;
+    }
+    const li = nextIndex - 1;
+    const picked = this.data.ledgers[li];
     if (!picked || !picked._id) {
       return;
     }
     const nextLedgerId = String(picked._id || "");
-    if (!nextLedgerId || nextLedgerId === this.data.ledgerId) {
+    if (!nextLedgerId) {
       return;
     }
-    this.writeLastAnalyzeLedgerId(nextLedgerId);
+    if (!this.data.analyzeAll && nextLedgerId === this.data.ledgerId) {
+      return;
+    }
+    this.writeLastAnalyzeScope(false, nextLedgerId);
     this.setData(
       {
-        ledgerIndex: nextIndex,
+        analyzeAll: false,
+        ledgerIndex: li,
         ledgerId: nextLedgerId,
         ledgerName: String(picked.name || ""),
+        ledgerPickerIndex: nextIndex,
       },
       () => this.rebuildPeriodChips({ defaultToCurrent: true })
     );
@@ -898,9 +958,15 @@ Page({
 
   rebuildPeriodChips(options) {
     const opts = options || {};
-    const { range, ledgerId, ledgers, todayYmd } = this.data;
-    const ledger = (ledgers || []).find((x) => x._id === ledgerId);
-    const createdMs = readLedgerCreatedMs(ledger);
+    const { range, ledgerId, ledgers, todayYmd, analyzeAll } = this.data;
+    let createdMs;
+    if (analyzeAll) {
+      const list = (ledgers || []).map((x) => readLedgerCreatedMs(x));
+      createdMs = list.length ? Math.min(...list) : Date.now();
+    } else {
+      const ledger = (ledgers || []).find((x) => x._id === ledgerId);
+      createdMs = readLedgerCreatedMs(ledger);
+    }
     let chips = [];
     if (range === "month") {
       chips = buildMonthPeriodChips(createdMs);
@@ -945,7 +1011,13 @@ Page({
         weekQuick,
         monthQuick,
       },
-      () => this.load(ledgerId)
+      () => {
+        if (this.data.analyzeAll) {
+          this.load();
+        } else {
+          this.load(this.data.ledgerId);
+        }
+      }
     );
   },
 
@@ -953,8 +1025,12 @@ Page({
     if (!this.ensureEnv()) {
       return;
     }
-    const ledgerId = ledgerIdOverride || this.data.ledgerId;
-    if (!ledgerId) {
+    const analyzeAll = this.data.analyzeAll;
+    const ledgerId =
+      ledgerIdOverride != null && ledgerIdOverride !== undefined
+        ? ledgerIdOverride
+        : this.data.ledgerId;
+    if (!analyzeAll && !ledgerId) {
       this.setData({ loading: false, listLoading: false });
       return;
     }
@@ -965,17 +1041,22 @@ Page({
       this.setData({ listLoading: true });
     }
     const { range, selectedYear, selectedMonth, weekAnchorDate } = this.data;
+    const callPayload = {
+      type: "analyzeLedger",
+      range,
+      year: selectedYear,
+      month: selectedMonth,
+      weekAnchorDate,
+    };
+    if (analyzeAll) {
+      callPayload.scope = "all";
+    } else {
+      callPayload.ledgerId = ledgerId;
+    }
     wx.cloud
       .callFunction({
         name: "ledgerFunctions",
-        data: {
-          type: "analyzeLedger",
-          ledgerId,
-          range,
-          year: selectedYear,
-          month: selectedMonth,
-          weekAnchorDate,
-        },
+        data: callPayload,
       })
       .then((resp) => {
         const r = resp.result || {};
@@ -1256,14 +1337,15 @@ Page({
     if (key == null || key === "") {
       return;
     }
-    const { ledgerId, range, selectedYear, selectedMonth, weekAnchorDate } = this.data;
-    if (!ledgerId) {
+    const { analyzeAll, ledgerId, range, selectedYear, selectedMonth, weekAnchorDate } = this.data;
+    if (!analyzeAll && !ledgerId) {
       return;
     }
+    const scopeParam = analyzeAll ? "&scope=all" : `&id=${encodeURIComponent(ledgerId)}`;
     wx.navigateTo({
-      url: `/pages/ledger-analytics-drill/ledger-analytics-drill?id=${ledgerId}&range=${range}&groupBy=${groupBy}&year=${selectedYear}&month=${selectedMonth}&weekAnchorDate=${encodeURIComponent(
+      url: `/pages/ledger-analytics-drill/ledger-analytics-drill?range=${range}&groupBy=${groupBy}&year=${selectedYear}&month=${selectedMonth}&weekAnchorDate=${encodeURIComponent(
         weekAnchorDate
-      )}&key=${encodeURIComponent(String(key))}`,
+      )}&key=${encodeURIComponent(String(key))}${scopeParam}`,
     });
   },
 
@@ -1380,14 +1462,23 @@ Page({
     }
   },
 
-  writeLastAnalyzeLedgerId(ledgerId) {
-    const normalized = String(ledgerId || "").trim();
-    this._lastAnalyzeLedgerId = normalized;
+  /**
+   * 与统计范围同步写入本地；全部账本时存 LAST_ANALYZE_ALL_SENTINEL
+   * @param {boolean} isAll
+   * @param {string} ledgerId  单账本模式下的 _id
+   */
+  writeLastAnalyzeScope(isAll, ledgerId) {
+    this._lastAnalyzeLedgerId = isAll ? LAST_ANALYZE_ALL_SENTINEL : String(ledgerId || "").trim();
     try {
-      if (normalized) {
-        wx.setStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY, normalized);
+      if (isAll) {
+        wx.setStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY, LAST_ANALYZE_ALL_SENTINEL);
       } else {
-        wx.removeStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY);
+        const id = String(ledgerId || "").trim();
+        if (id) {
+          wx.setStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY, id);
+        } else {
+          wx.setStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY, LAST_ANALYZE_ALL_SENTINEL);
+        }
       }
     } catch (e) {
       // ignore

@@ -47,8 +47,8 @@
   left: 24rpx;
   right: 24rpx;
   bottom: calc(24rpx + env(safe-area-inset-bottom));
-  height: 84rpx;
-  line-height: 84rpx;
+  /* height: 84rpx; */
+  line-height: 64rpx;
   border-radius: 999rpx;
   background: #0066ff;
   color: #fff;

@@ -1,11 +1,21 @@
 <view class="form">
   <view class="seg-wrap">
-    <picker mode="selector" range="{{flowLabels}}" value="{{flowIndex}}" bindchange="onFlowChange">
-      <view class="seg-pill">
-        <view class="seg-item {{flowIndex === 0 ? 'seg-item-active' : ''}}">支出</view>
-        <view class="seg-item {{flowIndex === 1 ? 'seg-item-active' : ''}}">收入</view>
+    <view class="seg-pill">
+      <view
+        class="seg-item {{flowIndex === 0 ? 'seg-item-active' : ''}}"
+        data-index="0"
+        bindtap="onSegFlowTap"
+      >
+        支出
       </view>
-    </picker>
+      <view
+        class="seg-item {{flowIndex === 1 ? 'seg-item-active' : ''}}"
+        data-index="1"
+        bindtap="onSegFlowTap"
+      >
+        收入
+      </view>
+    </view>
   </view>
   <view class="field amount-field">
     <text class="label">金额</text>
@@ -50,11 +60,32 @@
   </view>
   <view class="field row field-select">
     <view class="label-with-icon">
+      <text class="field-icon">💳</text>
+      <text class="label-row">资产账户</text>
+    </view>
+    <picker mode="selector" range="{{assetPickerRange}}" value="{{assetPickerIndex}}" bindchange="onAssetAccountPickerChange">
+      <view class="picker-value">
+        {{assetPickerRange[assetPickerIndex] || "不关联"}}
+        >
+      </view>
+    </picker>
+  </view>
+  <view class="field row field-select">
+    <view class="label-with-icon">
       <text class="field-icon">📅</text>
       <text class="label-row">记账日期</text>
     </view>
-    <picker mode="date" value="{{bookDate}}" bindchange="onBookDateChange">
+    <picker mode="date" value="{{bookDate}}" start="{{bookDateStart}}" bindchange="onBookDateChange">
       <view class="picker-value">{{bookDate || "选择日期"}} ></view>
+    </picker>
+  </view>
+  <view class="field row field-select">
+    <view class="label-with-icon">
+      <text class="field-icon">🕐</text>
+      <text class="label-row">记账时间</text>
+    </view>
+    <picker mode="time" value="{{bookTime}}" start="00:00" end="23:59" bindchange="onBookTimeChange">
+      <view class="picker-value">{{bookTime || "选择时间"}} ></view>
     </picker>
   </view>
   <view class="field">
