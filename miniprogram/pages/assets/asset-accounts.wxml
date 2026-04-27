@@ -24,7 +24,11 @@
   </view>
   <view wx:else class="list">
     <view class="card" wx:for="{{list}}" wx:key="_id">
-      <view class="kind kind-corner">{{item.kind === 'liability' ? '负债' : '资产'}}</view>
+      <view
+        class="kind kind-corner {{item.kind === 'liability' ? 'kind-liability' : 'kind-asset'}}"
+      >
+        {{item.kind === 'liability' ? '负债' : '资产'}}
+      </view>
       <view class="card-body">
         <view class="card-left">
           <view class="card-main">

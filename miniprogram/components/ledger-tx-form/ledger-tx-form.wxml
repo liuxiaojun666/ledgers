@@ -58,7 +58,7 @@
     </view>
     <view wx:if="{{showAddCategory}}" class="add-cat-tip">优先使用自定义 emoji；留空时使用左侧预置 icon。</view>
   </view>
-  <view class="field row field-select">
+  <view wx:if="{{assetPickerRange.length > 1}}" class="field row field-select">
     <view class="label-with-icon">
       <text class="field-icon">💳</text>
       <text class="label-row">资产账户</text>
