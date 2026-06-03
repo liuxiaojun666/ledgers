@@ -1,26 +1,35 @@
 <view class="page">
-  <view class="head">
-    <view class="title">账户：{{accountName || "全部账户"}}</view>
-    <view class="sub">仅可查看，新增变动请从账户管理进入</view>
+  <view wx:if="{{accountName}}" class="head">
+    <view class="head-sub head-sub--account">{{accountName}}</view>
   </view>
   <view wx:if="{{loading}}" class="hint">加载中…</view>
-  <view wx:elif="{{!list.length}}" class="hint">暂无记录</view>
-  <view wx:else class="list">
-    <view class="row {{item.hasTransferPair ? 'row-transfer' : ''}} {{item.transferGroupPos ? ('row-transfer-' + item.transferGroupPos) : ''}}" wx:for="{{list}}" wx:key="_id">
-      <view class="row-left">
-        <view class="row-title">
-          {{item.actionLabel}} · ¥{{item.amountYuan}}
-          <text wx:if="{{item.hasTransferPair}}" class="transfer-pill">
-            转账{{item.transferDirection}}
-          </text>
-        </view>
-        <view wx:if="{{!accountId && item.accountName}}" class="row-sub">账户：{{item.accountName}}</view>
-        <view class="row-sub">余额 ¥{{item.afterBalanceYuan}} · {{item.bookedAtLabel}}</view>
-        <view wx:if="{{item.hasTransferPair && item.counterpartyAccountName}}" class="row-sub">
-          对端账户：{{item.counterpartyAccountName}}
-        </view>
-        <view wx:if="{{item.note}}" class="row-note">{{item.note}}</view>
-      </view>
-    </view>
+  <view wx:if="{{loadState === 'error' && errorText}}" class="state-banner tone-danger-banner">
+    <text class="state-banner-icon">!</text>
+    <text class="state-banner-text">{{errorText}}</text>
   </view>
+  <view wx:if="{{!loading && loadState !== 'error' && !flatRows.length}}" class="hint">暂无记录</view>
+  <block wx:elif="{{!loading && flatRows.length}}">
+    <block wx:for="{{flatRows}}" wx:key="rk">
+      <view wx:if="{{item.kind === 'section'}}" class="section-label">{{item.sectionLabel}}</view>
+      <view
+        wx:else
+        class="record-row tone-{{item.detail.tone}} {{item.detail.transferRowExtras}}"
+      >
+        <view class="record-main">
+          <view class="record-head">
+            <text class="record-title">{{item.detail.firstLineTitle}}</text>
+            <text class="record-amt amt-{{item.detail.tone}}">{{item.detail.amtColumn}}</text>
+          </view>
+          <view wx:if="{{item.detail.hasTransferPair && item.detail.counterpartyAccountName}}" class="record-sub">
+            对端账户：{{item.detail.counterpartyAccountName}}
+          </view>
+          <view wx:if="{{item.detail.displayNote}}" class="record-note">{{item.detail.displayNote}}</view>
+          <view class="record-tail">
+            <text class="record-balance">余额 ¥{{item.detail.afterBalanceYuan}}</text>
+            <text wx:if="{{item.detail.bookedAtLabel}}" class="record-time">{{item.detail.bookedAtLabel}}</text>
+          </view>
+        </view>
+      </view>
+    </block>
+  </block>
 </view>

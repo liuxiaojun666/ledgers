@@ -1,61 +1,173 @@
 <view class="page">
-  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:if="{{loading}}">
+    <view class="hint">加载中…</view>
+  </block>
   <block wx:else>
-    <view class="summary-card">
-      <view class="summary-item">
-        <view class="summary-label">总资产</view>
-        <view class="summary-value">¥{{totalAssetsYuan}}</view>
-      </view>
-      <view class="summary-item">
-        <view class="summary-label">总负债</view>
-        <view class="summary-value summary-liability">¥{{totalLiabilitiesYuan}}</view>
-      </view>
-      <view class="summary-item">
-        <view class="summary-label">净资产</view>
-        <view class="summary-value {{netWorthSign ? 'summary-net-neg' : 'summary-net'}}">
-          ¥{{netWorthYuan}}
+    <view class="summary-hero">
+      <view class="summary-hero__top">
+        <view class="summary-hero__label">净资产</view>
+        <view
+          wx:if="{{monthTrendLabel}}"
+          class="summary-badge {{monthTrendPositive ? 'summary-badge--up' : 'summary-badge--down'}}"
+        >
+          {{monthTrendLabel}}
         </view>
       </view>
-    </view>
-    <view class="action-panel">
-      <view class="action-grid">
-        <view class="action-item" bindtap="openAccounts">
-          <view class="action-icon">🏦</view>
-          <view class="action-name">账户管理</view>
+      <view class="summary-hero__amount">¥{{netWorthYuan}}</view>
+      <view class="summary-hero__stats">
+        <view class="summary-stat">
+          <view class="summary-stat__label">总资产</view>
+          <view class="summary-stat__value">¥{{totalAssetsYuan}}</view>
         </view>
-        <view class="action-item" bindtap="openRecords">
-          <view class="action-icon">🧾</view>
-          <view class="action-name">变动记录</view>
-        </view>
-        <view class="action-item" bindtap="openTransfer">
-          <view class="action-icon">🔁</view>
-          <view class="action-name">账户转账</view>
-        </view>
-        <view class="action-item" bindtap="openTrend">
-          <view class="action-icon">📈</view>
-          <view class="action-name">净资产趋势</view>
+        <view class="summary-stat-divider" />
+        <view class="summary-stat">
+          <view class="summary-stat__label">总负债</view>
+          <view class="summary-stat__value summary-stat__value--liability">¥{{totalLiabilitiesYuan}}</view>
         </view>
       </view>
     </view>
+
+    <view class="quick-card">
+      <view class="quick-item" hover-class="quick-item--hover" bindtap="openCreateAccount">
+        <view class="quick-icon quick-icon--create">
+          <image class="quick-icon-img" src="../../images/icons/asset-quick-create.svg" mode="aspectFit" />
+        </view>
+        <view class="quick-name">新建账户</view>
+      </view>
+      <view class="quick-item" hover-class="quick-item--hover" bindtap="openTransfer">
+        <view class="quick-icon quick-icon--transfer">
+          <image class="quick-icon-img" src="../../images/icons/asset-quick-transfer.svg" mode="aspectFit" />
+        </view>
+        <view class="quick-name">转账</view>
+      </view>
+      <view class="quick-item" hover-class="quick-item--hover" bindtap="openTrend">
+        <view class="quick-icon quick-icon--trend">
+          <image class="quick-icon-img" src="../../images/icons/asset-quick-trend.svg" mode="aspectFit" />
+        </view>
+        <view class="quick-name">趋势</view>
+      </view>
+      <view class="quick-item" hover-class="quick-item--hover" bindtap="openRecords">
+        <view class="quick-icon quick-icon--records">
+          <image class="quick-icon-img" src="../../images/icons/asset-quick-records.svg" mode="aspectFit" />
+        </view>
+        <view class="quick-name">记录</view>
+      </view>
+    </view>
+
     <view class="section">
-      <view class="section-title">资产账户</view>
-      <view wx:if="{{!assetAccounts.length}}" class="empty">暂无资产账户</view>
+      <view class="section-head">
+        <view class="section-title">个人资产账户</view>
+        <view wx:if="{{assetAccounts.length}}" class="section-count">{{assetAccounts.length}} 个</view>
+      </view>
+      <view wx:if="{{!assetAccounts.length}}" class="empty-block">
+        <view class="empty-block__text">暂无资产账户</view>
+        <view class="empty-block__action" bindtap="openCreateAccount">去新建</view>
+      </view>
       <view wx:else class="account-list">
-        <view class="account-row" wx:for="{{assetAccounts}}" wx:key="_id">
-          <view class="account-name">{{item.name}}</view>
-          <view class="account-balance">¥{{item.balanceYuan}}</view>
+        <view
+          class="account-row"
+          wx:for="{{assetAccounts}}"
+          wx:key="_id"
+          hover-class="account-row--hover"
+          bindtap="openAccountDetail"
+          data-id="{{item._id}}"
+          data-name="{{item.name}}"
+          data-scope="personal"
+          data-role="owner"
+        >
+          <view class="account-avatar account-avatar--asset">{{item.nameInitial}}</view>
+          <view class="account-main">
+            <view class="account-name">{{item.name}}</view>
+          </view>
+          <view class="account-balance">
+            ¥{{item.balanceYuan}}
+            <text class="row-arrow">›</text>
+          </view>
         </view>
       </view>
     </view>
+
     <view class="section">
-      <view class="section-title">负债账户</view>
-      <view wx:if="{{!liabilityAccounts.length}}" class="empty">暂无负债账户</view>
+      <view class="section-head">
+        <view class="section-title">个人负债账户</view>
+        <view wx:if="{{liabilityAccounts.length}}" class="section-count">{{liabilityAccounts.length}} 个</view>
+      </view>
+      <view wx:if="{{!liabilityAccounts.length}}" class="empty-block">
+        <view class="empty-block__text">暂无负债账户</view>
+      </view>
       <view wx:else class="account-list">
-        <view class="account-row" wx:for="{{liabilityAccounts}}" wx:key="_id">
-          <view class="account-name">{{item.name}}</view>
-          <view class="account-balance liability">¥{{item.balanceYuan}}</view>
+        <view
+          class="account-row"
+          wx:for="{{liabilityAccounts}}"
+          wx:key="_id"
+          hover-class="account-row--hover"
+          bindtap="openAccountDetail"
+          data-id="{{item._id}}"
+          data-name="{{item.name}}"
+          data-scope="personal"
+          data-role="owner"
+        >
+          <view class="account-avatar account-avatar--liability">{{item.nameInitial}}</view>
+          <view class="account-main">
+            <view class="account-name">{{item.name}}</view>
+          </view>
+          <view class="account-balance account-balance--liability">
+            ¥{{item.balanceYuan}}
+            <text class="row-arrow">›</text>
+          </view>
         </view>
       </view>
+    </view>
+
+    <view class="section" wx:if="{{groupedSharedAccounts.length}}">
+      <view class="section-head">
+        <view class="section-title">共享账户</view>
+      </view>
+      <view class="owner-group" wx:for="{{groupedSharedAccounts}}" wx:key="ownerOpenid">
+        <view class="owner-title">
+          <image
+            wx:if="{{item.ownerAvatarUrl}}"
+            class="member-avatar"
+            src="{{item.ownerAvatarUrl}}"
+            mode="aspectFill"
+          />
+          <text class="owner-title-text">{{item.ownerNickname}}</text>
+        </view>
+        <view class="account-list">
+          <view
+            class="account-row"
+            wx:for="{{item.accounts}}"
+            wx:for-item="acct"
+            wx:key="_id"
+            hover-class="account-row--hover"
+            bindtap="openAccountDetail"
+            data-id="{{acct._id}}"
+            data-name="{{acct.name}}"
+            data-scope="shared"
+            data-role="{{acct.shareRole}}"
+          >
+            <view class="account-avatar account-avatar--shared">{{acct.nameInitial}}</view>
+            <view class="account-main">
+              <view class="account-name">{{acct.name}}</view>
+              <view class="account-meta">{{acct.kindLabel}} · {{acct.roleLabel}}</view>
+            </view>
+            <view class="account-balance">
+              ¥{{acct.balanceYuan}}
+              <text class="row-arrow">›</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="archived-entry" hover-class="archived-entry--hover" bindtap="openArchivedList">
+      <text>查看已归档资产</text>
+      <text class="archived-entry__arrow">›</text>
+    </view>
+
+    <view wx:if="{{loadState === 'error' && errorText}}" class="state-banner">
+      <text class="state-banner-icon">!</text>
+      <text class="state-banner-text">{{errorText}}</text>
     </view>
   </block>
 </view>

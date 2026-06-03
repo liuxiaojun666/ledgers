@@ -1,0 +1,155 @@
+.page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #eef3ff 0%, #f7f9ff 260rpx, #f6f8fc 100%);
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.title {
+  font-size: 34rpx;
+  color: #1f2940;
+  font-weight: 700;
+  margin-bottom: 6rpx;
+}
+
+.subtitle {
+  font-size: 24rpx;
+  color: #6a7898;
+  margin-bottom: 16rpx;
+}
+
+.card {
+  background: #fff;
+  border-radius: 22rpx;
+  border: 1rpx solid #e2eaff;
+  padding: 20rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 8rpx 20rpx rgba(30, 64, 139, 0.05);
+}
+
+.card-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1f2940;
+  margin-bottom: 12rpx;
+}
+
+.seg {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 12rpx;
+}
+
+.seg-item {
+  flex: 1;
+  text-align: center;
+  font-size: 24rpx;
+  padding: 10rpx 0;
+  border-radius: 999rpx;
+  background: #f1f5ff;
+  color: #5b6890;
+}
+
+.seg-item.on {
+  background: #1d5fff;
+  color: #ffffff;
+  box-shadow: 0 6rpx 14rpx rgba(29, 95, 255, 0.24);
+  font-weight: 600;
+}
+
+.btn {
+  background: linear-gradient(135deg, #1d5fff 0%, #3f7dff 100%);
+  color: #fff;
+  font-size: 26rpx;
+  border-radius: 999rpx;
+  line-height: 68rpx;
+}
+
+.btn::after {
+  border: none;
+}
+
+.share-btn {
+  margin-top: 12rpx;
+  background: linear-gradient(135deg, #23814a 0%, #30a060 100%);
+}
+
+.invite-code,
+.hint {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #6a7899;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.row {
+  border: 1rpx solid #e6ecff;
+  border-radius: 16rpx;
+  padding: 12rpx;
+  background: #fbfcff;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.member-name {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  flex: 1;
+  min-width: 0;
+  color: #2c3b5f;
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
+.member-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-avatar {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 999rpx;
+  background: #eef2ff;
+  flex-shrink: 0;
+}
+
+.meta {
+  font-size: 24rpx;
+  color: #2c3b5f;
+  margin-bottom: 8rpx;
+}
+
+.actions {
+  display: flex;
+  gap: 16rpx;
+  flex-shrink: 0;
+}
+
+.link {
+  font-size: 24rpx;
+  color: #1d5fff;
+}
+
+.link.danger {
+  color: #d33b3b;
+}
+
+.danger-btn {
+  background: #f7dada;
+  color: #9f2424;
+}

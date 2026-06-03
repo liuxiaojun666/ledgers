@@ -1,57 +1,27 @@
 const { safeDecodeParam } = require("../../utils/route-params");
-
-function formatYuan(cents) {
-  const n = Number(cents) || 0;
-  return (n / 100).toFixed(2);
-}
-
-function readDateMs(v) {
-  if (v == null || v === "") return NaN;
-  const t = new Date(v).getTime();
-  return Number.isFinite(t) && !Number.isNaN(t) ? t : NaN;
-}
-
-function getRecordTimeMs(item) {
-  return readDateMs(item.bookedAt) || readDateMs(item.createdAt) || 0;
-}
-
-function formatRecordTimeLabel(item) {
-  const ms = readDateMs(item.bookedAt) || readDateMs(item.createdAt);
-  if (!Number.isFinite(ms) || ms === 0) {
-    return "";
-  }
-  const d = new Date(ms);
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(
-    d.getDate()
-  )} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
-
-function actionLabel(actionType) {
-  if (actionType === "adjust") return "调整";
-  if (actionType === "increase") return "增加";
-  if (actionType === "decrease") return "减少";
-  return actionType || "未知";
-}
-
-function directionTag(actionType) {
-  if (actionType === "increase") return "转入";
-  if (actionType === "decrease") return "转出";
-  return "";
-}
+const {
+  buildFlatRowsFromRawRecords,
+  computeTodayYesterdayKeys,
+  getRecordTimeMs,
+} = require("../../utils/asset-record-flat-rows");
 
 Page({
   data: {
     loading: false,
+    loadState: "loading",
+    errorText: "",
     accountId: "",
     accountName: "",
-    list: [],
+    scope: "personal",
+    flatRows: [],
   },
 
   onLoad(options) {
     const accountId = safeDecodeParam(options && options.accountId);
     const accountName = safeDecodeParam(options && options.accountName);
-    this.setData({ accountId, accountName });
+    const rawScope = safeDecodeParam(options && options.scope);
+    const scope = rawScope === "all" || rawScope === "shared" ? rawScope : "personal";
+    this.setData({ accountId, accountName, scope });
   },
 
   onShow() {
@@ -59,59 +29,56 @@ Page({
   },
 
   refresh() {
-    this.setData({ loading: true });
+    this.setData({ loading: true, loadState: "loading", errorText: "" });
     wx.cloud
       .callFunction({
         name: "ledgerFunctions",
-        data: { type: "listAssetRecords", accountId: this.data.accountId },
+        data: {
+          type: "listAssetRecords",
+          accountId: this.data.accountId,
+          scope: this.data.scope,
+        },
       })
       .then((resp) => {
         const r = resp.result || {};
         if (!r.success) {
           wx.showToast({ title: r.errMsg || "加载失败", icon: "none" });
+          this.setData({
+            flatRows: [],
+            loadState: "error",
+            errorText: r.errMsg || "记录拉取失败",
+          });
           return;
         }
-        const list = (r.list || []).map((item) => ({
-          ...item,
-          actionLabel: actionLabel(item.actionType),
-          transferDirection: directionTag(item.actionType),
-          hasTransferPair: !!item.transferPairId,
-          amountYuan: formatYuan(item.amountCents),
-          afterBalanceYuan: formatYuan(item.afterBalanceCents),
-          bookedAtLabel: formatRecordTimeLabel(item),
-        }));
-        list.sort((a, b) => {
+        const sorted = [...(r.list || [])];
+        sorted.sort((a, b) => {
           const diff = getRecordTimeMs(b) - getRecordTimeMs(a);
           if (diff !== 0) return diff;
           return String(b._id || "").localeCompare(String(a._id || ""));
         });
-        const decorated = list.map((item, idx, arr) => {
-          if (!item.hasTransferPair) {
-            return { ...item, transferGroupPos: "" };
-          }
-          const prev = arr[idx - 1];
-          const next = arr[idx + 1];
-          const pairId = item.transferPairId;
-          const samePrev = !!(prev && prev.transferPairId === pairId);
-          const sameNext = !!(next && next.transferPairId === pairId);
-          let transferGroupPos = "single";
-          if (samePrev && sameNext) {
-            transferGroupPos = "middle";
-          } else if (samePrev) {
-            transferGroupPos = "end";
-          } else if (sameNext) {
-            transferGroupPos = "start";
-          }
-          return { ...item, transferGroupPos };
+        const keys = computeTodayYesterdayKeys();
+        const flatRows = buildFlatRowsFromRawRecords(sorted, {
+          accountId: this.data.accountId,
+          accountName: this.data.accountName,
+          todayKey: keys.todayKey,
+          yesterdayKey: keys.yesterdayKey,
         });
-        this.setData({ list: decorated });
+        const loadStateDone = flatRows.some((x) => x.kind === "row") ? "success" : "empty";
+        this.setData({
+          flatRows,
+          loadState: loadStateDone,
+        });
       })
       .catch(() => {
         wx.showToast({ title: "加载失败", icon: "none" });
+        this.setData({
+          flatRows: [],
+          loadState: "error",
+          errorText: "网络异常，请稍后重试",
+        });
       })
       .finally(() => {
         this.setData({ loading: false });
       });
   },
-
 });

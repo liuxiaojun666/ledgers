@@ -1,31 +1,48 @@
 <view class="page">
   <view wx:if="{{loading}}" class="hint">加载中…</view>
   <view wx:else class="form">
-    <view class="item">
+    <view class="head-title">账户转账</view>
+    <view class="item card-form">
       <view class="label">转出账户</view>
       <picker mode="selector" range="{{accountNames}}" value="{{fromIndex}}" bindchange="onFromChange">
-        <view class="picker">{{accountNames[fromIndex] || "请选择"}}</view>
+        <view class="picker">⊞ {{accountNames[fromIndex] || "请选择"}}</view>
       </picker>
-    </view>
-    <view class="item">
+      <view class="center-arrow">↓</view>
       <view class="label">转入账户</view>
       <picker mode="selector" range="{{accountNames}}" value="{{toIndex}}" bindchange="onToChange">
-        <view class="picker">{{accountNames[toIndex] || "请选择"}}</view>
+        <view class="picker">⌂ {{accountNames[toIndex] || "请选择"}}</view>
       </picker>
-    </view>
-    <view class="item">
-      <view class="label">金额（元）</view>
-      <input class="input" type="digit" value="{{amountYuan}}" bindinput="onAmountInput" placeholder="请输入金额" />
-    </view>
-    <view class="item">
-      <view class="label">日期</view>
-      <picker mode="date" value="{{bookedAtDate}}" start="{{transferDateStart}}" bindchange="onDateChange">
-        <view class="picker">{{bookedAtDate}}</view>
-      </picker>
-    </view>
-    <view class="item">
+      <view class="label">金额</view>
+      <view class="amount-field">
+        <text class="amount-prefix">¥</text>
+        <input
+          class="amount-input"
+          type="digit"
+          value="{{amountYuan}}"
+          bindinput="onAmountInput"
+          placeholder="请输入金额"
+          placeholder-class="amount-placeholder"
+          confirm-type="done"
+        />
+      </view>
+      <view class="date-row">
+        <view class="date-col">
+          <view class="label">日期</view>
+          <picker mode="date" value="{{bookedAtDate}}" start="{{transferDateStart}}" bindchange="onDateChange">
+            <view class="picker">{{bookedAtDate}}</view>
+          </picker>
+        </view>
+      </view>
       <view class="label">备注</view>
       <textarea class="textarea" value="{{note}}" bindinput="onNoteInput" placeholder="可选备注" />
+    </view>
+    <view class="tip-card">
+      <view class="tip-title">转账说明</view>
+      <view class="tip-text">仅支持同户主账户间转账，成功后会自动生成转出/转入双分录。</view>
+    </view>
+    <view wx:if="{{statusHint}}" class="state-banner tone-danger-banner transfer-status-banner">
+      <text class="state-banner-icon">!</text>
+      <text class="state-banner-text">{{statusHint}}</text>
     </view>
   </view>
   <button class="btn" loading="{{submitting}}" bindtap="onSubmit">确认转账</button>

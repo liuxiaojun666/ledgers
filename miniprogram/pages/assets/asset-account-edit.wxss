@@ -43,6 +43,17 @@
   min-height: 42rpx;
 }
 
+.input--disabled {
+  color: #66758f;
+}
+
+.field-hint {
+  font-size: 22rpx;
+  color: #94a3b8;
+  margin-bottom: 8rpx;
+  line-height: 1.4;
+}
+
 .textarea {
   width: 100%;
   min-height: 120rpx;

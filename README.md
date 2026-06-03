@@ -23,7 +23,7 @@
 - `miniprogram/`：前端小程序代码（WXML/WXSS/JS）
 - `cloudfunctions/ledgerFunctions/`：主业务云函数（`index.js`、`scheduleLib.js`、`config.json`）
 - `design-exports/`、`design-exports-v2/`：设计导出资源（不参与打包）
-- `design-exports-v2/jizhang.pen`：设计工程文件（用于设计工具还原/对照）
+- `design-exports-v2/jizhang.pen`：设计工程文件（用于设计工具还原/对照）；画板 **`11-单账户管理-V4`** 对应 `pages/assets/asset-account-detail`（名称旁 ✎、角色徽标、记变动、共享/归档列表、底部「最近变动」预览，与当前线上结构一致）。
 - `AGENTS.md`：给 Cursor/协作者的项目规则与改动指引
 
 ## 运行与配置
@@ -52,7 +52,7 @@
 - 定时记账列表页（`pages/ledger-schedules`）底部提供固定主按钮「新家定时记账」，列表态与空态都可直接发起新建。
 - 我的页资料采用手动设置：点击圆头像触发 `chooseAvatar` 后会先上传云存储并调用 `updateMyProfile` 持久化（可只更新头像），点击昵称触发输入弹窗并保存；不依赖 `getUserProfile` 返回真实微信昵称。未设置昵称时，昵称展示与流水一致，回退为匿名 openid（`…` + 后 8 位）。
 - 我的页的「分类管理」「定时记账」入口点击后直接跳转，不在 `pages/mine` 预加载；目标页内自行展示 loading/加载态。
-- 资产页（`pages/assets/assets`）底部功能入口改为单行四宫格快捷区：每个入口均为“图标在上 + 名称在下”的可点击区域（账户管理/变动记录/账户转账/净资产趋势），并取消原先两行 fixed 按钮。
+- 资产页（`pages/assets/assets`）底部功能入口为单行四宫格：白卡 + 分色图标底（蓝 / 青绿 / 琥珀 / 紫）与符号，与 Pencil 稿「10-资产总览」一致；入口为新建账户 / 记录 / 账户转账 / 趋势；已取消原先两行 fixed 按钮。
 - 自定义 TabBar 的立体感仅通过 `box-shadow` 增强：不新增额外覆盖层，避免影响点击区域；样式集中在 `miniprogram/custom-tab-bar/index.wxss` 的 `tabbar-pill` 和 `tab-item-active`。选中态由四个 Tab 页在 `onShow` 显式写入固定索引（账本=0、统计=1、资产=2、我的=3）；`custom-tab-bar` 不再基于 route 做自动同步，点击 Tab 时先即时 `setData({ selected })`，最终以页面 `onShow` 为准。
 - 分享入口口径：全局页面默认隐藏微信分享菜单（`wx.hideShareMenu`），仅 `pages/ledger-collaborators` 与 `pages/mine` 放开 `shareAppMessage`；前者用于邀请协作者，后者提供“分享给朋友”卡片入口（`open-type="share"`）。
 
@@ -98,16 +98,17 @@
   - `getMyProfile` / `updateMyProfile` -> `pages/mine`
 - **资产（全局）**
   - `createAssetAccount` -> `pages/assets/asset-account-edit`（期初非零时云函数会追加「期初余额（开户）」`asset_records`，`bookedAt` 为开户时刻；**同一账户下**新写入的 `asset_records` 的 `bookedAt` 云函数要求不早于该账户的创建时间）
-  - `listAssetAccounts` -> `pages/assets/asset-accounts`、`pages/ledger-tx`、`pages/ledger-schedule-edit`（可选入参 `archivedOnly: true` 仅查已归档，供账户列表「已归档」页；记一笔/定时/转账等默认未归档。记一笔/定时任务可选关联本人**非归档**资产账户；**返回顺序**为当前余额 `balanceCents` **降序**，同额按 `updatedAt` 新在前。另：仅传 `includeArchived: true` 且**未**传 `archivedOnly` 时仍为含归档的**全部**，兼容旧版）
-  - `getAssetAccount` -> `pages/assets/asset-account-edit`
+  - `listAssetAccounts` -> `pages/assets/asset-accounts`、`pages/ledger-tx`、`pages/ledger-schedule-edit`（可选入参 `scope: "personal"|"shared"`：`personal` 为本人账户，`shared` 为「别人共享给我」的账户；`shared` 返回 `shareRole` 与户主信息，并支持按户主分组展示。另保留 `archivedOnly` / `includeArchived` 兼容口径；排序仍为余额降序）
+  - `getAssetAccount` -> `pages/assets/asset-account-detail`、`pages/assets/asset-account-edit`
   - `updateAssetAccount` -> `pages/assets/asset-account-edit`
   - `archiveAssetAccount` -> `pages/assets/asset-accounts`（`deleteAssetAccount` 云函数保留：无 `asset_records` 时可物理删除；**小程序未接入口**）
-  - `getAssetDashboard` -> `pages/assets/assets`（资产/负债分栏内账户均按**余额降序**）
+  - `getAssetDashboard` -> `pages/assets/assets`（支持 `scope: "all"|"personal"|"shared"`；`all` 会合并本人账户与共享到账户，`shared` 只聚合共享到账户，不混入户主未共享账户）
   - `createAssetRecord` -> `pages/assets/asset-record-edit`（`increase/decrease` 可选同步到指定账本分类）
-  - `listAssetRecords` -> `pages/assets/asset-records`
+  - `listAssetRecords` -> `pages/assets/asset-records`（未传 `accountId` 时支持 `scope: "personal"|"shared"|"all"`，按可访问账户聚合）
   - `getAssetRecord` / `updateAssetRecord` / `deleteAssetRecord`：云函数仍暴露 `type`，其中 `updateAssetRecord` / `deleteAssetRecord` 恒返回“仅可查看”类错误（与小程序只读策略一致；`getAssetRecord` 保留供扩展，当前小程序未调用）
   - `createAssetTransfer` -> `pages/assets/asset-transfer`
   - `listNetWorthTrend` -> `pages/assets/asset-trend`
+  - `createAssetAccountShareInvite` / `enterAssetAccountShare` / `listAssetAccountShareMembers` / `updateAssetAccountShareMemberRole` / `removeAssetAccountShareMember` / `exitAssetAccountShare` -> 资产账户共享（按 `accountId` 粒度；仅户主可分享/移除，**共享成员统一只读**；`updateAssetAccountShareMemberRole` 保留 `type` 但固定返回“无需修改角色”；户主可在 `asset-account-share` 通过微信分享携带邀请码的链接）
 
 ## 页面索引（页面 -> `type`）
 
@@ -123,7 +124,7 @@
   - 删除账本成功后统一 `switchTab` 回 `pages/ledgers/ledgers`，并清空 `showBillLedgerListOnce`；若仅剩一个账本将自动进入内嵌详情，多个账本则展示列表。
 - `pages/ledger-collaborators/ledger-collaborators`
   - `getLedger`、`createLedgerInvite`、`listLedgerCollaborators`、`removeCollaborator`
-  - 提供微信分享邀请和协作者列表管理，待审批入口跳转到 `pages/ledger-pending`；与 `pages/mine` 一起属于允许分享的页面。
+  - 提供微信分享邀请和协作者列表管理，待审批入口跳转到 `pages/ledger-pending`；与 `pages/mine`、`pages/assets/asset-account-share` 一起属于允许分享的页面。
   - `onShareAppMessage` 自定义邀请卡片标题与封面图：标题使用「邀请你加入『账本名』一起记账」，封面图固定 `miniprogram/images/LmtpX.png`，并对超长账本名做截断避免分享文案被系统硬截断。
 - `components/ledger-detail-view`
   - `enterLedger`、`createLedgerInvite`、`listLedgerCollaborators`、`getLedger`、`updateLedgerName`、`deleteLedger`、`exitLedger`、`listTransactions`
@@ -140,25 +141,41 @@
 - `pages/ledger-analytics/ledger-analytics`
   - `listLedgers`、`analyzeLedger`（单账本 `ledgerId` 或全量 `scope: "all"`；本地 `lastAnalyzeLedgerId` 为 `__ALL__` 时走全量）
 - `pages/assets/assets`
-  - `getAssetDashboard`（全局资产总览，不绑定账本；资产/负债分栏内账户**按余额降序**）
-  - 底部操作区为单行快捷入口（图标上、文案下）：账户管理 / 变动记录 / 账户转账 / 净资产趋势。
+  - `getAssetDashboard`（当前固定按 `scope: "all"` 拉取：合并本人账户与共享到账户）。成功时额外附带 `monthOverPrevMonthNetWorthPct`（基于当前用户「最近两个有快照月份」净资产环比小数百分数，`asset_snapshots` 不足两轮或上期净资产接近 0 时为 `null`），总览卡片内「本月 ±x%」用该字段动态展示而非写死。
+  - `listAssetRecords`（从本页进入“变动记录”会携带 `scope=all`，可查看“个人 + 共享到账户”的可访问变动记录）
+  - 资产总览固定展示「个人资产账户」「个人负债账户」「共享资产（按户主分组）」三段；共享分组只展示共享到账户，不混入个人账户。
+  - 底部操作区为单行四宫格（图标上、文案下）：新建账户 / 记录 / 账户转账 / 趋势；单格白底圆角卡，四个图标底色与主色区分为蓝 / 青绿 / 琥珀 / 紫（与「10-资产总览」`quick10` Pencil 稿一致）；「新建账户」直接进入 `asset-account-edit` 新建页。
+  - 首屏「加载中…」由各区块占位承接；仪表盘拉取失败时仅在内容区展示一条错误横幅，不再并排展示多张「预览态」状态卡。
+  - 账户列表行（个人资产 / 个人负债 / 共享分组）支持点击，进入单账户管理页 `asset-account-detail`。
+  - 页面最下方提供“查看已归档资产列表”入口，跳转 `asset-archived-list`。
+- `pages/assets/asset-archived-list`
+  - `listAssetAccounts`（`archivedOnly: true`）按“个人归档账户 / 共享归档账户”两块展示已归档列表；列表行点击进入 `asset-account-detail`（携带 `accountId` / `scope` / `role`，与资产总览账户行一致）。
 - `pages/assets/asset-accounts`
-  - `listAssetAccounts`（`archivedOnly: true` / 未传）、`archiveAssetAccount`
+  - `listAssetAccounts`（支持 `scope`；共享域为被共享到账户，含 `shareRole`）
   - 顶部「未归档」「已归档」分段切换为**两个独立列表**；未归档对应 `listAssetAccounts` 默认条件，已归档对应 `archivedOnly: true`。
   - 卡片右上角徽章「资产」「负债」：**资产**绿色系、「**负债**」红色系区分。
   - 账户信息区可浏览，不响应点击进入编辑；卡片右侧「资产变动/调整」进入 `asset-record-edit` 新建记录；底部操作条含「编辑」进入 `asset-account-edit`、`归档/恢复`（不再提供删除入口；不需要的账户请归档）。
   - 列表顺序与云函数 `listAssetAccounts` 一致：按**余额从高到低**。
+- `pages/assets/asset-account-detail`
+  - `getAssetAccount`、`archiveAssetAccount`、**`listAssetRecords`**（仅**未归档**时拉取预览）：**无顶栏「账户」大字**；主卡片内含**账户名**（可编辑时名称旁 **✎ 小图标** 进 `asset-account-edit`）、类型副文案、右上角色徽标、余额；未归档时另有 **「记变动」** 主按钮。导航栏在账户已归档时为 **`账户名（已归档）`**。**已归档时**顶部 **琥珀色提示条**，卡片浅色琥珀边框；**隐藏**记变动、名称旁编辑、共享行与嵌入「最近变动」；**下方列表仅保留「恢复账户」**。**不再在本页提供转账按钮**（转账从资产总览等入口进 `asset-transfer`）。未归档时下方列表为（户主）「共享与成员」+「归档账户」。
+  - 正文**下方**「最近变动」展示嵌入列表（与同页 `asset-records` 行样式、`utils/asset-record-flat-rows` 格式化一致），「查看全部 ›」跳转整页变动记录。
+  - 页面会按 `scope` 与 `role` 控制可用操作：共享成员统一 `viewer` 只读（无名称旁编辑、无记变动、无归档、无「共享与成员」）；转账不在本页，走资产总览「账户转账」等入口。
+  - 加载中单行文案；账户拉取失败时错误横幅；预览区失败一条短提示；共享成员时单独只读提示条；不常驻多块「演示态」并排。
 - `pages/assets/asset-account-edit`
   - `createAssetAccount`、`getAssetAccount`、`updateAssetAccount`；**账户分类**随 **账户属性**（资产/负债）切换：只展示与当前属性匹配的分类（如资产不含信用卡/借款等；负债不含现金/银行卡等），切换属性时若当前分类不适用则自动回退为「其他」。
   - 不提供「排序」表单项；新建时由云函数写入默认 `sortOrder`（库字段，仅兼容；展示顺序不依赖它）。
+- `pages/assets/asset-account-share`
+  - `createAssetAccountShareInvite`、`enterAssetAccountShare`、`listAssetAccountShareMembers`、`updateAssetAccountShareMemberRole`、`removeAssetAccountShareMember`、`exitAssetAccountShare`（按 `accountId` 粒度共享；仅户主可邀请/移除；共享成员固定只读）
+  - 户主端通过 `open-type="share"` 微信分享邀请链接（链接附带邀请码）；页面不展示邀请码明文，也不提供复制邀请码按钮。受邀者打开链接后可在页面内直接确认加入共享账户。
 - `pages/assets/asset-records`
-  - `listAssetRecords`；变动列表**只读**（无改删入口；云函数 `updateAssetRecord` / `deleteAssetRecord` 亦恒失败），按 `bookedAt ?? createdAt` 倒序展示、行内时间至**秒**；新建变动入口在 `asset-accounts` 卡片的「资产变动/调整」→ `asset-record-edit`；未传 `accountId` 为全部账户时，列表行展示该条 `accountName`（云函数对每条记录补充本侧账户名称，与转账对端 `counterpartyAccountName` 并存）。
+  - `listAssetRecords`；变动列表**只读**，按入账日分段；首行左侧「账户名 · 变动类型」为中性字色，**仅右侧「¥ ±」按增减/转账设色**；底行左侧「余额」、右下「入账日期时间」。转账备注若仅为 `[转账转出/入]` 等与首行重复则不展示备注区。**未传 `accountId`** 时按路由 `scope`（由资产 Tab「记录」等入口传入）聚合；多条来源时列表行仍可带云函数补充的本侧账户名及对端信息。行格式化与分段与 `pages/assets/asset-account-detail` 内嵌预览同源（`utils/asset-record-flat-rows`）。**不在本页**做全部/个人/共享切换与底部新建；新建从 `asset-account-detail` 等入口进 `asset-record-edit`。拉取用正文区「加载中…」，空态「暂无记录」，失败一条错误横幅。
 - `pages/assets/asset-record-edit`
   - 仅 `createAssetRecord`（新建；`increase/decrease` 可选同步到账本分类）。`listCategories` 的选项：`increase` 仅 `incomeList`，`decrease` 仅 `expenseList`。记账时间：`date`+`time` 选**时分**，`bookedAtMs` 带保存瞬间**秒/毫秒**（与 `ledger-tx-form` 一致）；日期不早于 `getAssetAccount` 的创建时间，提交时再与云函数下限做一次 `clamp`。若 URL 带 `recordId`（旧链或手输），会提示并回退到 `asset-records`。
 - `pages/assets/asset-transfer`
-  - `listAssetAccounts`、`createAssetTransfer`；日期的 `start` 为转出/转入两户创建时间的**较晚者**（公历日），`bookedAtMs` 在提交时 `clamp` 到不早于任一户。
+  - `listAssetAccounts`、`createAssetTransfer`；支持 URL `scope=all`（当前仅聚合个人账户；共享账户统一只读不进入候选）或默认 `personal`（仅个人账户），并支持携带 `fromAccountId` 预选转出账户（书签或其它入口直达时可生效）。日期的 `start` 为转出/转入两户创建时间的**较晚者**（公历日），`bookedAtMs` 在提交时 `clamp` 到不早于任一户；表单下方仅在出现 `statusHint`（账户加载失败或提交前校验失败等）时展示一条提示，不会在无错误时并排展示多块示例状态。
 - `pages/assets/asset-trend`
   - `listNetWorthTrend`
+  - 页面采用「当前净资产 + 环比」与轻量柱状趋势展示近月走势；仅查询失败时用一条错误横幅提示，不设常驻多块「预览态」状态卡。
   - 资产转账口径：`createAssetTransfer` 采用云数据库事务写入双分录与双账户余额，失败会整体回滚。
   - 趋势性能口径：`listNetWorthTrend` 优先读取 `asset_snapshots` 月快照；`createAssetRecord` / 新建转账等变更后会自动重建当前用户快照。重建时**仅落库最近 200 个自然月**（与 `listNetWorthTrend` 的返回上限一致），避免月跨度过大时云函数超时（默认 20s）。
 - `pages/ledger-analytics-drill/ledger-analytics-drill`

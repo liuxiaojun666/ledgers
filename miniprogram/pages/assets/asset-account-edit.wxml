@@ -22,7 +22,15 @@
 
     <view class="form-item">
       <view class="label">当前余额（元）</view>
-      <input class="input" type="digit" value="{{balanceYuan}}" bindinput="onBalanceInput" placeholder="请输入金额" />
+      <view wx:if="{{isEdit}}" class="field-hint">请在账户详情「记变动」中调整余额</view>
+      <input
+        class="input {{isEdit ? 'input--disabled' : ''}}"
+        type="digit"
+        value="{{balanceYuan}}"
+        disabled="{{isEdit}}"
+        bindinput="onBalanceInput"
+        placeholder="{{isEdit ? '' : '请输入金额'}}"
+      />
     </view>
 
     <view class="form-item">

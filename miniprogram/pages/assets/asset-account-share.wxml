@@ -1,0 +1,49 @@
+<view class="page">
+  <view class="title" wx:if="{{accountId}}">账户：{{accountName || accountId}}</view>
+  <view class="subtitle">按账户维度管理共享成员（共享成员固定只读）</view>
+
+  <view class="card" wx:if="{{role === 'owner'}}">
+    <view class="card-title">邀请成员</view>
+    <button class="btn share-btn" open-type="share">微信分享邀请链接</button>
+  </view>
+
+  <view class="card" wx:if="{{!accountId && inviteCode}}">
+    <view class="card-title">加入共享资产账户</view>
+    <view class="hint">收到邀请后，可直接加入到账户共享列表。</view>
+    <button class="btn" loading="{{joining}}" bindtap="onAcceptInvite">确认加入</button>
+  </view>
+
+  <view class="card">
+    <view class="card-title">{{role === 'owner' ? '共享成员' : '我的共享权限'}}</view>
+    <view wx:if="{{!accountId && !inviteCode}}" class="hint">缺少账户或邀请码</view>
+    <view wx:if="{{loading}}" class="hint">加载中…</view>
+    <block wx:elif="{{role === 'owner'}}">
+      <view wx:if="{{!members.length}}" class="hint">暂无成员</view>
+      <view wx:else class="list">
+        <view class="row member-row" wx:for="{{members}}" wx:key="_id">
+          <view class="member-name">
+            <image
+              wx:if="{{item.avatarUrl}}"
+              class="member-avatar"
+              src="{{item.avatarUrl}}"
+              mode="aspectFill"
+            />
+            <text class="member-name-text">{{item.displayName}} · {{item.roleLabel}}</text>
+          </view>
+          <view class="actions">
+            <view
+              class="link danger"
+              bindtap="onRemove"
+              data-id="{{item.memberOpenid}}"
+              data-name="{{item.displayName}}"
+            >移除</view>
+          </view>
+        </view>
+      </view>
+    </block>
+    <block wx:else>
+      <view class="hint">当前权限：只读</view>
+      <button class="btn danger-btn" bindtap="onExitShare">退出该账户共享</button>
+    </block>
+  </view>
+</view>

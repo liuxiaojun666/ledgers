@@ -1,0 +1,63 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:else>
+    <view class="head">
+      <view class="head-title">已归档账户</view>
+      <view class="head-sub">归档账户仅展示，不参与日常操作入口</view>
+    </view>
+    <view class="section">
+      <view class="section-title">个人归档账户</view>
+      <view wx:if="{{!personalList.length}}" class="hint">暂无个人归档账户</view>
+      <view wx:else class="list">
+        <view
+          class="row row-tap"
+          wx:for="{{personalList}}"
+          wx:key="_id"
+          bindtap="openAccountDetail"
+          data-id="{{item._id}}"
+          data-name="{{item.name}}"
+          data-scope="personal"
+          data-role="owner"
+        >
+          <view>
+            <view class="name">{{item.name}}（{{item.kindLabel}}）</view>
+            <view class="meta">分类：{{item.typeLabel}}</view>
+          </view>
+          <view class="balance">¥{{item.balanceYuan}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">共享归档账户</view>
+      <view wx:if="{{!sharedList.length}}" class="hint">暂无共享归档账户</view>
+      <view wx:else class="list">
+        <view
+          class="row row-tap"
+          wx:for="{{sharedList}}"
+          wx:key="_id"
+          bindtap="openAccountDetail"
+          data-id="{{item._id}}"
+          data-name="{{item.name}}"
+          data-scope="shared"
+          data-role="{{item.shareRole || 'viewer'}}"
+        >
+          <view>
+            <view class="name">{{item.name}}（{{item.kindLabel}}）</view>
+            <view class="meta meta-owner">
+              <text>分类：{{item.typeLabel}} · 户主：</text>
+              <image
+                wx:if="{{item.ownerAvatarUrl}}"
+                class="member-avatar"
+                src="{{item.ownerAvatarUrl}}"
+                mode="aspectFill"
+              />
+              <text>{{item.ownerNickname || "共享户主"}} · {{item.shareRoleLabel}}</text>
+            </view>
+          </view>
+          <view class="balance">¥{{item.balanceYuan}}</view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

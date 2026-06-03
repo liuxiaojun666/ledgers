@@ -65,6 +65,7 @@ function yuanTextFromCents(raw) {
 Page({
   data: {
     accountId: "",
+    isEdit: false,
     submitting: false,
     loading: false,
     name: "",
@@ -83,7 +84,7 @@ Page({
   onLoad(options) {
     const accountId = safeDecodeParam(options && options.accountId);
     if (accountId) {
-      this.setData({ accountId, loading: true });
+      this.setData({ accountId, isEdit: true, loading: true });
       wx.setNavigationBarTitle({ title: "编辑账户" });
       this.loadAccount(accountId);
     } else {
@@ -187,20 +188,22 @@ Page({
     if (this.data.submitting) {
       return;
     }
-    const balanceCents = centsFromYuanText(this.data.balanceYuan);
-    if (!Number.isFinite(balanceCents)) {
-      wx.showToast({ title: "请输入有效余额", icon: "none" });
-      return;
-    }
+    const isEdit = !!this.data.accountId;
     const payload = {
       name: this.data.name,
       kind: this.data.kind,
       accountType: this.data.type,
-      balanceCents,
       includeInNetWorth: this.data.includeInNetWorth,
       remark: this.data.remark,
     };
-    const isEdit = !!this.data.accountId;
+    if (!isEdit) {
+      const balanceCents = centsFromYuanText(this.data.balanceYuan);
+      if (!Number.isFinite(balanceCents)) {
+        wx.showToast({ title: "请输入有效余额", icon: "none" });
+        return;
+      }
+      payload.balanceCents = balanceCents;
+    }
     this.setData({ submitting: true });
     wx.cloud
       .callFunction({

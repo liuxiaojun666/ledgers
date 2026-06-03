@@ -1,3 +1,5 @@
+const { resolveAvatarUrlsOnPage } = require("../../utils/profile-avatar");
+
 function formatYuan(cents) {
   const n = Number(cents) || 0;
   return (n / 100).toFixed(2);
@@ -22,9 +24,17 @@ function typeLabel(type) {
 Page({
   data: {
     loading: false,
+    scope: "personal",
     /** 未归档 | 已归档，与云函数 archivedOnly 对应 */
     accountTab: "active",
     list: [],
+  },
+
+  onLoad(options) {
+    const scope = String((options && options.scope) || "").trim();
+    if (scope === "shared") {
+      this.setData({ scope: "shared" });
+    }
   },
 
   onShow() {
@@ -39,6 +49,7 @@ Page({
         data: {
           type: "listAssetAccounts",
           archivedOnly: this.data.accountTab === "archived",
+          scope: this.data.scope,
         },
       })
       .then((resp) => {
@@ -55,8 +66,17 @@ Page({
           ...item,
           balanceYuan: formatYuan(item.balanceCents),
           typeLabel: typeLabel(item.type),
+          shareRoleLabel: "只读",
+          ownerNickname: String(item.ownerNickname || "").trim(),
+          ownerAvatarUrl: String(item.ownerAvatarUrl || "").trim(),
         }));
-        this.setData({ list });
+        this.setData({ list }, () => {
+          if (this.data.scope === "shared" && list.length) {
+            resolveAvatarUrlsOnPage(this, "list", list, {
+              avatarField: "ownerAvatarUrl",
+            }).catch(() => {});
+          }
+        });
       })
       .catch(() => {
         wx.showToast({ title: "请上传并部署云函数 ledgerFunctions", icon: "none" });
@@ -78,6 +98,10 @@ Page({
   },
 
   onCreate() {
+    if (this.data.scope === "shared") {
+      wx.showToast({ title: "共享资产下不可新建账户", icon: "none" });
+      return;
+    }
     wx.navigateTo({ url: "/pages/assets/asset-account-edit" });
   },
 
@@ -143,5 +167,23 @@ Page({
       .catch(() => {
         wx.showToast({ title: "操作失败", icon: "none" });
       });
+  },
+
+  onShare(e) {
+    const ds = e.currentTarget.dataset || {};
+    const accountId = String(ds.id || "").trim();
+    const accountName = String(ds.name || "").trim();
+    if (!accountId) {
+      return;
+    }
+    const role =
+      this.data.scope === "shared"
+        ? String(ds.role || "viewer").trim() || "viewer"
+        : "owner";
+    wx.navigateTo({
+      url: `/pages/assets/asset-account-share?accountId=${encodeURIComponent(
+        accountId
+      )}&accountName=${encodeURIComponent(accountName)}&role=${encodeURIComponent(role)}`,
+    });
   },
 });

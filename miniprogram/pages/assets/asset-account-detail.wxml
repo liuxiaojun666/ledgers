@@ -1,0 +1,147 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:if="{{!loading && account}}">
+    <view wx:if="{{account.archived && !isShared}}" class="archived-strip">
+      <text class="archived-strip-mark">已归档</text>
+      <view class="archived-strip-body">
+        <text class="archived-strip-title">该账户已归档</text>
+        <text class="archived-strip-desc">恢复前不可记账、不可修改信息或管理共享；下方仅可使用「恢复账户」。</text>
+      </view>
+    </view>
+
+    <view wx:if="{{isShared}}" class="share-by">
+      <image
+        wx:if="{{ownerAvatarUrl}}"
+        class="share-by__avatar"
+        src="{{ownerAvatarUrl}}"
+        mode="aspectFill"
+      />
+      <view wx:else class="share-by__avatar share-by__avatar--ph">{{ownerNameInitial}}</view>
+      <view class="share-by__text">
+        <text class="share-by__title">由 {{ownerNickname || "共享户主"}} 共享</text>
+        <text class="share-by__sub">仅可查看余额与变动记录</text>
+      </view>
+    </view>
+
+    <view class="hero">
+      <view
+        class="hero-card {{account.archived && !isShared ? 'hero-card--archived' : account.kind === 'liability' ? 'hero-card--liability' : 'hero-card--asset'}}"
+      >
+        <view class="hero-card__head">
+          <view class="hero-avatar">{{account.nameInitial}}</view>
+          <view class="hero-card__meta">
+            <view class="title-row">
+              <view class="title title-clip">{{account.name}}</view>
+              <view
+                wx:if="{{isOwner && canEdit && !account.archived}}"
+                class="title-edit-btn"
+                hover-class="title-edit-btn--hover"
+                catchtap="onEdit"
+              >
+                <image class="title-edit-icon" src="../../images/icons/asset-settings.svg" mode="aspectFit" />
+              </view>
+            </view>
+            <view class="head-sub">{{account.typeLabel}} · {{account.kindLabel}}</view>
+          </view>
+          <view wx:if="{{role === 'viewer' && !isShared}}" class="role-badge">只读</view>
+        </view>
+        <view class="balance">¥{{account.balanceYuan}}</view>
+        <block wx:if="{{!account.archived || isShared}}">
+          <view
+            class="hero-cta {{!canEdit ? 'hero-cta--muted' : ''}}"
+            hover-class="hero-cta--hover"
+            bindtap="onAdjust"
+          >
+            <text class="hero-cta-text">{{canEdit ? "记变动" : "只读（不可记变动）"}}</text>
+          </view>
+        </block>
+      </view>
+    </view>
+
+    <view class="owner-tools" wx:if="{{scope === 'personal' && !account.archived}}">
+      <view class="owner-tool" hover-class="owner-tool--hover" bindtap="onOpenShare">
+        <view class="owner-tool__icon owner-tool__icon--share">
+          <image class="owner-tool__img" src="../../images/icons/asset-tool-share.svg" mode="aspectFit" />
+        </view>
+        <view class="owner-tool__text">
+          <text class="owner-tool__label">共享成员</text>
+          <text class="owner-tool__sub">邀请他人查看</text>
+        </view>
+      </view>
+      <view
+        class="owner-tool {{!canArchive || archiving ? 'owner-tool--disabled' : ''}}"
+        hover-class="owner-tool--hover"
+        bindtap="onArchive"
+      >
+        <view class="owner-tool__icon owner-tool__icon--archive">
+          <image class="owner-tool__img" src="../../images/icons/asset-tool-archive.svg" mode="aspectFit" />
+        </view>
+        <view class="owner-tool__text">
+          <text class="owner-tool__label">归档账户</text>
+          <text class="owner-tool__sub">{{archiving ? "处理中…" : "移出常用列表"}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{!account.archived || isShared}}" class="recent-section">
+      <view class="recent-head">
+        <text class="recent-title">最近变动</text>
+        <view wx:if="{{recordsLoadState !== 'loading'}}" class="recent-link" hover-class="recent-link--hover" bindtap="onRecords">
+          查看全部 ›
+        </view>
+      </view>
+      <view wx:if="{{recordsLoading}}" class="recent-empty">同步中…</view>
+      <view wx:if="{{!recordsLoading && recordsLoadState === 'error' && recordsErrorText}}" class="recent-err">{{recordsErrorText}}</view>
+      <view wx:if="{{!recordsLoading && recordsLoadState === 'empty'}}" class="recent-empty">暂无变动记录</view>
+      <block wx:if="{{!recordsLoading && recordsLoadState === 'success'}}">
+        <block wx:for="{{recordsFlatRows}}" wx:key="rk">
+          <view wx:if="{{item.kind === 'section'}}" class="rec-sec">{{item.sectionLabel}}</view>
+          <view
+            wx:else
+            class="record-row tone-{{item.detail.tone}} {{item.detail.transferRowExtras}}"
+          >
+            <view class="record-main">
+              <view class="record-head">
+                <text class="record-title">{{item.detail.firstLineTitle}}</text>
+                <text class="record-amt amt-{{item.detail.tone}}">{{item.detail.amtColumn}}</text>
+              </view>
+              <view wx:if="{{item.detail.hasTransferPair && item.detail.counterpartyAccountName}}" class="record-sub">
+                对端账户：{{item.detail.counterpartyAccountName}}
+              </view>
+              <view wx:if="{{item.detail.displayNote}}" class="record-note">{{item.detail.displayNote}}</view>
+              <view class="record-tail">
+                <text class="record-balance">余额 ¥{{item.detail.afterBalanceYuan}}</text>
+                <text wx:if="{{item.detail.bookedAtLabel}}" class="record-time">{{item.detail.bookedAtLabel}}</text>
+              </view>
+            </view>
+          </view>
+        </block>
+      </block>
+    </view>
+
+    <view
+      wx:if="{{isShared}}"
+      class="page-foot-link {{exitingShare ? 'page-foot-link--busy' : ''}}"
+      hover-class="page-foot-link--hover"
+      bindtap="onExitShare"
+    >
+      {{exitingShare ? "退出中…" : "退出共享账户"}}
+    </view>
+    <view
+      wx:if="{{scope === 'personal' && account.archived}}"
+      class="page-foot-link page-foot-link--primary {{archiving ? 'page-foot-link--busy' : ''}}"
+      hover-class="page-foot-link--hover"
+      bindtap="onArchive"
+    >
+      {{archiving ? "恢复中…" : "恢复账户"}}
+    </view>
+  </block>
+  <view wx:if="{{!loading && !account}}" class="fallback-box">
+    <view wx:if="{{loadState === 'error' && errorText}}" class="state-banner">
+      <text class="state-banner-icon">!</text>
+      <text class="state-banner-text">{{errorText}}</text>
+    </view>
+    <view wx:elif="{{accountId}}" class="hint">账户信息不可用，请稍后重试</view>
+    <view wx:else class="hint">缺少账户参数</view>
+  </view>
+</view>

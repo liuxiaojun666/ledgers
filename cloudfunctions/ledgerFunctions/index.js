@@ -40,7 +40,7 @@
  *
  * 资产变动记录：小程序仅展示列表，不提供改删；`updateAssetRecord` / `deleteAssetRecord` 入口返回失败，修正请新增 `createAssetRecord` 或转账等。
  * 同账户新写入的 `asset_records.bookedAt` 不得早于该户 `openedAtMs` / `createdAt`（`createAssetRecord` / `createAssetTransfer` / 记一笔或编辑流水关联资产等路径校验；关联流水见 `insertLedgerTransaction` + `appendAssetRecordFromLedgerSource`）。
- * listAssetAccounts、getAssetDashboard：账户顺序按 `balanceCents` 降序，同分按 `updatedAt` 新在前；库内 `sortOrder` 仅新建默认等兼容，不再作为列表排序主键。`listAssetAccounts` 可选 `archivedOnly: true` 仅查已归档；默认（或与 `includeArchived: true` 同传时以 `archivedOnly` 优先）为**未归档**（`archived` 非真）；`includeArchived: true` 且**未**传 `archivedOnly` 时为含已归档的**全部**（兼容旧客户端）。
+ * listAssetAccounts、getAssetDashboard：账户顺序按 `balanceCents` 降序，同分按 `updatedAt` 新在前；库内 `sortOrder` 仅新建默认等兼容，不再作为列表排序主键。`listAssetAccounts` 可选 `archivedOnly: true` 仅查已归档；默认（或与 `includeArchived: true` 同传时以 `archivedOnly` 优先）为**未归档**（`archived` 非真）；`includeArchived: true` 且**未**传 `archivedOnly` 时为含已归档的**全部**（兼容旧客户端）。`getAssetDashboard` 成功时还返回 `monthOverPrevMonthNetWorthPct`：当前用户 `asset_snapshots` 按 `month` 排序的最后两个月净资产快照的环比小数百分数，不足两个月或上期净资产近似 0 时为 `null`（不在此接口内触发 `rebuildAssetSnapshots`）。
  * asset_snapshots：重算时按月聚合状态全量走内存，**仅落库最近 ASSET_SNAPSHOT_PERSIST_MAX（与 listNetWorthTrend 条数一致）** 个月。新建账户的期初行 `bookedAt` 为开户时刻，旧数据若曾锚在 2000-01 由 `rebuildAssetAccountBalanceChain` 在可安全时修正。
  */
 const cloud = require("wx-server-sdk");
@@ -62,6 +62,8 @@ const COLLECTION_NAMES = [
   "asset_accounts",
   "asset_records",
   "asset_snapshots",
+  "asset_account_shares",
+  "asset_account_share_invites",
 ];
 const MAX_SCHEDULES_PER_USER = 40;
 const INVITE_CODE_LEN = 8;
@@ -162,6 +164,8 @@ async function ensureCollections() {
 const memberDocId = (openid, ledgerId) => `${openid}_${ledgerId}`;
 const joinRequestDocId = (openid, ledgerId) => `${openid}_${ledgerId}`;
 const inviteDocId = (ledgerId, inviteCode) => `${ledgerId}_${inviteCode}`;
+const assetAccountShareDocId = (memberOpenid, accountId) => `${memberOpenid}_${accountId}`;
+const assetAccountShareInviteDocId = (accountId, inviteCode) => `${accountId}_${inviteCode}`;
 
 const DEFAULT_CATEGORIES = [
   "餐饮",
@@ -366,16 +370,59 @@ async function getAssetAccountById(ownerOpenid, accountId) {
   }
 }
 
+async function getAssetAccountRawById(accountId) {
+  const id = String(accountId == null ? "" : accountId).trim();
+  if (!id) {
+    return null;
+  }
+  try {
+    const res = await db.collection("asset_accounts").where({ _id: id }).limit(1).get();
+    return (res.data && res.data[0]) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function getAssetAccountAccess(openid, accountId) {
+  const account = await getAssetAccountRawById(accountId);
+  if (!account) {
+    return { ok: false, errMsg: "资产账户不存在" };
+  }
+  const ownerOpenid = String(account.ownerOpenid || "").trim();
+  if (!ownerOpenid) {
+    return { ok: false, errMsg: "资产账户数据异常" };
+  }
+  if (ownerOpenid === openid) {
+    return { ok: true, role: "owner", ownerOpenid, account };
+  }
+  const shareId = assetAccountShareDocId(openid, String(account._id || ""));
+  const shareRes = await db
+    .collection("asset_account_shares")
+    .where({ _id: shareId, status: "active" })
+    .limit(1)
+    .get();
+  const share = (shareRes.data && shareRes.data[0]) || null;
+  if (!share) {
+    return { ok: false, errMsg: "无权访问该资产账户" };
+  }
+  const role = "viewer";
+  return { ok: true, role, ownerOpenid, account };
+}
+
 /** 记一笔/改流水时可选关联当前用户自己的资产账户；空字符串表示不关联 */
 async function normalizeOptionalAssetLink(openid, raw) {
   const id = raw == null ? "" : String(raw).trim();
   if (!id) {
     return { ok: true, clear: true };
   }
-  const acc = await getAssetAccountById(openid, id);
-  if (!acc) {
-    return { ok: false, errMsg: "资产账户不存在" };
+  const access = await getAssetAccountAccess(openid, id);
+  if (!access.ok) {
+    return { ok: false, errMsg: access.errMsg || "资产账户不存在" };
   }
+  if (access.role !== "owner") {
+    return { ok: false, errMsg: "共享账户不可关联" };
+  }
+  const acc = access.account;
   if (acc.archived === true) {
     return { ok: false, errMsg: "该资产账户已归档，无法关联" };
   }
@@ -388,6 +435,7 @@ async function normalizeOptionalAssetLink(openid, raw) {
     clear: false,
     assetAccountId: id,
     assetAccountName: name.slice(0, 64),
+    ownerOpenid: access.ownerOpenid,
   };
 }
 
@@ -564,13 +612,18 @@ async function appendAssetRecordFromLedgerSource(openid, {
   sourceOperation,
   sourceChangeSummary,
 }) {
-  const acc = await getAssetAccountById(
+  const access = await getAssetAccountAccess(
     openid,
     String(accountId == null ? "" : accountId).trim()
   );
-  if (!acc) {
-    return { ok: false, errMsg: "资产账户不存在" };
+  if (!access.ok) {
+    return { ok: false, errMsg: access.errMsg || "资产账户不存在" };
   }
+  if (access.role === "viewer") {
+    return { ok: false, errMsg: "只读共享账户不可操作" };
+  }
+  const ownerOpenid = access.ownerOpenid;
+  const acc = access.account;
   if (acc.archived === true) {
     return { ok: false, errMsg: "该资产账户已归档" };
   }
@@ -599,7 +652,7 @@ async function appendAssetRecordFromLedgerSource(openid, {
   }
   const addRes = await db.collection("asset_records").add({
     data: {
-      ownerOpenid: openid,
+      ownerOpenid,
       accountId: idStr,
       actionType: at,
       amountCents: n,
@@ -619,11 +672,11 @@ async function appendAssetRecordFromLedgerSource(openid, {
   await db.collection("asset_accounts").doc(idStr).update({
     data: { balanceCents: afterBalanceCents, updatedAt: db.serverDate() },
   });
-  const rebuilt = await rebuildAssetAccountBalanceChain(openid, idStr);
+  const rebuilt = await rebuildAssetAccountBalanceChain(ownerOpenid, idStr);
   if (!rebuilt.ok) {
     return { ok: false, errMsg: rebuilt.errMsg || "余额重算失败" };
   }
-  await rebuildAssetSnapshots(openid);
+  await rebuildAssetSnapshots(ownerOpenid);
   return { ok: true, recordId: addRes && addRes._id ? addRes._id : "" };
 }
 
@@ -1124,8 +1177,46 @@ async function createAssetAccount(openid, event) {
 
 async function listAssetAccounts(openid, event) {
   const ev = event || {};
+  const scope = String(ev.scope || "personal").trim() === "shared" ? "shared" : "personal";
   const archivedOnly = ev.archivedOnly === true;
   const includeAll = !archivedOnly && !!ev.includeArchived;
+  if (scope === "shared") {
+    const shareRes = await db
+      .collection("asset_account_shares")
+      .where({ memberOpenid: openid, status: "active" })
+      .limit(500)
+      .get();
+    const shareRows = shareRes.data || [];
+    const accountIds = [];
+    const roleByAccountId = {};
+    for (let i = 0; i < shareRows.length; i += 1) {
+      const row = shareRows[i];
+      const aid = String(row.accountId || "").trim();
+      if (!aid) continue;
+      if (!roleByAccountId[aid]) {
+        accountIds.push(aid);
+      }
+      roleByAccountId[aid] = "viewer";
+    }
+    if (!accountIds.length) {
+      return { success: true, list: [], grouped: [] };
+    }
+    let where = { _id: _.in(accountIds) };
+    if (archivedOnly) {
+      where.archived = true;
+    } else if (!includeAll) {
+      where.archived = _.neq(true);
+    }
+    const res = await db.collection("asset_accounts").where(where).limit(500).get();
+    const rows = await attachOwnerProfilesToAssetRows(
+      sortAssetAccountRowsByBalanceDesc(res.data || []).map((row) => ({
+        ...row,
+        shareRole: roleByAccountId[String(row._id)] || "viewer",
+      }))
+    );
+    const grouped = buildGroupedSharedAssetAccounts(rows);
+    return { success: true, list: rows, grouped };
+  }
   const where = { ownerOpenid: openid };
   if (archivedOnly) {
     where.archived = true;
@@ -1142,18 +1233,34 @@ async function listAssetAccounts(openid, event) {
 }
 
 async function getAssetAccount(openid, event) {
-  const account = await getAssetAccountById(openid, event.accountId);
-  if (!account) {
-    return { success: false, errMsg: "资产账户不存在" };
+  const access = await getAssetAccountAccess(openid, event.accountId);
+  if (!access.ok) {
+    return { success: false, errMsg: access.errMsg || "资产账户不存在" };
   }
-  return { success: true, account };
+  let account = access.account;
+  if (access.role !== "owner") {
+    const enriched = await attachOwnerProfilesToAssetRows([
+      { ...account, shareRole: access.role },
+    ]);
+    account = enriched[0] || account;
+  }
+  return {
+    success: true,
+    account,
+    role: access.role,
+    ownerOpenid: access.ownerOpenid,
+  };
 }
 
 async function updateAssetAccount(openid, event) {
-  const account = await getAssetAccountById(openid, event.accountId);
-  if (!account) {
-    return { success: false, errMsg: "资产账户不存在" };
+  const access = await getAssetAccountAccess(openid, event.accountId);
+  if (!access.ok) {
+    return { success: false, errMsg: access.errMsg || "资产账户不存在" };
   }
+  if (access.role !== "owner") {
+    return { success: false, errMsg: "无权编辑该资产账户" };
+  }
+  const account = access.account;
   const patch = {};
   if (event.name != null) {
     const name = normalizeAssetAccountName(event.name);
@@ -1178,13 +1285,7 @@ async function updateAssetAccount(openid, event) {
     }
     patch.type = type;
   }
-  if (event.balanceCents != null) {
-    const balanceCents = readAssetBalanceCents(event.balanceCents);
-    if (!Number.isFinite(balanceCents)) {
-      return { success: false, errMsg: "账户余额无效" };
-    }
-    patch.balanceCents = balanceCents;
-  }
+  // 编辑账户不改余额；余额由 asset_records 变动链维护，新建见 createAssetAccount
   if (event.sortOrder != null) {
     patch.sortOrder = readAssetSortOrder(event.sortOrder);
   }
@@ -1203,10 +1304,14 @@ async function updateAssetAccount(openid, event) {
 }
 
 async function archiveAssetAccount(openid, event) {
-  const account = await getAssetAccountById(openid, event.accountId);
-  if (!account) {
-    return { success: false, errMsg: "资产账户不存在" };
+  const access = await getAssetAccountAccess(openid, event.accountId);
+  if (!access.ok) {
+    return { success: false, errMsg: access.errMsg || "资产账户不存在" };
   }
+  if (access.role !== "owner") {
+    return { success: false, errMsg: "无权操作该资产账户" };
+  }
+  const account = access.account;
   const archived = event.archived !== false;
   await db.collection("asset_accounts").doc(String(account._id)).update({
     data: {
@@ -1218,10 +1323,14 @@ async function archiveAssetAccount(openid, event) {
 }
 
 async function deleteAssetAccount(openid, event) {
-  const account = await getAssetAccountById(openid, event.accountId);
-  if (!account) {
-    return { success: false, errMsg: "资产账户不存在" };
+  const access = await getAssetAccountAccess(openid, event.accountId);
+  if (!access.ok) {
+    return { success: false, errMsg: access.errMsg || "资产账户不存在" };
   }
+  if (access.role !== "owner") {
+    return { success: false, errMsg: "仅户主可删除账户" };
+  }
+  const account = access.account;
   const countRes = await db
     .collection("asset_records")
     .where({ ownerOpenid: openid, accountId: String(account._id) })
@@ -1236,13 +1345,80 @@ async function deleteAssetAccount(openid, event) {
   return { success: true };
 }
 
-async function getAssetDashboard(openid) {
-  const res = await db
-    .collection("asset_accounts")
-    .where({ ownerOpenid: openid, archived: _.neq(true) })
-    .limit(200)
-    .get();
-  const rows = sortAssetAccountRowsByBalanceDesc(res.data || []);
+/** 快照按 `month` 升序的最后两个月，相对净资产环比（小数百分数，可为负）；快照不足或未定义时返回 null */
+function computeNetWorthMonthOverPrevMonthPctFromSnapshotRows(rawRows) {
+  const rows = (rawRows || [])
+    .filter((r) => r && String(r.month || "").trim())
+    .sort((a, b) => String(a.month || "").localeCompare(String(b.month || "")));
+  if (rows.length < 2) {
+    return null;
+  }
+  const prev = rows[rows.length - 2];
+  const cur = rows[rows.length - 1];
+  const np = Number(prev.netWorthCents);
+  const nc = Number(cur.netWorthCents);
+  if (!Number.isFinite(np) || !Number.isFinite(nc)) {
+    return null;
+  }
+  const absPrev = Math.abs(np);
+  if (absPrev < 1e-9) {
+    return null;
+  }
+  const ratio = ((nc - np) / absPrev) * 100;
+  return Number.isFinite(ratio) ? Math.round(ratio * 10) / 10 : null;
+}
+
+async function getAssetDashboard(openid, event) {
+  const ev = event || {};
+  const rawScope = String(ev.scope || "all").trim();
+  const scope = rawScope === "shared" || rawScope === "personal" ? rawScope : "all";
+  let rows = [];
+  const loadSharedRows = async () => {
+    const shareRes = await db
+      .collection("asset_account_shares")
+      .where({ memberOpenid: openid, status: "active" })
+      .limit(500)
+      .get();
+    let sharedRows = [];
+    const shareRows = shareRes.data || [];
+    const roleByAccountId = {};
+    shareRows.forEach((row) => {
+      const accountId = String(row.accountId || "").trim();
+      if (!accountId) return;
+      roleByAccountId[accountId] = String(row.role || "").trim() || "viewer";
+    });
+    const accountIds = [...new Set(shareRows.map((r) => String(r.accountId || "").trim()).filter(Boolean))];
+    if (accountIds.length) {
+      const accRes = await db
+        .collection("asset_accounts")
+        .where({ _id: _.in(accountIds), archived: _.neq(true) })
+        .limit(500)
+        .get();
+      sharedRows = await attachOwnerProfilesToAssetRows(
+        sortAssetAccountRowsByBalanceDesc(accRes.data || []).map((row) => ({
+          ...row,
+          shareRole: roleByAccountId[String(row._id)] || "viewer",
+        }))
+      );
+    }
+    return sharedRows;
+  };
+  const loadPersonalRows = async () => {
+    const res = await db
+      .collection("asset_accounts")
+      .where({ ownerOpenid: openid, archived: _.neq(true) })
+      .limit(200)
+      .get();
+    return sortAssetAccountRowsByBalanceDesc(res.data || []);
+  };
+  if (scope === "shared") {
+    rows = await loadSharedRows();
+  } else if (scope === "personal") {
+    rows = await loadPersonalRows();
+  } else {
+    const [personalRows, sharedRows] = await Promise.all([loadPersonalRows(), loadSharedRows()]);
+    rows = personalRows.concat(sharedRows);
+  }
   let totalAssetsCents = 0;
   let totalLiabilitiesCents = 0;
   const assetTypeMap = {};
@@ -1272,11 +1448,24 @@ async function getAssetDashboard(openid) {
         return { key: k, label: k, amountCents: amount, percent };
       })
       .sort((a, b) => b.amountCents - a.amountCents);
+  let monthOverPrevMonthNetWorthPct = null;
+  try {
+    const snapRes = await db
+      .collection("asset_snapshots")
+      .where({ ownerOpenid: openid })
+      .limit(200)
+      .get();
+    monthOverPrevMonthNetWorthPct = computeNetWorthMonthOverPrevMonthPctFromSnapshotRows(snapRes.data || []);
+  } catch (_) {
+    monthOverPrevMonthNetWorthPct = null;
+  }
   return {
     success: true,
+    scope,
     totalAssetsCents,
     totalLiabilitiesCents,
     netWorthCents,
+    monthOverPrevMonthNetWorthPct,
     assetAccounts,
     liabilityAccounts,
     assetTypeGroups: toGroups(assetTypeMap, totalAssetsCents),
@@ -1285,10 +1474,51 @@ async function getAssetDashboard(openid) {
 }
 
 async function listAssetRecords(openid, event) {
-  const where = { ownerOpenid: openid };
-  const accountId = String(event.accountId == null ? "" : event.accountId).trim();
+  const ev = event || {};
+  const where = {};
+  const accountId = String(ev.accountId == null ? "" : ev.accountId).trim();
+  const rawScope = String(ev.scope || "personal").trim();
+  const scope = rawScope === "all" || rawScope === "shared" ? rawScope : "personal";
+  let accessibleAccountIds = [];
   if (accountId) {
+    const access = await getAssetAccountAccess(openid, accountId);
+    if (!access.ok) {
+      return { success: false, errMsg: access.errMsg || "无权访问该资产账户" };
+    }
+    where.ownerOpenid = access.ownerOpenid;
     where.accountId = accountId;
+  } else {
+    const ownAccountIds = [];
+    if (scope !== "shared") {
+      const ownRes = await db
+        .collection("asset_accounts")
+        .where({ ownerOpenid: openid })
+        .field({ _id: true })
+        .limit(500)
+        .get();
+      (ownRes.data || []).forEach((row) => {
+        const aid = String(row._id || "").trim();
+        if (aid) ownAccountIds.push(aid);
+      });
+    }
+    const sharedAccountIds = [];
+    if (scope !== "personal") {
+      const sharedRes = await db
+        .collection("asset_account_shares")
+        .where({ memberOpenid: openid, status: "active" })
+        .field({ accountId: true })
+        .limit(500)
+        .get();
+      (sharedRes.data || []).forEach((row) => {
+        const aid = String(row.accountId || "").trim();
+        if (aid) sharedAccountIds.push(aid);
+      });
+    }
+    accessibleAccountIds = [...new Set(ownAccountIds.concat(sharedAccountIds))];
+    if (!accessibleAccountIds.length) {
+      return { success: true, list: [] };
+    }
+    where.accountId = _.in(accessibleAccountIds);
   }
   const res = await db
     .collection("asset_records")
@@ -1307,11 +1537,19 @@ async function listAssetRecords(openid, event) {
   const accountIds = [...accountIdSet];
   const accountNameMap = {};
   if (accountIds.length) {
+    let accountIdsForName = accountIds;
+    if (!accountId && accessibleAccountIds.length) {
+      const allowedSet = new Set(accessibleAccountIds);
+      accountIdsForName = accountIds.filter((id) => allowedSet.has(id));
+    }
+    if (!accountIdsForName.length) {
+      accountIdsForName = accountIds.filter((id) => id === accountId);
+    }
     const accRes = await db
       .collection("asset_accounts")
-      .where({ ownerOpenid: openid, _id: _.in(accountIds) })
+      .where({ _id: _.in(accountIdsForName) })
       .field({ _id: true, name: true })
-      .limit(200)
+      .limit(500)
       .get();
     const accRows = accRes.data || [];
     for (let i = 0; i < accRows.length; i += 1) {
@@ -1341,10 +1579,15 @@ async function createAssetRecord(openid, event) {
   if (!accountId) {
     return { success: false, errMsg: "缺少账户" };
   }
-  const account = await getAssetAccountById(openid, accountId);
-  if (!account) {
-    return { success: false, errMsg: "资产账户不存在" };
+  const access = await getAssetAccountAccess(openid, accountId);
+  if (!access.ok) {
+    return { success: false, errMsg: access.errMsg || "资产账户不存在" };
   }
+  if (access.role !== "owner") {
+    return { success: false, errMsg: "共享账户不可记变动" };
+  }
+  const ownerOpenid = access.ownerOpenid;
+  const account = access.account;
   if (account.archived) {
     return { success: false, errMsg: "归档账户不可记变动" };
   }
@@ -1387,7 +1630,7 @@ async function createAssetRecord(openid, event) {
   }
   const addRes = await db.collection("asset_records").add({
     data: {
-      ownerOpenid: openid,
+      ownerOpenid,
       accountId: String(account._id),
       actionType,
       amountCents,
@@ -1402,7 +1645,7 @@ async function createAssetRecord(openid, event) {
   await db.collection("asset_accounts").doc(String(account._id)).update({
     data: { balanceCents: afterBalanceCents, updatedAt: db.serverDate() },
   });
-  const rebuilt = await rebuildAssetAccountBalanceChain(openid, String(account._id));
+  const rebuilt = await rebuildAssetAccountBalanceChain(ownerOpenid, String(account._id));
   if (!rebuilt.ok) {
     return { success: false, errMsg: rebuilt.errMsg || "余额重算失败" };
   }
@@ -1416,8 +1659,8 @@ async function createAssetRecord(openid, event) {
     });
     if (!syncIns.ok) {
       await db.collection("asset_records").doc(String(addRes._id)).remove();
-      await rebuildAssetAccountBalanceChain(openid, String(account._id));
-      await rebuildAssetSnapshots(openid);
+      await rebuildAssetAccountBalanceChain(ownerOpenid, String(account._id));
+      await rebuildAssetSnapshots(ownerOpenid);
       return { success: false, errMsg: `同步账本失败：${syncIns.errMsg || "请稍后重试"}` };
     }
     await db.collection("asset_records").doc(String(addRes._id)).update({
@@ -1430,7 +1673,7 @@ async function createAssetRecord(openid, event) {
       },
     });
   }
-  await rebuildAssetSnapshots(openid);
+  await rebuildAssetSnapshots(ownerOpenid);
   return { success: true, recordId: addRes._id, latestBalanceCents: rebuilt.balanceCents };
 }
 
@@ -1439,14 +1682,14 @@ async function getAssetRecord(openid, event) {
   if (!id) {
     return { success: false, errMsg: "缺少记录" };
   }
-  const res = await db
-    .collection("asset_records")
-    .where({ _id: id, ownerOpenid: openid })
-    .limit(1)
-    .get();
+  const res = await db.collection("asset_records").where({ _id: id }).limit(1).get();
   const row = (res.data && res.data[0]) || null;
   if (!row) {
     return { success: false, errMsg: "记录不存在" };
+  }
+  const access = await getAssetAccountAccess(openid, row.accountId);
+  if (!access.ok) {
+    return { success: false, errMsg: "记录不存在或无权访问" };
   }
   return { success: true, record: row };
 }
@@ -1476,10 +1719,19 @@ async function createAssetTransfer(openid, event) {
   if (!bookedAt) {
     return { success: false, errMsg: "记账时间不合法" };
   }
-  const fromAccount = await getAssetAccountById(openid, fromAccountId);
-  const toAccount = await getAssetAccountById(openid, toAccountId);
-  if (!fromAccount || !toAccount) {
-    return { success: false, errMsg: "账户不存在" };
+  const fromAccess = await getAssetAccountAccess(openid, fromAccountId);
+  const toAccess = await getAssetAccountAccess(openid, toAccountId);
+  if (!fromAccess.ok || !toAccess.ok) {
+    return { success: false, errMsg: "账户不存在或无权访问" };
+  }
+  if (fromAccess.role !== "owner" || toAccess.role !== "owner") {
+    return { success: false, errMsg: "共享账户不可转账" };
+  }
+  const fromAccount = fromAccess.account;
+  const toAccount = toAccess.account;
+  const ownerOpenid = String(fromAccount.ownerOpenid || "");
+  if (!ownerOpenid || ownerOpenid !== String(toAccount.ownerOpenid || "")) {
+    return { success: false, errMsg: "仅支持同一户主下账户转账" };
   }
   if (fromAccount.archived || toAccount.archived) {
     return { success: false, errMsg: "归档账户不可转账" };
@@ -1525,7 +1777,7 @@ async function createAssetTransfer(openid, event) {
       toAfter = txToBefore + amountCents;
       await transaction.collection("asset_records").add({
         data: {
-          ownerOpenid: openid,
+          ownerOpenid,
           accountId: String(fromAccount._id),
           actionType: "decrease",
           amountCents,
@@ -1541,7 +1793,7 @@ async function createAssetTransfer(openid, event) {
       });
       await transaction.collection("asset_records").add({
         data: {
-          ownerOpenid: openid,
+          ownerOpenid,
           accountId: String(toAccount._id),
           actionType: "increase",
           amountCents,
@@ -1568,15 +1820,15 @@ async function createAssetTransfer(openid, event) {
   }
 
   // 转账可能是补录历史日期，需重算两边余额链确保一致。
-  const rebuiltFrom = await rebuildAssetAccountBalanceChain(openid, String(fromAccount._id));
+  const rebuiltFrom = await rebuildAssetAccountBalanceChain(ownerOpenid, String(fromAccount._id));
   if (!rebuiltFrom.ok) {
     return { success: false, errMsg: rebuiltFrom.errMsg || "转账后重算失败" };
   }
-  const rebuiltTo = await rebuildAssetAccountBalanceChain(openid, String(toAccount._id));
+  const rebuiltTo = await rebuildAssetAccountBalanceChain(ownerOpenid, String(toAccount._id));
   if (!rebuiltTo.ok) {
     return { success: false, errMsg: rebuiltTo.errMsg || "转账后重算失败" };
   }
-  await rebuildAssetSnapshots(openid);
+  await rebuildAssetSnapshots(ownerOpenid);
   if (rebuiltFrom.balanceCents < 0) {
     return { success: false, errMsg: "转出账户余额不足" };
   }
@@ -1598,20 +1850,17 @@ function monthKeyByDate(date) {
   return `${y}-${String(m).padStart(2, "0")}`;
 }
 
-async function listNetWorthTrend(openid) {
-  let res = await db
-    .collection("asset_snapshots")
-    .where({ ownerOpenid: openid })
-    .limit(200)
-    .get();
+async function listNetWorthTrend(openid, event) {
+  const ev = event || {};
+  const scope = String(ev.scope || "personal").trim() === "shared" ? "shared" : "personal";
+  if (scope === "shared") {
+    return { success: true, points: [] };
+  }
+  let res = await db.collection("asset_snapshots").where({ ownerOpenid: openid }).limit(200).get();
   let rows = (res.data || []).slice();
   if (!rows.length) {
     await rebuildAssetSnapshots(openid);
-    res = await db
-      .collection("asset_snapshots")
-      .where({ ownerOpenid: openid })
-      .limit(200)
-      .get();
+    res = await db.collection("asset_snapshots").where({ ownerOpenid: openid }).limit(200).get();
     rows = (res.data || []).slice();
   }
   rows.sort((a, b) => String(a.month || "").localeCompare(String(b.month || "")));
@@ -1622,6 +1871,141 @@ async function listNetWorthTrend(openid) {
     netWorthCents: Number(row.netWorthCents) || 0,
   }));
   return { success: true, points };
+}
+
+async function assertAssetAccountOwner(openid, accountId) {
+  const acc = await getAssetAccountById(openid, accountId);
+  if (!acc) {
+    return { ok: false, errMsg: "仅账户户主可操作" };
+  }
+  return { ok: true, account: acc };
+}
+
+function normalizeAssetShareRole(raw) {
+  return "viewer";
+}
+
+async function createAssetAccountShareInvite(openid, event) {
+  const accountId = String((event && event.accountId) || "").trim();
+  const gate = await assertAssetAccountOwner(openid, accountId);
+  if (!gate.ok) {
+    return { success: false, errMsg: gate.errMsg };
+  }
+  const role = normalizeAssetShareRole(event && event.role);
+  const inviteCode = normalizeInviteCode(buildInviteCode());
+  const rid = assetAccountShareInviteDocId(accountId, inviteCode);
+  const expiresAt = new Date(Date.now() + DEFAULT_INVITE_EXPIRE_HOURS * 60 * 60 * 1000);
+  await db.collection("asset_account_share_invites").doc(rid).set({
+    data: {
+      accountId,
+      ownerOpenid: openid,
+      code: inviteCode,
+      role,
+      status: "active",
+      createdBy: openid,
+      createdAt: db.serverDate(),
+      expiresAt,
+    },
+  });
+  return { success: true, inviteCode, accountId, role, expiresAt };
+}
+
+async function enterAssetAccountShare(openid, event) {
+  const inviteCode = normalizeInviteCode(event && event.code);
+  if (!inviteCode) {
+    return { success: false, errMsg: "邀请码无效" };
+  }
+  const invRes = await db
+    .collection("asset_account_share_invites")
+    .where({ code: inviteCode, status: "active" })
+    .limit(1)
+    .get();
+  const invite = (invRes.data && invRes.data[0]) || null;
+  if (!invite) {
+    return { success: false, errMsg: "邀请码无效或已失效" };
+  }
+  if (String(invite.ownerOpenid || "") === openid) {
+    return { success: false, errMsg: "不能加入自己共享的账户" };
+  }
+  const expMs = readDateMs(invite.expiresAt);
+  if (Number.isFinite(expMs) && expMs < Date.now()) {
+    return { success: false, errMsg: "邀请码已过期" };
+  }
+  const account = await getAssetAccountById(String(invite.ownerOpenid || ""), invite.accountId);
+  if (!account) {
+    return { success: false, errMsg: "目标账户不存在" };
+  }
+  const sid = assetAccountShareDocId(openid, String(account._id));
+  await db.collection("asset_account_shares").doc(sid).set({
+    data: {
+      accountId: String(account._id),
+      ownerOpenid: String(account.ownerOpenid || ""),
+      memberOpenid: openid,
+      role: normalizeAssetShareRole(invite.role),
+      status: "active",
+      invitedBy: String(invite.createdBy || invite.ownerOpenid || ""),
+      joinedAt: db.serverDate(),
+      updatedAt: db.serverDate(),
+    },
+  });
+  return { success: true, accountId: String(account._id), role: normalizeAssetShareRole(invite.role) };
+}
+
+async function listAssetAccountShareMembers(openid, event) {
+  const accountId = String((event && event.accountId) || "").trim();
+  const gate = await assertAssetAccountOwner(openid, accountId);
+  if (!gate.ok) {
+    return { success: false, errMsg: gate.errMsg };
+  }
+  const res = await db
+    .collection("asset_account_shares")
+    .where({ accountId, status: "active" })
+    .limit(200)
+    .get();
+  const rows = res.data || [];
+  const memberOpenids = rows
+    .map((row) => String(row.memberOpenid || "").trim())
+    .filter(Boolean);
+  const profileMap = await fetchProfileMapByOpenids(memberOpenids);
+  const list = rows.map((row) => {
+    const memberOpenid = String(row.memberOpenid || "").trim();
+    const p = profileMap[memberOpenid] || {};
+    return {
+      ...row,
+      displayName: p.nickName || maskOpenidForDisplay(memberOpenid),
+      avatarUrl: p.avatarUrl || "",
+    };
+  });
+  return { success: true, list };
+}
+
+async function updateAssetAccountShareMemberRole(openid, event) {
+  return { success: false, errMsg: "共享成员固定为只读，无需修改角色" };
+}
+
+async function removeAssetAccountShareMember(openid, event) {
+  const accountId = String((event && event.accountId) || "").trim();
+  const memberOpenid = String((event && event.memberOpenid) || "").trim();
+  const gate = await assertAssetAccountOwner(openid, accountId);
+  if (!gate.ok) {
+    return { success: false, errMsg: gate.errMsg };
+  }
+  if (!memberOpenid) {
+    return { success: false, errMsg: "缺少成员" };
+  }
+  const sid = assetAccountShareDocId(memberOpenid, accountId);
+  await db.collection("asset_account_shares").doc(sid).remove();
+  return { success: true };
+}
+
+async function exitAssetAccountShare(openid, event) {
+  const accountId = String((event && event.accountId) || "").trim();
+  if (!accountId) {
+    return { success: false, errMsg: "缺少账户" };
+  }
+  const sid = assetAccountShareDocId(openid, accountId);
+  await db.collection("asset_account_shares").doc(sid).remove();
+  return { success: true };
 }
 
 function normalizeLedgerCategoryName(raw) {
@@ -2197,7 +2581,7 @@ exports.main = async (event) => {
       case "deleteAssetAccount":
         return await deleteAssetAccount(openid, event);
       case "getAssetDashboard":
-        return await getAssetDashboard(openid);
+        return await getAssetDashboard(openid, event);
       case "createAssetRecord":
         return await createAssetRecord(openid, event);
       case "listAssetRecords":
@@ -2211,7 +2595,19 @@ exports.main = async (event) => {
       case "createAssetTransfer":
         return await createAssetTransfer(openid, event);
       case "listNetWorthTrend":
-        return await listNetWorthTrend(openid);
+        return await listNetWorthTrend(openid, event);
+      case "createAssetAccountShareInvite":
+        return await createAssetAccountShareInvite(openid, event);
+      case "enterAssetAccountShare":
+        return await enterAssetAccountShare(openid, event);
+      case "listAssetAccountShareMembers":
+        return await listAssetAccountShareMembers(openid, event);
+      case "updateAssetAccountShareMemberRole":
+        return await updateAssetAccountShareMemberRole(openid, event);
+      case "removeAssetAccountShareMember":
+        return await removeAssetAccountShareMember(openid, event);
+      case "exitAssetAccountShare":
+        return await exitAssetAccountShare(openid, event);
       default:
         return { success: false, errMsg: "未知 type" };
     }
@@ -4351,6 +4747,52 @@ async function fetchProfileMapByOpenids(openids) {
     }
   }
   return map;
+}
+
+function ownerProfileFieldsFromMap(profileMap, ownerOpenid) {
+  const owner = String(ownerOpenid || "").trim();
+  if (!owner) {
+    return { ownerNickname: "", ownerAvatarUrl: "" };
+  }
+  const p = (profileMap && profileMap[owner]) || {};
+  return {
+    ownerNickname: p.nickName || maskOpenidForDisplay(owner),
+    ownerAvatarUrl: p.avatarUrl || "",
+  };
+}
+
+async function attachOwnerProfilesToAssetRows(rows) {
+  const ownerIds = [
+    ...new Set((rows || []).map((r) => String(r.ownerOpenid || "").trim()).filter(Boolean)),
+  ];
+  const profileMap = await fetchProfileMapByOpenids(ownerIds);
+  return (rows || []).map((row) => {
+    const owner = String(row.ownerOpenid || "").trim();
+    const fields = ownerProfileFieldsFromMap(profileMap, owner);
+    return { ...row, ...fields };
+  });
+}
+
+function buildGroupedSharedAssetAccounts(rows) {
+  const groupedMap = {};
+  (rows || []).forEach((row) => {
+    const owner = String(row.ownerOpenid || "").trim();
+    if (!owner) {
+      return;
+    }
+    if (!groupedMap[owner]) {
+      groupedMap[owner] = {
+        ownerOpenid: owner,
+        ownerNickname: row.ownerNickname || maskOpenidForDisplay(owner),
+        ownerAvatarUrl: row.ownerAvatarUrl || "",
+        accounts: [],
+      };
+    }
+    groupedMap[owner].accounts.push(row);
+  });
+  return Object.keys(groupedMap)
+    .map((k) => groupedMap[k])
+    .sort((a, b) => String(a.ownerNickname).localeCompare(String(b.ownerNickname)));
 }
 
 async function collectTransactionsForLedgerIds(ledgerIdList) {
