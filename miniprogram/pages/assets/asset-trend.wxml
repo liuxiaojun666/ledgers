@@ -12,10 +12,11 @@
     </view>
     <view class="chart-card">
       <view class="chart-title">趋势图</view>
-      <view class="chart-bars">
-        <view class="bar" wx:for="{{chartBars}}" wx:key="month" style="height: {{item.heightRpx}}rpx;"></view>
+      <view wx:if="{{showChart}}" class="chart-canvas-wrap">
+        <ff-canvas id="ff-trend" canvas-id="assetTrendLine" opts="{{chartOpts}}"></ff-canvas>
       </view>
-      <view class="axis-row">
+      <view wx:else class="chart-empty">暂无趋势数据</view>
+      <view wx:if="{{showChart}}" class="axis-row">
         <view class="axis-label">{{firstMonth}}</view>
         <view class="axis-label">{{lastMonth}}</view>
       </view>

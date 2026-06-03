@@ -3682,7 +3682,7 @@ function formatNextRunChinaText(ms) {
   return `${y}-${p(m)}-${p(d)}`;
 }
 
-function recurrenceLabel(rec) {
+function recurrenceLabel(rec, row) {
   if (rec === "once") {
     return "一次性";
   }
@@ -3694,6 +3694,14 @@ function recurrenceLabel(rec) {
   }
   if (rec === "monthly") {
     return "每月";
+  }
+  if (rec === "yearly") {
+    const m = row && row.yearMonth != null ? Number(row.yearMonth) : NaN;
+    const d = row && row.yearDay != null ? Number(row.yearDay) : NaN;
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 28) {
+      return `每年${m}月${d}日`;
+    }
+    return "每年";
   }
   return rec;
 }
@@ -3719,11 +3727,13 @@ function formatScheduleRow(r, ledgerName) {
     note: r.note || "",
     assetAccountName: r.assetAccountName ? String(r.assetAccountName).slice(0, 64) : "",
     recurrence: r.recurrence,
-    recurrenceText: recurrenceLabel(r.recurrence),
+    recurrenceText: recurrenceLabel(r.recurrence, r),
     hour: r.hour,
     minute: r.minute,
     weekday: r.weekday,
     monthDay: r.monthDay,
+    yearMonth: r.yearMonth,
+    yearDay: r.yearDay,
     onceDate: r.onceDate || "",
     enabled: r.enabled !== false,
     status: r.status || "active",
@@ -3780,6 +3790,8 @@ async function getSchedule(openid, event) {
       minute: doc.minute,
       weekday: doc.weekday,
       monthDay: doc.monthDay,
+      yearMonth: doc.yearMonth,
+      yearDay: doc.yearDay,
       onceDate: doc.onceDate || "",
       ledgerId: doc.ledgerId,
       amountYuan: ((Number(doc.amountCents) || 0) / 100).toFixed(2),
@@ -3846,6 +3858,8 @@ async function createSchedule(openid, event) {
     nowMs: Date.now(),
     weekday: event.weekday,
     monthDay: event.monthDay,
+    yearMonth: event.yearMonth,
+    yearDay: event.yearDay,
     onceYear: onceY,
     onceMonth: onceM,
     onceDay: onceD,
@@ -3882,6 +3896,14 @@ async function createSchedule(openid, event) {
       monthDay:
         recurrence === "monthly"
           ? Math.min(28, Math.max(1, Number(event.monthDay) || 1))
+          : null,
+      yearMonth:
+        recurrence === "yearly"
+          ? Math.min(12, Math.max(1, Number(event.yearMonth) || 1))
+          : null,
+      yearDay:
+        recurrence === "yearly"
+          ? Math.min(28, Math.max(1, Number(event.yearDay) || 1))
           : null,
       onceDate:
         recurrence === "once"
@@ -4006,6 +4028,8 @@ async function updateSchedule(openid, event) {
       nowMs: Date.now(),
       weekday: event.weekday != null ? event.weekday : doc.weekday,
       monthDay: event.monthDay != null ? event.monthDay : doc.monthDay,
+      yearMonth: event.yearMonth != null ? event.yearMonth : doc.yearMonth,
+      yearDay: event.yearDay != null ? event.yearDay : doc.yearDay,
       onceYear: onceY,
       onceMonth: onceM,
       onceDay: onceD,
@@ -4030,6 +4054,23 @@ async function updateSchedule(openid, event) {
         ? Math.min(
             28,
             Math.max(1, Number(event.monthDay != null ? event.monthDay : doc.monthDay) || 1)
+          )
+        : null;
+    patch.yearMonth =
+      recurrence === "yearly"
+        ? Math.min(
+            12,
+            Math.max(
+              1,
+              Number(event.yearMonth != null ? event.yearMonth : doc.yearMonth) || 1
+            )
+          )
+        : null;
+    patch.yearDay =
+      recurrence === "yearly"
+        ? Math.min(
+            28,
+            Math.max(1, Number(event.yearDay != null ? event.yearDay : doc.yearDay) || 1)
           )
         : null;
     patch.onceDate =

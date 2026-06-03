@@ -31,6 +31,47 @@ function accountNameInitial(name) {
 
 const { resolveAvatarUrlsOnPage } = require("../../utils/profile-avatar");
 
+const ASSET_DASHBOARD_CACHE_PREFIX = "asset_dashboard_snap_v1";
+
+function assetDashboardCacheKey(scope) {
+  return `${ASSET_DASHBOARD_CACHE_PREFIX}_${String(scope || "all").trim() || "all"}`;
+}
+
+function readAssetDashboardCache(scope) {
+  try {
+    const v = wx.getStorageSync(assetDashboardCacheKey(scope));
+    if (v && v.payload && typeof v.payload === "object") {
+      return v.payload;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return null;
+}
+
+function writeAssetDashboardCache(scope, payload) {
+  try {
+    wx.setStorageSync(assetDashboardCacheKey(scope), {
+      savedAt: Date.now(),
+      payload,
+    });
+  } catch (e) {
+    // ignore quota errors
+  }
+}
+
+function pickDashboardCachePayload(r) {
+  return {
+    success: true,
+    totalAssetsCents: r.totalAssetsCents,
+    totalLiabilitiesCents: r.totalLiabilitiesCents,
+    netWorthCents: r.netWorthCents,
+    monthOverPrevMonthNetWorthPct: r.monthOverPrevMonthNetWorthPct,
+    assetAccounts: r.assetAccounts || [],
+    liabilityAccounts: r.liabilityAccounts || [],
+  };
+}
+
 function decorateAccountRow(row) {
   return {
     ...row,
@@ -89,21 +130,75 @@ Page({
     return true;
   },
 
+  applyDashboardFromApi(r) {
+    if (!r || !r.success) {
+      return false;
+    }
+    const totalAssetsCents = Number(r.totalAssetsCents) || 0;
+    const totalLiabilitiesCents = Number(r.totalLiabilitiesCents) || 0;
+    const netWorthCents = Number(r.netWorthCents) || 0;
+    const decorate = (rows) => (rows || []).map(decorateAccountRow);
+    const rawAssetAccounts = decorate(r.assetAccounts);
+    const rawLiabilityAccounts = decorate(r.liabilityAccounts);
+    const personalAssetAccounts = rawAssetAccounts.filter((row) => !this.isSharedAccountRow(row));
+    const personalLiabilityAccounts = rawLiabilityAccounts.filter((row) => !this.isSharedAccountRow(row));
+    const groupedSharedAccounts = this.buildSharedGroups(rawAssetAccounts, rawLiabilityAccounts);
+    const hasAnyAccount =
+      personalAssetAccounts.length > 0 ||
+      personalLiabilityAccounts.length > 0 ||
+      groupedSharedAccounts.length > 0;
+    const mom = r.monthOverPrevMonthNetWorthPct;
+    const momNum = Number(mom);
+    this.setData(
+      {
+        totalAssetsYuan: formatYuan(totalAssetsCents),
+        totalLiabilitiesYuan: formatYuan(totalLiabilitiesCents),
+        netWorthYuan: formatSignedYuan(netWorthCents),
+        netWorthSign: netWorthCents < 0 ? "-" : "",
+        monthTrendLabel: formatMonthNetWorthMoMLabel(mom),
+        monthTrendPositive: Number.isFinite(momNum) ? momNum >= 0 : true,
+        assetAccounts: personalAssetAccounts,
+        liabilityAccounts: personalLiabilityAccounts,
+        groupedSharedAccounts,
+        loadState: hasAnyAccount ? "success" : "empty",
+        errorText: "",
+        loading: false,
+      },
+      () => {
+        if (groupedSharedAccounts.length) {
+          resolveAvatarUrlsOnPage(this, "groupedSharedAccounts", groupedSharedAccounts, {
+            avatarField: "ownerAvatarUrl",
+          }).catch(() => {});
+        }
+      }
+    );
+    return true;
+  },
+
   refreshDashboard() {
     if (!this.ensureEnv()) {
       return;
     }
-    this.setData({
-      loading: true,
-      loadState: "loading",
-      errorText: "",
-      monthTrendLabel: "",
-      monthTrendPositive: true,
-    });
+    const scope = this.data.scope;
+    const cached = readAssetDashboardCache(scope);
+    const hadCache = !!cached;
+
+    if (hadCache) {
+      this.applyDashboardFromApi(cached);
+    } else {
+      this.setData({
+        loading: true,
+        loadState: "loading",
+        errorText: "",
+        monthTrendLabel: "",
+        monthTrendPositive: true,
+      });
+    }
+
     wx.cloud
       .callFunction({
         name: "ledgerFunctions",
-        data: { type: "getAssetDashboard", scope: this.data.scope },
+        data: { type: "getAssetDashboard", scope },
       })
       .then((resp) => {
         const r = resp.result || {};
@@ -111,65 +206,37 @@ Page({
           const err = String(r.errMsg || "");
           if (/未知\s*type/i.test(err)) {
             wx.showToast({ title: "请上传最新 ledgerFunctions 云函数", icon: "none" });
-            this.setData({
-              loadState: "error",
-              errorText: "云函数版本过旧，请上传最新版本",
-              monthTrendLabel: "",
-            });
+            if (!hadCache) {
+              this.setData({
+                loadState: "error",
+                errorText: "云函数版本过旧，请上传最新版本",
+                monthTrendLabel: "",
+              });
+            }
             return;
           }
           wx.showToast({ title: r.errMsg || "加载失败", icon: "none" });
-          this.setData({
-            loadState: "error",
-            errorText: r.errMsg || "加载失败，请稍后重试",
-            monthTrendLabel: "",
-          });
+          if (!hadCache) {
+            this.setData({
+              loadState: "error",
+              errorText: r.errMsg || "加载失败，请稍后重试",
+              monthTrendLabel: "",
+            });
+          }
           return;
         }
-        const totalAssetsCents = Number(r.totalAssetsCents) || 0;
-        const totalLiabilitiesCents = Number(r.totalLiabilitiesCents) || 0;
-        const netWorthCents = Number(r.netWorthCents) || 0;
-        const decorate = (rows) => (rows || []).map(decorateAccountRow);
-        const rawAssetAccounts = decorate(r.assetAccounts);
-        const rawLiabilityAccounts = decorate(r.liabilityAccounts);
-        const personalAssetAccounts = rawAssetAccounts.filter((row) => !this.isSharedAccountRow(row));
-        const personalLiabilityAccounts = rawLiabilityAccounts.filter((row) => !this.isSharedAccountRow(row));
-        const groupedSharedAccounts = this.buildSharedGroups(rawAssetAccounts, rawLiabilityAccounts);
-        const hasAnyAccount =
-          personalAssetAccounts.length > 0 ||
-          personalLiabilityAccounts.length > 0 ||
-          groupedSharedAccounts.length > 0;
-        const mom = r.monthOverPrevMonthNetWorthPct;
-        const momNum = Number(mom);
-        this.setData(
-          {
-            totalAssetsYuan: formatYuan(totalAssetsCents),
-            totalLiabilitiesYuan: formatYuan(totalLiabilitiesCents),
-            netWorthYuan: formatSignedYuan(netWorthCents),
-            netWorthSign: netWorthCents < 0 ? "-" : "",
-            monthTrendLabel: formatMonthNetWorthMoMLabel(mom),
-            monthTrendPositive: Number.isFinite(momNum) ? momNum >= 0 : true,
-            assetAccounts: personalAssetAccounts,
-            liabilityAccounts: personalLiabilityAccounts,
-            groupedSharedAccounts,
-            loadState: hasAnyAccount ? "success" : "empty",
-          },
-          () => {
-            if (groupedSharedAccounts.length) {
-              resolveAvatarUrlsOnPage(this, "groupedSharedAccounts", groupedSharedAccounts, {
-                avatarField: "ownerAvatarUrl",
-              }).catch(() => {});
-            }
-          }
-        );
+        writeAssetDashboardCache(scope, pickDashboardCachePayload(r));
+        this.applyDashboardFromApi(r);
       })
       .catch(() => {
         wx.showToast({ title: "请上传并部署云函数 ledgerFunctions", icon: "none" });
-        this.setData({
-          loadState: "error",
-          errorText: "网络异常，请检查云开发环境后重试",
-          monthTrendLabel: "",
-        });
+        if (!hadCache) {
+          this.setData({
+            loadState: "error",
+            errorText: "网络异常，请检查云开发环境后重试",
+            monthTrendLabel: "",
+          });
+        }
       })
       .finally(() => {
         this.setData({ loading: false });

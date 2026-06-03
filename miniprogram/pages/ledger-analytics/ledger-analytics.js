@@ -29,8 +29,64 @@ const INSIGHT_POLICY = {
   },
 };
 const LAST_ANALYZE_LEDGER_STORAGE_KEY = "lastAnalyzeLedgerId";
+const LAST_ANALYZE_FILTERS_STORAGE_KEY = "lastAnalyzeFilters";
 /** 与本地存储中「全部账本」统计范围对应，勿与普通账本 _id 冲突 */
 const LAST_ANALYZE_ALL_SENTINEL = "__ALL__";
+
+function readLastAnalyzeFilters() {
+  try {
+    const raw = wx.getStorageSync(LAST_ANALYZE_FILTERS_STORAGE_KEY);
+    if (!raw || typeof raw !== "object") {
+      return null;
+    }
+    const range = raw.range;
+    if (range !== "week" && range !== "month" && range !== "year") {
+      return null;
+    }
+    const selectedYear = toInt(raw.selectedYear);
+    const selectedMonth = toInt(raw.selectedMonth);
+    const weekAnchorDate = String(raw.weekAnchorDate || "").trim();
+    const trendKind = raw.trendKind === "income" ? "income" : "expense";
+    const out = { range, trendKind };
+    if (selectedYear) {
+      out.selectedYear = selectedYear;
+      out.yearPickerValue = `${selectedYear}`;
+    }
+    if (selectedMonth) {
+      out.selectedMonth = selectedMonth;
+    }
+    if (selectedYear && selectedMonth) {
+      out.monthPickerValue = `${selectedYear}-${pad2(selectedMonth)}`;
+    }
+    if (weekAnchorDate && parseYmd(weekAnchorDate)) {
+      out.weekAnchorDate = weekAnchorDate;
+    }
+    return out;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeLastAnalyzeFilters(data) {
+  const range = data && data.range;
+  if (range !== "week" && range !== "month" && range !== "year") {
+    return;
+  }
+  const selectedYear = toInt(data.selectedYear);
+  const selectedMonth = toInt(data.selectedMonth);
+  const weekAnchorDate = String((data && data.weekAnchorDate) || "").trim();
+  try {
+    wx.setStorageSync(LAST_ANALYZE_FILTERS_STORAGE_KEY, {
+      range,
+      selectedYear: selectedYear || 0,
+      selectedMonth: selectedMonth || 0,
+      weekAnchorDate: weekAnchorDate && parseYmd(weekAnchorDate) ? weekAnchorDate : "",
+      trendKind: data.trendKind === "income" ? "income" : "expense",
+    });
+  } catch (e) {
+    // ignore
+  }
+}
 
 function pickLedgerId(...queryObjs) {
   for (let i = 0; i < queryObjs.length; i += 1) {
@@ -740,14 +796,19 @@ Page({
   onLoad(options) {
     const now = nowYearMonth();
     const todayYmd = formatYmd(new Date());
-    this.setData({
+    const patch = {
       selectedYear: now.year,
       selectedMonth: now.month,
       weekAnchorDate: todayYmd,
       todayYmd,
       monthPickerValue: `${now.year}-${pad2(now.month)}`,
       yearPickerValue: `${now.year}`,
-    });
+    };
+    const savedFilters = readLastAnalyzeFilters();
+    if (savedFilters) {
+      Object.assign(patch, savedFilters);
+    }
+    this.setData(patch);
     const launchQ = safeEnterQuery(wx.getLaunchOptionsSync);
     const ledgerId = pickLedgerId(options, launchQ);
     this._preferredLedgerId = ledgerId || "";
@@ -756,6 +817,15 @@ Page({
 
   onShow() {
     this.setTabBarState({ selected: 1, hidden: false });
+    const app = getApp();
+    const preferredFromNav = String(
+      (app.globalData && app.globalData.analyzePreferredLedgerId) || ""
+    ).trim();
+    if (preferredFromNav) {
+      app.globalData.analyzePreferredLedgerId = "";
+      this._preferredLedgerId = preferredFromNav;
+      this._rebuildWithCurrentMonth = true;
+    }
     if (!this.ensureEnv()) {
       return;
     }
@@ -799,6 +869,7 @@ Page({
       .then((resp) => {
         const r = resp.result || {};
         if (!r.success) {
+          this._rebuildWithCurrentMonth = false;
           wx.showToast({ title: r.errMsg || "加载账本失败", icon: "none" });
           this.setData({ loading: false, listLoading: false });
           return;
@@ -807,6 +878,7 @@ Page({
         const ledgerNameList = ledgers.map((x) => x.name || "未命名账本");
         const ledgerDisplayNames = ["全部账本"].concat(ledgerNameList);
         if (!ledgers.length) {
+          this._rebuildWithCurrentMonth = false;
           this.destroyF2Charts();
           this.setData({
             loading: false,
@@ -881,10 +953,30 @@ Page({
             ledgerIndex: ledgerIndex >= 0 ? ledgerIndex : 0,
             ledgerPickerIndex,
           },
-          () => this.rebuildPeriodChips({ defaultToCurrent: true })
+          () => {
+            if (this._rebuildWithCurrentMonth) {
+              this._rebuildWithCurrentMonth = false;
+              const monthSel = pickDefaultTimeSelection("month");
+              const todayYmd = formatYmd(new Date());
+              this.setData(
+                {
+                  range: "month",
+                  selectedYear: monthSel.selectedYear,
+                  selectedMonth: monthSel.selectedMonth,
+                  monthPickerValue: monthSel.monthPickerValue,
+                  todayYmd,
+                  weekAnchorDate: todayYmd,
+                },
+                () => this.rebuildPeriodChips({ defaultToCurrent: true })
+              );
+              return;
+            }
+            this.rebuildPeriodChips();
+          }
         );
       })
       .catch(() => {
+        this._rebuildWithCurrentMonth = false;
         wx.showToast({
           title: "请上传并部署云函数 ledgerFunctions",
           icon: "none",
@@ -927,7 +1019,7 @@ Page({
           ledgerPickerIndex: 0,
           ledgerIndex: -1,
         },
-        () => this.rebuildPeriodChips({ defaultToCurrent: true })
+        () => this.rebuildPeriodChips()
       );
       return;
     }
@@ -952,8 +1044,12 @@ Page({
         ledgerName: String(picked.name || ""),
         ledgerPickerIndex: nextIndex,
       },
-      () => this.rebuildPeriodChips({ defaultToCurrent: true })
+      () => this.rebuildPeriodChips()
     );
+  },
+
+  persistAnalyzeFilters() {
+    writeLastAnalyzeFilters(this.data);
   },
 
   rebuildPeriodChips(options) {
@@ -1012,6 +1108,7 @@ Page({
         monthQuick,
       },
       () => {
+        this.persistAnalyzeFilters();
         if (this.data.analyzeAll) {
           this.load();
         } else {
@@ -1173,6 +1270,7 @@ Page({
           }
         );
         this._resolveGroupsPersonAvatarUrls(groupsPerson).catch(() => {});
+        this.persistAnalyzeFilters();
         this._loadedOnce = true;
       })
       .catch(() => {
@@ -1237,6 +1335,10 @@ Page({
     this.setData({ range }, () => this.rebuildPeriodChips({ defaultToCurrent: true }));
   },
 
+  onHide() {
+    this.persistAnalyzeFilters();
+  },
+
   onPeriodChipTap(e) {
     const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
     const kind = ds.kind;
@@ -1261,7 +1363,10 @@ Page({
           weekQuick: weekQuickState(this.data.todayYmd, this.data.weekAnchorDate),
           monthQuick: monthQuickState(this.data.todayYmd, year, month),
         },
-        () => this.load()
+        () => {
+          this.persistAnalyzeFilters();
+          this.load();
+        }
       );
       return;
     }
@@ -1283,7 +1388,10 @@ Page({
           periodChips: marked,
           monthQuick: monthQuickState(this.data.todayYmd, year, this.data.selectedMonth),
         },
-        () => this.load()
+        () => {
+          this.persistAnalyzeFilters();
+          this.load();
+        }
       );
       return;
     }
@@ -1304,7 +1412,10 @@ Page({
           periodChips: marked,
           weekQuick: weekQuickState(this.data.todayYmd, monday),
         },
-        () => this.load()
+        () => {
+          this.persistAnalyzeFilters();
+          this.load();
+        }
       );
     }
   },
@@ -1322,6 +1433,7 @@ Page({
         ? (this.data.chartPieRowsIncome || []).length === 0
         : (this.data.chartPieRowsExpense || []).length === 0;
     this.setData({ trendKind: k, pieChartCurrentEmpty }, () => {
+      this.persistAnalyzeFilters();
       wx.nextTick(() => {
         setTimeout(() => {
           this.refreshF2Charts();

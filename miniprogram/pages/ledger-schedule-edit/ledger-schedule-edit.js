@@ -17,6 +17,22 @@ function buildMonthDayLabels() {
   return out;
 }
 
+function buildYearMonthLabels() {
+  const out = [];
+  for (let i = 1; i <= 12; i += 1) {
+    out.push(`${i}月`);
+  }
+  return out;
+}
+
+function buildYearDayLabels() {
+  const out = [];
+  for (let i = 1; i <= 28; i += 1) {
+    out.push(`${i}日`);
+  }
+  return out;
+}
+
 Page({
   data: {
     loading: true,
@@ -35,14 +51,18 @@ Page({
     note: "",
     flowLabels: ["支出", "收入"],
     flowIndex: 0,
-    recurrenceLabels: ["一次性", "每天", "每周", "每月"],
-    recurrenceValues: ["once", "daily", "weekly", "monthly"],
+    recurrenceLabels: ["一次性", "每天", "每周", "每月", "每年"],
+    recurrenceValues: ["once", "daily", "weekly", "monthly", "yearly"],
     recurrenceIndex: 1,
     onceDate: todayStr(),
     weekdayLabels: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
     weekdayIndex: 1,
     monthDayLabels: buildMonthDayLabels(),
     monthDayIndex: 0,
+    yearMonthLabels: buildYearMonthLabels(),
+    yearMonthIndex: 0,
+    yearDayLabels: buildYearDayLabels(),
+    yearDayIndex: 0,
     enabled: true,
     status: "active",
     saving: false,
@@ -280,6 +300,10 @@ Page({
     const weekdayIndex = ((wd % 7) + 7) % 7;
     const md = raw.monthDay != null ? Number(raw.monthDay) : 1;
     const monthDayIndex = Math.min(27, Math.max(0, md - 1));
+    const ym = raw.yearMonth != null ? Number(raw.yearMonth) : 1;
+    const yearMonthIndex = Math.min(11, Math.max(0, ym - 1));
+    const yd = raw.yearDay != null ? Number(raw.yearDay) : 1;
+    const yearDayIndex = Math.min(27, Math.max(0, yd - 1));
     const pick = raw.category ? String(raw.category) : "";
     const rawAid =
       raw.assetAccountId != null ? String(raw.assetAccountId).trim() : "";
@@ -306,6 +330,8 @@ Page({
         onceDate: raw.onceDate || todayStr(),
         weekdayIndex,
         monthDayIndex,
+        yearMonthIndex,
+        yearDayIndex,
         enabled: raw.enabled !== false,
         status: raw.status || "active",
         selectedAssetId: rawAid,
@@ -400,6 +426,14 @@ Page({
     this.setData({ monthDayIndex: Number(e.detail.value) });
   },
 
+  onYearMonthChange(e) {
+    this.setData({ yearMonthIndex: Number(e.detail.value) });
+  },
+
+  onYearDayChange(e) {
+    this.setData({ yearDayIndex: Number(e.detail.value) });
+  },
+
   onEnabledChange(e) {
     this.setData({ enabled: !!e.detail.value });
   },
@@ -422,6 +456,8 @@ Page({
       onceDate,
       weekdayIndex,
       monthDayIndex,
+      yearMonthIndex,
+      yearDayIndex,
       enabled,
       status,
       saving,
@@ -466,6 +502,10 @@ Page({
     }
     if (recurrence === "monthly") {
       payload.monthDay = monthDayIndex + 1;
+    }
+    if (recurrence === "yearly") {
+      payload.yearMonth = yearMonthIndex + 1;
+      payload.yearDay = yearDayIndex + 1;
     }
     if (recurrence === "once") {
       payload.onceDate = onceDate;

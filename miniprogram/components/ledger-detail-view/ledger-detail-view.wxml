@@ -39,6 +39,13 @@
           </view>
         </view>
       </view>
+      <view class="detail-analytics-entry" hover-class="detail-analytics-entry--hover" bindtap="goLedgerAnalytics">
+        <view class="detail-analytics-entry__main">
+          <text class="detail-analytics-entry__title">统计分析</text>
+          <text class="detail-analytics-entry__sub">收支趋势、分类占比与本账本预算</text>
+        </view>
+        <text class="detail-analytics-entry__arrow">›</text>
+      </view>
       <view wx:if="{{showBudgetStrip}}" class="detail-budget-card">
         <view class="detail-budget-head">
           <text class="detail-budget-label">本月预算</text>

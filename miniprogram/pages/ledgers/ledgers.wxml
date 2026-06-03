@@ -67,11 +67,12 @@
               <view class="card-title">{{item.name}}</view>
             </view>
             <view class="card-month-line">
-              <text class="card-month-label">{{item.monthSummaryLabel}}</text>
-              <text class="card-month-sep"> · </text>
-              <text class="card-month-income">收入 ¥{{item.monthIncomeYuan}}</text>
-              <text class="card-month-sep"> · </text>
-              <text class="card-month-expense">支出 ¥{{item.monthExpenseYuan}}</text>
+              <text class="card-month-income">
+                <text class="card-month-prefix">{{item.monthSummaryLabel}}</text>收入 ¥{{item.monthIncomeYuan}}
+              </text>
+              <text class="card-month-expense">
+                <text class="card-month-prefix">{{item.monthSummaryLabel}}</text>支出 ¥{{item.monthExpenseYuan}}
+              </text>
             </view>
             <view class="card-meta">
               <text>成员 {{item.memberCount}} 人</text>

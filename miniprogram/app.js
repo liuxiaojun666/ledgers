@@ -93,6 +93,8 @@ App({
       resourceAppid: "wxbe6c30a61a51b422",
       /** 为 true 时「账本」Tab 强制展示账本列表（如删除账本后仅余栈底时切回 Tab） */
       showBillLedgerListOnce: false,
+      /** 从账本详情等页跳转「统计」Tab 时携带的目标账本 _id（switchTab 无法传参） */
+      analyzePreferredLedgerId: "",
       cloudReady: null,
       sharedCloud: null,
     };

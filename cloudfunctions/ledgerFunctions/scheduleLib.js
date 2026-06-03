@@ -62,7 +62,13 @@ function addCalendarMonthsClampDay(y, mo, d, deltaMonth, clampDay) {
 }
 
 function normalizeRecurrence(r) {
-  if (r === "once" || r === "daily" || r === "weekly" || r === "monthly") {
+  if (
+    r === "once" ||
+    r === "daily" ||
+    r === "weekly" ||
+    r === "monthly" ||
+    r === "yearly"
+  ) {
     return r;
   }
   return "daily";
@@ -72,6 +78,7 @@ function normalizeRecurrence(r) {
  * 新建时计算首次 nextRunAt（北京时间 0:00 的日历日，不按时分）
  * weekday: 0-6 周日-周六（与小程序 picker 一致）
  * monthDay: 1-28
+ * yearMonth: 1-12；yearDay: 1-28（每年重复）
  * onceDate: "YYYY-MM-DD"
  */
 function computeInitialNextRun({
@@ -79,6 +86,8 @@ function computeInitialNextRun({
   nowMs,
   weekday,
   monthDay,
+  yearMonth,
+  yearDay,
   onceYear,
   onceMonth,
   onceDay,
@@ -125,6 +134,26 @@ function computeInitialNextRun({
       const dim = daysInMonth(q.y, q.m);
       const dUse = Math.min(md, dim);
       const ms = chinaYMDHMToUtcMs(q.y, q.m, dUse, 0, 0);
+      if (ms >= todayStart) {
+        found = ms;
+        break;
+      }
+    }
+    if (found == null) {
+      return { ok: false, errMsg: "无法计算下次执行时间" };
+    }
+    return { ok: true, nextRunAtMs: found };
+  }
+
+  if (r === "yearly") {
+    const ym = Math.min(12, Math.max(1, Number(yearMonth) || 1));
+    const yd = Math.min(28, Math.max(1, Number(yearDay) || 1));
+    let found = null;
+    for (let ky = 0; ky < 12; ky += 1) {
+      const yTry = p.y + ky;
+      const dim = daysInMonth(yTry, ym);
+      const dUse = Math.min(yd, dim);
+      const ms = chinaYMDHMToUtcMs(yTry, ym, dUse, 0, 0);
       if (ms >= todayStart) {
         found = ms;
         break;
@@ -190,6 +219,18 @@ function advanceAfterRun(doc, nowMs) {
     return {
       done: false,
       nextRunAtMs: chinaYMDHMToUtcMs(q.y, q.m, dUse, 0, 0),
+    };
+  }
+
+  if (r === "yearly") {
+    const ym = Math.min(12, Math.max(1, Number(doc.yearMonth) || 1));
+    const yd = Math.min(28, Math.max(1, Number(doc.yearDay) || 1));
+    const ny = p.y + 1;
+    const dim = daysInMonth(ny, ym);
+    const dUse = Math.min(yd, dim);
+    return {
+      done: false,
+      nextRunAtMs: chinaYMDHMToUtcMs(ny, ym, dUse, 0, 0),
     };
   }
 

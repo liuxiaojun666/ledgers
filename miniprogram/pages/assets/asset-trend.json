@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "净资产趋势"
+  "navigationBarTitleText": "净资产趋势",
+  "usingComponents": {
+    "ff-canvas": "/miniprogram_npm/@antv/f2-canvas/index"
+  }
 }

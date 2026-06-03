@@ -69,21 +69,24 @@
   color: #1f2940;
 }
 
-.chart-bars {
+.chart-canvas-wrap {
   margin-top: 16rpx;
-  height: 200rpx;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 10rpx;
+  width: 100%;
+  height: 400rpx;
 }
 
-.bar {
-  flex: 1 1 0;
-  max-width: 30px;
-  min-width: 0;
-  border-radius: 10rpx 10rpx 0 0;
-  background: linear-gradient(180deg, #9ec0ff 0%, #2a67ff 100%);
+ff-canvas {
+  width: 100%;
+  height: 400rpx;
+  display: block;
+}
+
+.chart-empty {
+  margin-top: 16rpx;
+  padding: 48rpx 0;
+  text-align: center;
+  font-size: 24rpx;
+  color: #94a3b8;
 }
 
 .axis-row {

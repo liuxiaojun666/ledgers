@@ -846,6 +846,20 @@ Component({
       });
     },
 
+    goLedgerAnalytics() {
+      const ledgerId = (this.properties.ledgerId || "").trim();
+      if (!ledgerId || this.data.loading || this.data.pendingApproval) {
+        return;
+      }
+      const app = getApp();
+      if (app && app.globalData) {
+        app.globalData.analyzePreferredLedgerId = ledgerId;
+      }
+      wx.switchTab({
+        url: "/pages/ledger-analytics/ledger-analytics",
+      });
+    },
+
     openDetailMenu() {
       const ledgerId = (this.properties.ledgerId || "").trim();
       if (!ledgerId || this.data.loading || this.data.pendingApproval) {

@@ -175,13 +175,24 @@
 
 .card-month-line {
   margin-top: 12rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6rpx;
   font-size: 24rpx;
-  line-height: 1.55;
-  color: #666666;
+  line-height: 1.4;
 }
 
-.card-month-label {
+.card-month-prefix {
   color: #888888;
+  font-weight: 400;
+}
+
+.card-month-income,
+.card-month-expense {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .card-month-income {

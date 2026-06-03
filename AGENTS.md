@@ -52,6 +52,7 @@
 - **定时记账关联资产（可选）**：`pages/ledger-schedule-edit` 同样拉取 `listAssetAccounts`，规则上可选 `assetAccountId`；**无资产账户时不展示「资产账户」行**（编辑时若规则仍关联已删除账户则展示）。`createSchedule`/`updateSchedule` 落库到 `ledger_schedules`，`executeScheduleDoc` 入账时走 `insertLedgerTransaction` + `applyLedgerCreateAssetLink`（与记一笔同链路，资产备注侧用「定时记账」文案）。列表页 `listMySchedules` 可展示 `assetAccountName` 便于辨识。
 - **定时记账分类选择交互**：`pages/ledger-schedule-edit` 同为底部弹窗 + 铺平网格，且随「支出/收入」切换仅展示对应 `expenseList`/`incomeList`；`status=completed` 时不打开弹窗并保持整行禁用观感。
 - **定时记账列表页新增入口**：`pages/ledger-schedules` 底部固定主按钮文案为「新家定时记账」，列表态与空态都可直接进入新建定时任务页。
+- **定时记账重复规则**：`pages/ledger-schedule-edit` 支持 `once` / `daily` / `weekly` / `monthly` / **`yearly`**；每年重复在 `ledger_schedules` 存 `yearMonth`（1–12）与 `yearDay`（1–28，与每月同日上限一致），`scheduleLib.computeInitialNextRun` / `advanceAfterRun` 与列表 `recurrenceText`（如「每年3月15日」）一致。
 - **月支出预算**：`ledgers.monthlyBudgetCents`（可选，分，自然月支出上限）；由创建者在 `pages/ledger-budget` 或 `components/ledger-detail-view` 标题「⋯」抽屉中维护，云函数 `updateLedgerMonthlyBudget`。
 - **账本改名入口**：仅创建者可见 `components/ledger-detail-view` 标题栏账本名称右侧「⋯」底部抽屉中的「修改账本名称」；`pages/ledger-manage` 不提供改名入口。
 - **多账本列表行**：`listLedgers` 返回每条 `monthIncomeCents` / `monthExpenseCents` / `monthSummaryLabel`（当月北京时间自然月，流水时间 `bookedAt ?? createdAt`；每账本最多 1000 条流水参与汇总，与 `analyzeLedger` 一致）；`design-exports-v2/jizhang.pen` 画板「01-账本列表」中卡片示意与列表布局对齐。列表卡片右侧仅保留「记一笔」按钮，并在右侧区域上下居中，不再展示「⋯」菜单。
