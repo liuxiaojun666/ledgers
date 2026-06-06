@@ -40,7 +40,7 @@
  *
  * 资产变动记录：小程序仅展示列表，不提供改删；`updateAssetRecord` / `deleteAssetRecord` 入口返回失败，修正请新增 `createAssetRecord` 或转账等。
  * 同账户新写入的 `asset_records.bookedAt` 不得早于该户 `openedAtMs` / `createdAt`（`createAssetRecord` / `createAssetTransfer` / 记一笔或编辑流水关联资产等路径校验；关联流水见 `insertLedgerTransaction` + `appendAssetRecordFromLedgerSource`）。
- * listAssetAccounts、getAssetDashboard：账户顺序按 `balanceCents` 降序，同分按 `updatedAt` 新在前；库内 `sortOrder` 仅新建默认等兼容，不再作为列表排序主键。`listAssetAccounts` 可选 `archivedOnly: true` 仅查已归档；默认（或与 `includeArchived: true` 同传时以 `archivedOnly` 优先）为**未归档**（`archived` 非真）；`includeArchived: true` 且**未**传 `archivedOnly` 时为含已归档的**全部**（兼容旧客户端）。`getAssetDashboard` 成功时还返回 `monthOverPrevMonthNetWorthPct`：当前用户 `asset_snapshots` 按 `month` 排序的最后两个月净资产快照的环比小数百分数，不足两个月或上期净资产近似 0 时为 `null`（不在此接口内触发 `rebuildAssetSnapshots`）。
+ * listAssetAccounts、getAssetDashboard：账户顺序按 `balanceCents` 降序，同分按 `updatedAt` 新在前；库内 `sortOrder` 仅新建默认等兼容，不再作为列表排序主键。`listAssetAccounts` 可选 `archivedOnly: true` 仅查已归档；默认（或与 `includeArchived: true` 同传时以 `archivedOnly` 优先）为**未归档**（`archived` 非真）；`includeArchived: true` 且**未**传 `archivedOnly` 时为含已归档的**全部**（兼容旧客户端）。`getAssetDashboard` 的 `totalAssetsCents` / `totalLiabilitiesCents` / `netWorthCents` 与类型分组仅统计 `includeInNetWorth !== false` 的账户，列表仍返回全部可见账户。成功时还返回 `monthOverPrevMonthNetWorthPct`：当前用户 `asset_snapshots` 按 `month` 排序的最后两个月净资产快照的环比小数百分数，不足两个月或上期净资产近似 0 时为 `null`（不在此接口内触发 `rebuildAssetSnapshots`）。
  * asset_snapshots：重算时按月聚合状态全量走内存，**仅落库最近 ASSET_SNAPSHOT_PERSIST_MAX（与 listNetWorthTrend 条数一致）** 个月。新建账户的期初行 `bookedAt` 为开户时刻，旧数据若曾锚在 2000-01 由 `rebuildAssetAccountBalanceChain` 在可安全时修正。
  */
 const cloud = require("wx-server-sdk");
@@ -1228,7 +1228,10 @@ async function listAssetAccounts(openid, event) {
     .where(where)
     .limit(200)
     .get();
-  const rows = sortAssetAccountRowsByBalanceDesc(res.data || []);
+  const rows = await attachOutboundShareMemberCounts(
+    openid,
+    sortAssetAccountRowsByBalanceDesc(res.data || [])
+  );
   return { success: true, list: rows };
 }
 
@@ -1419,6 +1422,9 @@ async function getAssetDashboard(openid, event) {
     const [personalRows, sharedRows] = await Promise.all([loadPersonalRows(), loadSharedRows()]);
     rows = personalRows.concat(sharedRows);
   }
+  if (scope !== "shared") {
+    rows = await attachOutboundShareMemberCounts(openid, rows);
+  }
   let totalAssetsCents = 0;
   let totalLiabilitiesCents = 0;
   const assetTypeMap = {};
@@ -1429,14 +1435,19 @@ async function getAssetDashboard(openid, event) {
     const row = rows[i];
     const amount = Number(row.balanceCents) || 0;
     const type = normalizeAssetAccountType(row.type) || "other";
+    const countsTowardNetWorth = row.includeInNetWorth !== false;
     if (row.kind === "liability") {
       liabilityAccounts.push(row);
-      totalLiabilitiesCents += amount;
-      liabilityTypeMap[type] = (liabilityTypeMap[type] || 0) + amount;
+      if (countsTowardNetWorth) {
+        totalLiabilitiesCents += amount;
+        liabilityTypeMap[type] = (liabilityTypeMap[type] || 0) + amount;
+      }
     } else {
       assetAccounts.push(row);
-      totalAssetsCents += amount;
-      assetTypeMap[type] = (assetTypeMap[type] || 0) + amount;
+      if (countsTowardNetWorth) {
+        totalAssetsCents += amount;
+        assetTypeMap[type] = (assetTypeMap[type] || 0) + amount;
+      }
     }
   }
   const netWorthCents = totalAssetsCents - totalLiabilitiesCents;
@@ -2006,6 +2017,116 @@ async function exitAssetAccountShare(openid, event) {
   const sid = assetAccountShareDocId(openid, accountId);
   await db.collection("asset_account_shares").doc(sid).remove();
   return { success: true };
+}
+
+async function transferAssetAccountOwnership(openid, event) {
+  const accountId = String((event && event.accountId) || "").trim();
+  const newOwnerOpenid = String((event && event.newOwnerOpenid) || "").trim();
+  const gate = await assertAssetAccountOwner(openid, accountId);
+  if (!gate.ok) {
+    return { success: false, errMsg: gate.errMsg };
+  }
+  const account = gate.account;
+  if (account.archived === true) {
+    return { success: false, errMsg: "已归档账户不可转让户主" };
+  }
+  if (!newOwnerOpenid) {
+    return { success: false, errMsg: "缺少新户主" };
+  }
+  const oldOwnerOpenid = openid;
+  if (newOwnerOpenid === oldOwnerOpenid) {
+    return { success: false, errMsg: "不能转让给自己" };
+  }
+  const newOwnerShareId = assetAccountShareDocId(newOwnerOpenid, accountId);
+  let newOwnerShare = null;
+  try {
+    const shareDoc = await db.collection("asset_account_shares").doc(newOwnerShareId).get();
+    newOwnerShare = shareDoc.data || null;
+  } catch (e) {
+    newOwnerShare = null;
+  }
+  if (!newOwnerShare || String(newOwnerShare.status || "") !== "active") {
+    return { success: false, errMsg: "新户主必须是当前共享成员" };
+  }
+  const oldOwnerShareId = assetAccountShareDocId(oldOwnerOpenid, accountId);
+  try {
+    await db.runTransaction(async (transaction) => {
+      const accDoc = await transaction.collection("asset_accounts").doc(accountId).get();
+      const accRow = accDoc && accDoc.data;
+      if (!accRow || String(accRow.ownerOpenid || "") !== oldOwnerOpenid) {
+        throw new Error("账户状态已变更，请刷新后重试");
+      }
+      await transaction.collection("asset_accounts").doc(accountId).update({
+        data: { ownerOpenid: newOwnerOpenid, updatedAt: db.serverDate() },
+      });
+      await transaction.collection("asset_account_shares").doc(newOwnerShareId).remove();
+      await transaction.collection("asset_account_shares").doc(oldOwnerShareId).set({
+        data: {
+          accountId,
+          ownerOpenid: newOwnerOpenid,
+          memberOpenid: oldOwnerOpenid,
+          role: normalizeAssetShareRole("viewer"),
+          status: "active",
+          invitedBy: newOwnerOpenid,
+          joinedAt: db.serverDate(),
+          updatedAt: db.serverDate(),
+        },
+      });
+    });
+  } catch (e) {
+    const msg = e && e.message ? String(e.message) : "转让失败";
+    return { success: false, errMsg: msg };
+  }
+  const recordsRes = await db
+    .collection("asset_records")
+    .where({ ownerOpenid: oldOwnerOpenid, accountId })
+    .limit(2000)
+    .get();
+  const records = recordsRes.data || [];
+  for (let i = 0; i < records.length; i += 1) {
+    const row = records[i];
+    await db.collection("asset_records").doc(String(row._id)).update({
+      data: { ownerOpenid: newOwnerOpenid, updatedAt: db.serverDate() },
+    });
+  }
+  const allSharesRes = await db
+    .collection("asset_account_shares")
+    .where({ accountId, status: "active" })
+    .limit(200)
+    .get();
+  const allShares = allSharesRes.data || [];
+  for (let i = 0; i < allShares.length; i += 1) {
+    const row = allShares[i];
+    if (String(row.ownerOpenid || "") === newOwnerOpenid) {
+      continue;
+    }
+    await db.collection("asset_account_shares").doc(String(row._id)).update({
+      data: { ownerOpenid: newOwnerOpenid, updatedAt: db.serverDate() },
+    });
+  }
+  const invRes = await db
+    .collection("asset_account_share_invites")
+    .where({ accountId, status: "active" })
+    .limit(50)
+    .get();
+  const invites = invRes.data || [];
+  for (let i = 0; i < invites.length; i += 1) {
+    await db.collection("asset_account_share_invites").doc(String(invites[i]._id)).update({
+      data: { status: "revoked", updatedAt: db.serverDate() },
+    });
+  }
+  const rebuilt = await rebuildAssetAccountBalanceChain(newOwnerOpenid, accountId);
+  if (!rebuilt.ok) {
+    return { success: false, errMsg: rebuilt.errMsg || "转让后重算失败" };
+  }
+  await rebuildAssetSnapshots(oldOwnerOpenid);
+  await rebuildAssetSnapshots(newOwnerOpenid);
+  return {
+    success: true,
+    accountId,
+    newOwnerOpenid,
+    previousOwnerOpenid: oldOwnerOpenid,
+  };
 }
 
 function normalizeLedgerCategoryName(raw) {
@@ -2608,6 +2729,8 @@ exports.main = async (event) => {
         return await removeAssetAccountShareMember(openid, event);
       case "exitAssetAccountShare":
         return await exitAssetAccountShare(openid, event);
+      case "transferAssetAccountOwnership":
+        return await transferAssetAccountOwnership(openid, event);
       default:
         return { success: false, errMsg: "未知 type" };
     }
@@ -3683,25 +3806,45 @@ function formatNextRunChinaText(ms) {
 }
 
 function recurrenceLabel(rec, row) {
+  const wdLabels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
   if (rec === "once") {
     return "一次性";
   }
   if (rec === "daily") {
-    return "每天";
+    const di = scheduleLib.normalizeDayInterval(row && row.dayInterval);
+    return di === 1 ? "天" : `每${di}天`;
   }
   if (rec === "weekly") {
-    return "每周";
+    const wi = scheduleLib.normalizeWeekInterval(row && row.weekInterval);
+    const wd =
+      row && row.weekday != null ? (((Number(row.weekday) || 0) % 7) + 7) % 7 : NaN;
+    const intervalText = wi === 1 ? "每" : wi === 2 ? "每二" : "每三";
+    if (Number.isFinite(wd) && wd >= 0 && wd <= 6) {
+      return `${intervalText}周${wdLabels[wd]}`;
+    }
+    return wi === 1 ? "周" : wi === 2 ? "每二周" : "每三周";
   }
   if (rec === "monthly") {
-    return "每月";
+    const mi = scheduleLib.normalizeMonthInterval(row && row.monthInterval);
+    const md = row && row.monthDay != null ? Number(row.monthDay) : NaN;
+    if (mi === 1 && md >= 1 && md <= 28) {
+      return `月${md}日`;
+    }
+    if (md >= 1 && md <= 28) {
+      return `每${mi}个月${md}日`;
+    }
+    return mi === 1 ? "月" : `每${mi}个月`;
+  }
+  if (rec === "semi_monthly") {
+    return "每半月（1日、15日）";
   }
   if (rec === "yearly") {
     const m = row && row.yearMonth != null ? Number(row.yearMonth) : NaN;
     const d = row && row.yearDay != null ? Number(row.yearDay) : NaN;
     if (m >= 1 && m <= 12 && d >= 1 && d <= 28) {
-      return `每年${m}月${d}日`;
+      return `年${m}月${d}日`;
     }
-    return "每年";
+    return "年";
   }
   return rec;
 }
@@ -3728,10 +3871,13 @@ function formatScheduleRow(r, ledgerName) {
     assetAccountName: r.assetAccountName ? String(r.assetAccountName).slice(0, 64) : "",
     recurrence: r.recurrence,
     recurrenceText: recurrenceLabel(r.recurrence, r),
+    dayInterval: r.dayInterval,
     hour: r.hour,
     minute: r.minute,
     weekday: r.weekday,
+    weekInterval: r.weekInterval,
     monthDay: r.monthDay,
+    monthInterval: r.monthInterval,
     yearMonth: r.yearMonth,
     yearDay: r.yearDay,
     onceDate: r.onceDate || "",
@@ -3788,8 +3934,11 @@ async function getSchedule(openid, event) {
       recurrence: doc.recurrence,
       hour: doc.hour,
       minute: doc.minute,
+      dayInterval: doc.dayInterval,
       weekday: doc.weekday,
+      weekInterval: doc.weekInterval,
       monthDay: doc.monthDay,
+      monthInterval: doc.monthInterval,
       yearMonth: doc.yearMonth,
       yearDay: doc.yearDay,
       onceDate: doc.onceDate || "",
@@ -3860,6 +4009,9 @@ async function createSchedule(openid, event) {
     monthDay: event.monthDay,
     yearMonth: event.yearMonth,
     yearDay: event.yearDay,
+    weekInterval: event.weekInterval,
+    monthInterval: event.monthInterval,
+    dayInterval: event.dayInterval,
     onceYear: onceY,
     onceMonth: onceM,
     onceDay: onceD,
@@ -3889,13 +4041,25 @@ async function createSchedule(openid, event) {
       recurrence,
       hour: 0,
       minute: 0,
+      dayInterval:
+        recurrence === "daily"
+          ? scheduleLib.normalizeDayInterval(event.dayInterval)
+          : null,
       weekday:
         recurrence === "weekly"
           ? (((Number(event.weekday) || 0) % 7) + 7) % 7
           : null,
+      weekInterval:
+        recurrence === "weekly"
+          ? scheduleLib.normalizeWeekInterval(event.weekInterval)
+          : null,
       monthDay:
         recurrence === "monthly"
           ? Math.min(28, Math.max(1, Number(event.monthDay) || 1))
+          : null,
+      monthInterval:
+        recurrence === "monthly"
+          ? scheduleLib.normalizeMonthInterval(event.monthInterval)
           : null,
       yearMonth:
         recurrence === "yearly"
@@ -4030,6 +4194,12 @@ async function updateSchedule(openid, event) {
       monthDay: event.monthDay != null ? event.monthDay : doc.monthDay,
       yearMonth: event.yearMonth != null ? event.yearMonth : doc.yearMonth,
       yearDay: event.yearDay != null ? event.yearDay : doc.yearDay,
+      weekInterval:
+        event.weekInterval != null ? event.weekInterval : doc.weekInterval,
+      monthInterval:
+        event.monthInterval != null ? event.monthInterval : doc.monthInterval,
+      dayInterval:
+        event.dayInterval != null ? event.dayInterval : doc.dayInterval,
       onceYear: onceY,
       onceMonth: onceM,
       onceDay: onceD,
@@ -4041,6 +4211,12 @@ async function updateSchedule(openid, event) {
     patch.hour = 0;
     patch.minute = 0;
     patch.nextRunAt = new Date(comp.nextRunAtMs);
+    patch.dayInterval =
+      recurrence === "daily"
+        ? scheduleLib.normalizeDayInterval(
+            event.dayInterval != null ? event.dayInterval : doc.dayInterval
+          )
+        : null;
     patch.weekday =
       recurrence === "weekly"
         ? (((Number(event.weekday != null ? event.weekday : doc.weekday) ||
@@ -4049,11 +4225,23 @@ async function updateSchedule(openid, event) {
             7) %
           7
         : null;
+    patch.weekInterval =
+      recurrence === "weekly"
+        ? scheduleLib.normalizeWeekInterval(
+            event.weekInterval != null ? event.weekInterval : doc.weekInterval
+          )
+        : null;
     patch.monthDay =
       recurrence === "monthly"
         ? Math.min(
             28,
             Math.max(1, Number(event.monthDay != null ? event.monthDay : doc.monthDay) || 1)
+          )
+        : null;
+    patch.monthInterval =
+      recurrence === "monthly"
+        ? scheduleLib.normalizeMonthInterval(
+            event.monthInterval != null ? event.monthInterval : doc.monthInterval
           )
         : null;
     patch.yearMonth =
@@ -4802,6 +4990,50 @@ function ownerProfileFieldsFromMap(profileMap, ownerOpenid) {
   };
 }
 
+async function attachOutboundShareMemberCounts(ownerOpenid, rows) {
+  const owner = String(ownerOpenid || "").trim();
+  const list = Array.isArray(rows) ? rows : [];
+  if (!owner || !list.length) {
+    return list;
+  }
+  const hasOwnedRow = list.some((row) => {
+    if (String(row.ownerOpenid || "").trim() !== owner) {
+      return false;
+    }
+    return String(row.shareRole || "").trim() !== "viewer";
+  });
+  if (!hasOwnedRow) {
+    return list;
+  }
+  const shareRes = await db
+    .collection("asset_account_shares")
+    .where({ ownerOpenid: owner, status: "active" })
+    .limit(500)
+    .get();
+  const countByAccountId = {};
+  (shareRes.data || []).forEach((row) => {
+    const aid = String(row.accountId || "").trim();
+    if (!aid) {
+      return;
+    }
+    countByAccountId[aid] = (countByAccountId[aid] || 0) + 1;
+  });
+  return list.map((row) => {
+    if (String(row.ownerOpenid || "").trim() !== owner) {
+      return row;
+    }
+    if (String(row.shareRole || "").trim() === "viewer") {
+      return row;
+    }
+    const aid = String(row._id || "").trim();
+    const shareMemberCount = aid ? countByAccountId[aid] || 0 : 0;
+    if (!shareMemberCount) {
+      return row;
+    }
+    return { ...row, shareMemberCount };
+  });
+}
+
 async function attachOwnerProfilesToAssetRows(rows) {
   const ownerIds = [
     ...new Set((rows || []).map((r) => String(r.ownerOpenid || "").trim()).filter(Boolean)),
@@ -5425,8 +5657,18 @@ async function updateTransaction(openid, event) {
   if (!transactionEditableByCaller(openid, g.tx, g.ledger)) {
     return { success: false, errMsg: "只能编辑或删除本人记录的流水" };
   }
+  const newLedgerIdRaw =
+    event.newLedgerId != null ? normalizeLedgerId(event.newLedgerId) : "";
+  const targetLedgerId =
+    newLedgerIdRaw && newLedgerIdRaw !== ledgerId ? newLedgerIdRaw : ledgerId;
+  if (targetLedgerId !== ledgerId) {
+    const targetGate = await assertMember(openid, targetLedgerId);
+    if (!targetGate.ok) {
+      return { success: false, errMsg: targetGate.errMsg || "无权访问目标账本" };
+    }
+  }
   const catCheck = await assertCategoryAllowedForLedgerWithFlow(
-    ledgerId,
+    targetLedgerId,
     event.category,
     flow
   );
@@ -5449,6 +5691,9 @@ async function updateTransaction(openid, event) {
     category,
     note,
   };
+  if (targetLedgerId !== ledgerId) {
+    updateData.ledgerId = targetLedgerId;
+  }
   if (bookedAtPatch) {
     updateData.bookedAt = bookedAtPatch;
   }
@@ -5502,7 +5747,7 @@ async function updateTransaction(openid, event) {
   }
   const ar = await applyLedgerUpdateAssetSideEffects(
     openid,
-    ledgerId,
+    targetLedgerId,
     txId,
     g.tx,
     merged

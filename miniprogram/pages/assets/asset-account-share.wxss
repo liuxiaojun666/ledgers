@@ -145,6 +145,10 @@
   color: #1d5fff;
 }
 
+.link.transfer {
+  color: #c76a00;
+}
+
 .link.danger {
   color: #d33b3b;
 }

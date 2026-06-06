@@ -32,6 +32,12 @@
           </view>
           <view class="actions">
             <view
+              class="link transfer"
+              bindtap="onTransferOwnership"
+              data-id="{{item.memberOpenid}}"
+              data-name="{{item.displayName}}"
+            >转让户主</view>
+            <view
               class="link danger"
               bindtap="onRemove"
               data-id="{{item.memberOpenid}}"

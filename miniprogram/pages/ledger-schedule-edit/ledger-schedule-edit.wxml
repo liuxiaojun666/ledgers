@@ -52,10 +52,28 @@
         <view class="field-value">{{onceDate}}</view>
       </view>
     </picker>
+    <picker wx:if="{{recurrenceIndex === 1}}" mode="selector" range="{{dayIntervalLabels}}" value="{{dayIntervalIndex}}" bindchange="onDayIntervalChange" disabled="{{status === 'completed'}}">
+      <view class="field-row">
+        <text class="field-label">间隔</text>
+        <view class="field-value">{{dayIntervalLabels[dayIntervalIndex]}}</view>
+      </view>
+    </picker>
+    <picker wx:if="{{recurrenceIndex === 2}}" mode="selector" range="{{weekIntervalLabels}}" value="{{weekIntervalIndex}}" bindchange="onWeekIntervalChange" disabled="{{status === 'completed'}}">
+      <view class="field-row">
+        <text class="field-label">间隔</text>
+        <view class="field-value">{{weekIntervalLabels[weekIntervalIndex]}}</view>
+      </view>
+    </picker>
     <picker wx:if="{{recurrenceIndex === 2}}" mode="selector" range="{{weekdayLabels}}" value="{{weekdayIndex}}" bindchange="onWeekdayChange" disabled="{{status === 'completed'}}">
       <view class="field-row">
         <text class="field-label">星期</text>
         <view class="field-value">{{weekdayLabels[weekdayIndex]}}</view>
+      </view>
+    </picker>
+    <picker wx:if="{{recurrenceIndex === 3}}" mode="selector" range="{{monthIntervalLabels}}" value="{{monthIntervalIndex}}" bindchange="onMonthIntervalChange" disabled="{{status === 'completed'}}">
+      <view class="field-row">
+        <text class="field-label">间隔</text>
+        <view class="field-value">{{monthIntervalLabels[monthIntervalIndex]}}</view>
       </view>
     </picker>
     <picker wx:if="{{recurrenceIndex === 3}}" mode="selector" range="{{monthDayLabels}}" value="{{monthDayIndex}}" bindchange="onMonthDayChange" disabled="{{status === 'completed'}}">
@@ -64,13 +82,13 @@
         <view class="field-value">{{monthDayLabels[monthDayIndex]}}</view>
       </view>
     </picker>
-    <picker wx:if="{{recurrenceIndex === 4}}" mode="selector" range="{{yearMonthLabels}}" value="{{yearMonthIndex}}" bindchange="onYearMonthChange" disabled="{{status === 'completed'}}">
+    <picker wx:if="{{recurrenceIndex === 5}}" mode="selector" range="{{yearMonthLabels}}" value="{{yearMonthIndex}}" bindchange="onYearMonthChange" disabled="{{status === 'completed'}}">
       <view class="field-row">
         <text class="field-label">月份</text>
         <view class="field-value">{{yearMonthLabels[yearMonthIndex]}}</view>
       </view>
     </picker>
-    <picker wx:if="{{recurrenceIndex === 4}}" mode="selector" range="{{yearDayLabels}}" value="{{yearDayIndex}}" bindchange="onYearDayChange" disabled="{{status === 'completed'}}">
+    <picker wx:if="{{recurrenceIndex === 5}}" mode="selector" range="{{yearDayLabels}}" value="{{yearDayIndex}}" bindchange="onYearDayChange" disabled="{{status === 'completed'}}">
       <view class="field-row">
         <text class="field-label">日期</text>
         <view class="field-value">{{yearDayLabels[yearDayIndex]}}</view>
@@ -84,7 +102,7 @@
       <text class="field-label">启用</text>
       <switch checked="{{enabled}}" bindchange="onEnabledChange" disabled="{{status === 'completed'}}" />
     </view>
-    <view class="tip">执行日以北京时间为准，精确到日期（每天凌晨批量检查）；每月/每年重复仅支持 1～28 日。</view>
+    <view class="tip">执行日以北京时间为准，精确到日期（每天凌晨批量检查）；每月/每年重复仅支持 1～28 日；半月为每月 1 日与 15 日。</view>
     <button wx:if="{{mode === 'edit'}}" class="btn-danger" bindtap="onDelete" loading="{{deleting}}">
       删除定时
     </button>

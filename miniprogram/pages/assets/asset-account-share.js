@@ -32,6 +32,7 @@ Page({
     role: "owner",
     inviteCode: "",
     members: [],
+    transferring: false,
   },
 
   onLoad(options) {
@@ -176,6 +177,66 @@ Page({
       })
       .catch(() => wx.showToast({ title: "加入失败", icon: "none" }))
       .finally(() => this.setData({ joining: false }));
+  },
+
+  onTransferOwnership(e) {
+    const memberOpenid = String((e.currentTarget.dataset || {}).id || "").trim();
+    const displayName = String((e.currentTarget.dataset || {}).name || "").trim();
+    if (!memberOpenid || this.data.transferring) {
+      return;
+    }
+    const nameHint = displayName ? `「${displayName}」` : "该成员";
+    wx.showModal({
+      title: "转让户主",
+      content: `确定要将户主转让给${nameHint}吗？转让后该成员将成为户主，你将变为只读共享成员。`,
+      confirmText: "继续",
+      success: (res) => {
+        if (!res.confirm) {
+          return;
+        }
+        wx.showModal({
+          title: "确认转让",
+          content: "此操作不可撤销。确认后将立即生效，你将失去对该账户的管理权限。",
+          confirmText: "确认转让",
+          confirmColor: "#e54545",
+          success: (res2) => {
+            if (!res2.confirm) {
+              return;
+            }
+            this.setData({ transferring: true });
+            wx.cloud
+              .callFunction({
+                name: "ledgerFunctions",
+                data: {
+                  type: "transferAssetAccountOwnership",
+                  accountId: this.data.accountId,
+                  newOwnerOpenid: memberOpenid,
+                },
+              })
+              .then((resp) => {
+                const r = resp.result || {};
+                if (!r.success) {
+                  wx.showToast({ title: r.errMsg || "转让失败", icon: "none" });
+                  return;
+                }
+                wx.showToast({ title: "户主已转让" });
+                setTimeout(() => {
+                  wx.redirectTo({
+                    url: buildAssetAccountDetailUrl({
+                      accountId: this.data.accountId,
+                      accountName: this.data.accountName,
+                      scope: "shared",
+                      role: "viewer",
+                    }),
+                  });
+                }, 250);
+              })
+              .catch(() => wx.showToast({ title: "转让失败", icon: "none" }))
+              .finally(() => this.setData({ transferring: false }));
+          },
+        });
+      },
+    });
   },
 
   onRemove(e) {

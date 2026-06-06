@@ -17,6 +17,18 @@
       </view>
     </view>
   </view>
+  <view wx:if="{{ledgerNames.length}}" class="field row field-select">
+    <view class="label-with-icon">
+      <text class="field-icon">📒</text>
+      <text class="label-row">账本</text>
+    </view>
+    <picker mode="selector" range="{{ledgerNames}}" value="{{ledgerIndex}}" bindchange="onLedgerPickerChange">
+      <view class="picker-value">
+        {{ledgerNames[ledgerIndex] || "选择账本"}}
+        >
+      </view>
+    </picker>
+  </view>
   <view class="field amount-field">
     <text class="label">金额</text>
     <input class="amount-input" type="digit" placeholder="¥ 0.00" value="{{amountInput}}" bindinput="onAmountInput" />

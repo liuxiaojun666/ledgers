@@ -17,6 +17,26 @@ function buildMonthDayLabels() {
   return out;
 }
 
+function buildDayIntervalLabels() {
+  const out = [];
+  for (let i = 1; i <= 10; i += 1) {
+    out.push(`${i}天`);
+  }
+  return out;
+}
+
+function buildMonthIntervalLabels() {
+  const out = [];
+  for (let i = 1; i <= 11; i += 1) {
+    out.push(i === 1 ? "一个月" : `${i}个月`);
+  }
+  return out;
+}
+
+function buildWeekIntervalLabels() {
+  return ["一周", "二周", "三周"];
+}
+
 function buildYearMonthLabels() {
   const out = [];
   for (let i = 1; i <= 12; i += 1) {
@@ -51,14 +71,20 @@ Page({
     note: "",
     flowLabels: ["支出", "收入"],
     flowIndex: 0,
-    recurrenceLabels: ["一次性", "每天", "每周", "每月", "每年"],
-    recurrenceValues: ["once", "daily", "weekly", "monthly", "yearly"],
+    recurrenceLabels: ["一次性", "天", "周", "月", "半月", "年"],
+    recurrenceValues: ["once", "daily", "weekly", "monthly", "semi_monthly", "yearly"],
     recurrenceIndex: 1,
     onceDate: todayStr(),
+    dayIntervalLabels: buildDayIntervalLabels(),
+    dayIntervalIndex: 0,
     weekdayLabels: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
     weekdayIndex: 1,
+    weekIntervalLabels: buildWeekIntervalLabels(),
+    weekIntervalIndex: 0,
     monthDayLabels: buildMonthDayLabels(),
     monthDayIndex: 0,
+    monthIntervalLabels: buildMonthIntervalLabels(),
+    monthIntervalIndex: 0,
     yearMonthLabels: buildYearMonthLabels(),
     yearMonthIndex: 0,
     yearDayLabels: buildYearDayLabels(),
@@ -296,10 +322,16 @@ Page({
 
   fillFromRaw(raw, schedule) {
     const riv = this.data.recurrenceValues.indexOf(raw.recurrence);
+    const di = raw.dayInterval != null ? Number(raw.dayInterval) : 1;
+    const dayIntervalIndex = Math.min(9, Math.max(0, di - 1));
     const wd = raw.weekday != null ? Number(raw.weekday) : 1;
     const weekdayIndex = ((wd % 7) + 7) % 7;
+    const wi = raw.weekInterval != null ? Number(raw.weekInterval) : 1;
+    const weekIntervalIndex = Math.min(2, Math.max(0, wi - 1));
     const md = raw.monthDay != null ? Number(raw.monthDay) : 1;
     const monthDayIndex = Math.min(27, Math.max(0, md - 1));
+    const mi = raw.monthInterval != null ? Number(raw.monthInterval) : 1;
+    const monthIntervalIndex = Math.min(10, Math.max(0, mi - 1));
     const ym = raw.yearMonth != null ? Number(raw.yearMonth) : 1;
     const yearMonthIndex = Math.min(11, Math.max(0, ym - 1));
     const yd = raw.yearDay != null ? Number(raw.yearDay) : 1;
@@ -328,8 +360,11 @@ Page({
         flowIndex: raw.flow === "income" ? 1 : 0,
         recurrenceIndex: riv >= 0 ? riv : 1,
         onceDate: raw.onceDate || todayStr(),
+        dayIntervalIndex,
         weekdayIndex,
+        weekIntervalIndex,
         monthDayIndex,
+        monthIntervalIndex,
         yearMonthIndex,
         yearDayIndex,
         enabled: raw.enabled !== false,
@@ -418,12 +453,24 @@ Page({
     this.setData({ onceDate: e.detail.value });
   },
 
+  onDayIntervalChange(e) {
+    this.setData({ dayIntervalIndex: Number(e.detail.value) });
+  },
+
   onWeekdayChange(e) {
     this.setData({ weekdayIndex: Number(e.detail.value) });
   },
 
+  onWeekIntervalChange(e) {
+    this.setData({ weekIntervalIndex: Number(e.detail.value) });
+  },
+
   onMonthDayChange(e) {
     this.setData({ monthDayIndex: Number(e.detail.value) });
+  },
+
+  onMonthIntervalChange(e) {
+    this.setData({ monthIntervalIndex: Number(e.detail.value) });
   },
 
   onYearMonthChange(e) {
@@ -454,8 +501,11 @@ Page({
       recurrenceValues,
       recurrenceIndex,
       onceDate,
+      dayIntervalIndex,
       weekdayIndex,
+      weekIntervalIndex,
       monthDayIndex,
+      monthIntervalIndex,
       yearMonthIndex,
       yearDayIndex,
       enabled,
@@ -497,11 +547,16 @@ Page({
       note: String(note || "").trim(),
       recurrence,
     };
+    if (recurrence === "daily") {
+      payload.dayInterval = dayIntervalIndex + 1;
+    }
     if (recurrence === "weekly") {
       payload.weekday = weekdayIndex;
+      payload.weekInterval = weekIntervalIndex + 1;
     }
     if (recurrence === "monthly") {
       payload.monthDay = monthDayIndex + 1;
+      payload.monthInterval = monthIntervalIndex + 1;
     }
     if (recurrence === "yearly") {
       payload.yearMonth = yearMonthIndex + 1;

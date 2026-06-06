@@ -67,6 +67,7 @@ function normalizeRecurrence(r) {
     r === "daily" ||
     r === "weekly" ||
     r === "monthly" ||
+    r === "semi_monthly" ||
     r === "yearly"
   ) {
     return r;
@@ -74,11 +75,38 @@ function normalizeRecurrence(r) {
   return "daily";
 }
 
+function normalizeWeekInterval(v) {
+  const n = Math.floor(Number(v) || 1);
+  if (n === 2 || n === 3) {
+    return n;
+  }
+  return 1;
+}
+
+function normalizeMonthInterval(v) {
+  const n = Math.floor(Number(v) || 1);
+  if (n >= 1 && n <= 11) {
+    return n;
+  }
+  return 1;
+}
+
+function normalizeDayInterval(v) {
+  const n = Math.floor(Number(v) || 1);
+  if (n >= 1 && n <= 10) {
+    return n;
+  }
+  return 1;
+}
+
 /**
  * 新建时计算首次 nextRunAt（北京时间 0:00 的日历日，不按时分）
  * weekday: 0-6 周日-周六（与小程序 picker 一致）
  * monthDay: 1-28
  * yearMonth: 1-12；yearDay: 1-28（每年重复）
+ * weekInterval: 1-3（每 N 周，仅 weekly）
+ * monthInterval: 1-11（每 N 月，仅 monthly）
+ * dayInterval: 1-10（每 N 天，仅 daily）
  * onceDate: "YYYY-MM-DD"
  */
 function computeInitialNextRun({
@@ -88,6 +116,8 @@ function computeInitialNextRun({
   monthDay,
   yearMonth,
   yearDay,
+  weekInterval,
+  monthInterval,
   onceYear,
   onceMonth,
   onceDay,
@@ -136,6 +166,33 @@ function computeInitialNextRun({
       const ms = chinaYMDHMToUtcMs(q.y, q.m, dUse, 0, 0);
       if (ms >= todayStart) {
         found = ms;
+        break;
+      }
+    }
+    if (found == null) {
+      return { ok: false, errMsg: "无法计算下次执行时间" };
+    }
+    return { ok: true, nextRunAtMs: found };
+  }
+
+  if (r === "semi_monthly") {
+    let found = null;
+    for (let k = 0; k < 24; k += 1) {
+      const q = addCalendarMonthsClampDay(p.y, p.m, 1, k, 1);
+      for (let di = 0; di < 2; di += 1) {
+        const day = di === 0 ? 1 : 15;
+        const dim = daysInMonth(q.y, q.m);
+        if (day > dim) {
+          continue;
+        }
+        const ms = chinaYMDHMToUtcMs(q.y, q.m, day, 0, 0);
+        if (ms >= todayStart) {
+          if (found == null || ms < found) {
+            found = ms;
+          }
+        }
+      }
+      if (found != null) {
         break;
       }
     }
@@ -196,7 +253,8 @@ function advanceAfterRun(doc, nowMs) {
   }
 
   if (r === "daily") {
-    const q = addCalendarDaysChina(p.y, p.m, p.d, 1);
+    const di = normalizeDayInterval(doc.dayInterval);
+    const q = addCalendarDaysChina(p.y, p.m, p.d, di);
     return {
       done: false,
       nextRunAtMs: chinaYMDHMToUtcMs(q.y, q.m, q.d, 0, 0),
@@ -204,7 +262,8 @@ function advanceAfterRun(doc, nowMs) {
   }
 
   if (r === "weekly") {
-    const q = addCalendarDaysChina(p.y, p.m, p.d, 7);
+    const wi = normalizeWeekInterval(doc.weekInterval);
+    const q = addCalendarDaysChina(p.y, p.m, p.d, 7 * wi);
     return {
       done: false,
       nextRunAtMs: chinaYMDHMToUtcMs(q.y, q.m, q.d, 0, 0),
@@ -213,12 +272,29 @@ function advanceAfterRun(doc, nowMs) {
 
   if (r === "monthly") {
     const md = Math.min(28, Math.max(1, Number(doc.monthDay) || 1));
-    const q = addCalendarMonthsClampDay(p.y, p.m, p.d, 1, md);
+    const mi = normalizeMonthInterval(doc.monthInterval);
+    const q = addCalendarMonthsClampDay(p.y, p.m, p.d, mi, md);
     const dim = daysInMonth(q.y, q.m);
     const dUse = Math.min(md, dim);
     return {
       done: false,
       nextRunAtMs: chinaYMDHMToUtcMs(q.y, q.m, dUse, 0, 0),
+    };
+  }
+
+  if (r === "semi_monthly") {
+    if (p.d < 15) {
+      const dim = daysInMonth(p.y, p.m);
+      const dUse = Math.min(15, dim);
+      return {
+        done: false,
+        nextRunAtMs: chinaYMDHMToUtcMs(p.y, p.m, dUse, 0, 0),
+      };
+    }
+    const q = addCalendarMonthsClampDay(p.y, p.m, 1, 1, 1);
+    return {
+      done: false,
+      nextRunAtMs: chinaYMDHMToUtcMs(q.y, q.m, q.d, 0, 0),
     };
   }
 
@@ -262,6 +338,9 @@ module.exports = {
   getChinaYMDHM,
   chinaYMDHMToUtcMs,
   normalizeRecurrence,
+  normalizeWeekInterval,
+  normalizeMonthInterval,
+  normalizeDayInterval,
   computeInitialNextRun,
   advanceAfterRun,
   readFirestoreDateMs,

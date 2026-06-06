@@ -39,6 +39,19 @@ Component({
       type: String,
       value: "",
     },
+    /** 编辑时流水所在的原账本，保存换账本时作为 updateTransaction 的 ledgerId */
+    sourceLedgerId: {
+      type: String,
+      value: "",
+    },
+    ledgerNames: {
+      type: Array,
+      value: [],
+    },
+    ledgerIndex: {
+      type: Number,
+      value: 0,
+    },
     txId: {
       type: String,
       value: "",
@@ -317,6 +330,33 @@ Component({
       this.setData({ customEmojiInput: v });
     },
 
+    getCurrentCategoryName() {
+      const list = this.getListForCurrentFlow();
+      const ci = this.data.categoryIndex;
+      if (!list.length) {
+        return "";
+      }
+      const safe = Math.min(Math.max(0, ci), list.length - 1);
+      return list[safe] || "";
+    },
+
+    /** 切换账本后父页面刷新分类列表，尽量保留同名分类 */
+    onLedgerCategoriesReady(preferredName) {
+      this.rebuildActiveCategoryList(
+        typeof preferredName === "string" ? preferredName : ""
+      );
+      this.buildAssetPickerState();
+      this.applyAssetBookDateConstraints();
+    },
+
+    onLedgerPickerChange(e) {
+      const idx = Number(e.detail && e.detail.value);
+      if (!Number.isFinite(idx)) {
+        return;
+      }
+      this.triggerEvent("ledgerchange", { value: idx });
+    },
+
     /** 父页面在 categories 更新后调用，用于选中新加的分类（下标为当前收支下列表） */
     selectCategoryIndex(idx) {
       const list = this.getListForCurrentFlow();
@@ -539,21 +579,32 @@ Component({
           wx.showToast({ title: "参数错误", icon: "none" });
           return;
         }
+        const sourceLedgerId = String(
+          this.properties.sourceLedgerId || ledgerId || ""
+        ).trim();
+        if (!sourceLedgerId) {
+          wx.showToast({ title: "缺少账本", icon: "none" });
+          return;
+        }
+        const payload = {
+          type: "updateTransaction",
+          ledgerId: sourceLedgerId,
+          txId,
+          amountCents,
+          flow,
+          category,
+          note,
+          bookedAtMs,
+          assetAccountId: linkId,
+        };
+        if (ledgerId && ledgerId !== sourceLedgerId) {
+          payload.newLedgerId = ledgerId;
+        }
         this.setData({ saving: true });
         wx.cloud
           .callFunction({
             name: "ledgerFunctions",
-            data: {
-              type: "updateTransaction",
-              ledgerId,
-              txId,
-              amountCents,
-              flow,
-              category,
-              note,
-              bookedAtMs,
-              assetAccountId: linkId,
-            },
+            data: payload,
           })
           .then((resp) => {
             const r = resp.result || {};
@@ -607,8 +658,9 @@ Component({
     },
 
     onDelete() {
-      const { ledgerId, txId } = this.properties;
-      if (!ledgerId || !txId) {
+      const { ledgerId, sourceLedgerId, txId } = this.properties;
+      const deleteLedgerId = String(sourceLedgerId || ledgerId || "").trim();
+      if (!deleteLedgerId || !txId) {
         wx.showToast({ title: "参数错误", icon: "none" });
         return;
       }
@@ -624,7 +676,11 @@ Component({
           wx.cloud
             .callFunction({
               name: "ledgerFunctions",
-              data: { type: "deleteTransaction", ledgerId, txId },
+              data: {
+                type: "deleteTransaction",
+                ledgerId: deleteLedgerId,
+                txId,
+              },
             })
             .then((resp) => {
               const r = resp.result || {};

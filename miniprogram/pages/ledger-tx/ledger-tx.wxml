@@ -6,7 +6,10 @@
       id="txUnifiedForm"
       mode="{{formMode}}"
       ledger-id="{{ledgerId}}"
+      source-ledger-id="{{sourceLedgerId}}"
       tx-id="{{txId}}"
+      ledger-names="{{ledgerNames}}"
+      ledger-index="{{ledgerIndex}}"
       categories="{{categories}}"
       expense-categories="{{expenseCategories}}"
       income-categories="{{incomeCategories}}"
@@ -15,6 +18,7 @@
       bind:saved="onSaved"
       bind:deleted="onDeleted"
       bind:categoriesupdated="onCategoriesUpdated"
+      bind:ledgerchange="onLedgerChange"
     />
   </block>
 </view>

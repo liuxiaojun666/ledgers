@@ -256,8 +256,44 @@
 
 .account-meta {
   margin-top: 6rpx;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8rpx;
+  overflow: hidden;
   font-size: 22rpx;
   color: #888888;
+}
+
+.account-meta-text {
+  font-size: 22rpx;
+  color: #888888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.account-tag {
+  display: inline-block;
+  font-size: 20rpx;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.account-tag--excluded {
+  color: #8a6d3b;
+  background: rgba(196, 90, 0, 0.1);
+}
+
+.account-tag--shared {
+  color: #6d28d9;
+  background: rgba(124, 58, 237, 0.1);
 }
 
 .account-balance {
@@ -279,41 +315,6 @@
   color: #cccccc;
   font-weight: 400;
   line-height: 1;
-}
-
-.owner-group + .owner-group {
-  margin-top: 16rpx;
-  padding-top: 16rpx;
-  border-top: 1rpx dashed #eeeeee;
-}
-
-.owner-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 10rpx;
-  font-size: 22rpx;
-  color: #0066ff;
-  font-weight: 600;
-  margin-bottom: 4rpx;
-  padding: 6rpx 14rpx 6rpx 8rpx;
-  border-radius: 999rpx;
-  background: rgba(0, 102, 255, 0.08);
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.owner-title-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.member-avatar {
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 999rpx;
-  background: #eef2ff;
-  flex-shrink: 0;
 }
 
 .empty-block {

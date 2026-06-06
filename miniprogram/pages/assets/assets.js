@@ -29,9 +29,7 @@ function accountNameInitial(name) {
   return s[0].toUpperCase();
 }
 
-const { resolveAvatarUrlsOnPage } = require("../../utils/profile-avatar");
-
-const ASSET_DASHBOARD_CACHE_PREFIX = "asset_dashboard_snap_v1";
+const ASSET_DASHBOARD_CACHE_PREFIX = "asset_dashboard_snap_v4";
 
 function assetDashboardCacheKey(scope) {
   return `${ASSET_DASHBOARD_CACHE_PREFIX}_${String(scope || "all").trim() || "all"}`;
@@ -72,11 +70,31 @@ function pickDashboardCachePayload(r) {
   };
 }
 
+function isInboundSharedAccountRow(row) {
+  const role = String((row && row.shareRole) || "").trim();
+  return role === "viewer";
+}
+
 function decorateAccountRow(row) {
+  const isInboundShared = isInboundSharedAccountRow(row);
+  const shareMemberCount = Number(row.shareMemberCount) || 0;
+  const isOutboundShared = !isInboundShared && shareMemberCount > 0;
+  const sharePeopleCount = shareMemberCount + 1;
+  const isShared = isInboundShared || isOutboundShared;
   return {
     ...row,
     balanceYuan: formatYuan(row.balanceCents),
     nameInitial: accountNameInitial(row.name),
+    excludedFromNetWorth: row.includeInNetWorth === false,
+    isShared,
+    isInboundShared,
+    isOutboundShared,
+    shareMemberCount,
+    sharePeopleCount,
+    shareMemberLabel: isOutboundShared ? `${sharePeopleCount} 人共享` : "",
+    detailScope: isInboundShared ? "shared" : "personal",
+    detailRole: isInboundShared ? String(row.shareRole || "").trim() || "viewer" : "owner",
+    sharedOwnerLabel: isInboundShared ? String(row.ownerNickname || "").trim() : "",
   };
 }
 
@@ -94,12 +112,6 @@ Page({
     monthTrendPositive: true,
     assetAccounts: [],
     liabilityAccounts: [],
-    groupedSharedAccounts: [],
-  },
-
-  isSharedAccountRow(row) {
-    const role = String((row && row.shareRole) || "").trim();
-    return role === "viewer";
   },
 
   onShow() {
@@ -138,40 +150,24 @@ Page({
     const totalLiabilitiesCents = Number(r.totalLiabilitiesCents) || 0;
     const netWorthCents = Number(r.netWorthCents) || 0;
     const decorate = (rows) => (rows || []).map(decorateAccountRow);
-    const rawAssetAccounts = decorate(r.assetAccounts);
-    const rawLiabilityAccounts = decorate(r.liabilityAccounts);
-    const personalAssetAccounts = rawAssetAccounts.filter((row) => !this.isSharedAccountRow(row));
-    const personalLiabilityAccounts = rawLiabilityAccounts.filter((row) => !this.isSharedAccountRow(row));
-    const groupedSharedAccounts = this.buildSharedGroups(rawAssetAccounts, rawLiabilityAccounts);
-    const hasAnyAccount =
-      personalAssetAccounts.length > 0 ||
-      personalLiabilityAccounts.length > 0 ||
-      groupedSharedAccounts.length > 0;
+    const assetAccounts = decorate(r.assetAccounts);
+    const liabilityAccounts = decorate(r.liabilityAccounts);
+    const hasAnyAccount = assetAccounts.length > 0 || liabilityAccounts.length > 0;
     const mom = r.monthOverPrevMonthNetWorthPct;
     const momNum = Number(mom);
-    this.setData(
-      {
-        totalAssetsYuan: formatYuan(totalAssetsCents),
-        totalLiabilitiesYuan: formatYuan(totalLiabilitiesCents),
-        netWorthYuan: formatSignedYuan(netWorthCents),
-        netWorthSign: netWorthCents < 0 ? "-" : "",
-        monthTrendLabel: formatMonthNetWorthMoMLabel(mom),
-        monthTrendPositive: Number.isFinite(momNum) ? momNum >= 0 : true,
-        assetAccounts: personalAssetAccounts,
-        liabilityAccounts: personalLiabilityAccounts,
-        groupedSharedAccounts,
-        loadState: hasAnyAccount ? "success" : "empty",
-        errorText: "",
-        loading: false,
-      },
-      () => {
-        if (groupedSharedAccounts.length) {
-          resolveAvatarUrlsOnPage(this, "groupedSharedAccounts", groupedSharedAccounts, {
-            avatarField: "ownerAvatarUrl",
-          }).catch(() => {});
-        }
-      }
-    );
+    this.setData({
+      totalAssetsYuan: formatYuan(totalAssetsCents),
+      totalLiabilitiesYuan: formatYuan(totalLiabilitiesCents),
+      netWorthYuan: formatSignedYuan(netWorthCents),
+      netWorthSign: netWorthCents < 0 ? "-" : "",
+      monthTrendLabel: formatMonthNetWorthMoMLabel(mom),
+      monthTrendPositive: Number.isFinite(momNum) ? momNum >= 0 : true,
+      assetAccounts,
+      liabilityAccounts,
+      loadState: hasAnyAccount ? "success" : "empty",
+      errorText: "",
+      loading: false,
+    });
     return true;
   },
 
@@ -279,32 +275,5 @@ Page({
         scope
       )}&role=${encodeURIComponent(role)}`,
     });
-  },
-
-  buildSharedGroups(assetRows, liabilityRows) {
-    const rows = (assetRows || []).concat(liabilityRows || []).filter((row) => this.isSharedAccountRow(row));
-    const map = {};
-    rows.forEach((row) => {
-      const ownerOpenid = String(row.ownerOpenid || "").trim();
-      if (!ownerOpenid) {
-        return;
-      }
-      if (!map[ownerOpenid]) {
-        map[ownerOpenid] = {
-          ownerOpenid,
-          ownerNickname: row.ownerNickname || "",
-          ownerAvatarUrl: row.ownerAvatarUrl || "",
-          accounts: [],
-        };
-      }
-      map[ownerOpenid].accounts.push({
-        ...decorateAccountRow(row),
-        kindLabel: row.kind === "liability" ? "负债" : "资产",
-        roleLabel: "只读",
-      });
-    });
-    return Object.keys(map)
-      .map((k) => map[k])
-      .sort((a, b) => String(a.ownerNickname).localeCompare(String(b.ownerNickname)));
   },
 });
