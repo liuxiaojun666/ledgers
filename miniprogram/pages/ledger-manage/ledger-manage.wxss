@@ -140,3 +140,38 @@
   border: none;
 }
 
+.btn-archive-ledger {
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88rpx;
+  padding: 0;
+  line-height: normal;
+  font-size: 28rpx;
+  font-weight: 500;
+  background: #fff;
+  color: #b45309;
+  border: 1rpx solid #fcd34d;
+  border-radius: 36rpx;
+  box-shadow: 0 6rpx 20rpx rgba(180, 83, 9, 0.05);
+}
+
+.btn-archive-ledger::after {
+  border: none;
+}
+
+.archived-tip {
+  margin-top: 24rpx;
+  background: linear-gradient(120deg, #fff7e8, #ffe4bf);
+  border-color: #ffd08a;
+}
+
+.archived-tip-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #4d2e00;
+}
+

@@ -4,19 +4,10 @@
     <view wx:if="{{!ledgers.length}}" class="empty">暂无可统计账本，请先在「账本」创建或加入账本。</view>
     <block wx:else>
       <view wx:if="{{ledgers.length}}" class="ledger-picker-wrap">
-        <picker
-          mode="selector"
-          range="{{ledgerDisplayNames}}"
-          value="{{ledgerPickerIndex}}"
-          bindtap="onLedgerPickerOpen"
-          bindchange="onLedgerChange"
-          bindcancel="onLedgerPickerClose"
-        >
-          <view class="ledger-picker-label">
-            <text class="ledger-picker-text">统计：{{ledgerName || "全部账本"}}</text>
-            <text class="ledger-picker-caret">▼</text>
-          </view>
-        </picker>
+        <view class="ledger-picker-label" bindtap="onScopePickerOpen">
+          <text class="ledger-picker-text">统计：{{scopeLabel || "全部账本"}}</text>
+          <text class="ledger-picker-caret">▼</text>
+        </view>
       </view>
       <view class="tabs">
         <view class="tab {{range === 'week' ? 'active' : ''}}" data-range="week" bindtap="onRangeTap">
@@ -72,7 +63,7 @@
         <view class="insight-text">{{insightText}}</view>
         <view class="insight-icon">✦</view>
       </view>
-      <view wx:if="{{showLineChart}}" class="chart-card">
+      <view wx:if="{{showLineChart && !scopeSheetOpen}}" class="chart-card">
         <view class="chart-head chart-head-line">
           <text class="chart-title">收支趋势</text>
           <view class="trend-kind-seg">
@@ -88,7 +79,7 @@
           <ff-canvas id="ff-line" canvas-id="ledgerAlLine" opts="{{chartOpts}}"></ff-canvas>
         </view>
       </view>
-      <view wx:if="{{showPieChart}}" class="chart-card">
+      <view wx:if="{{showPieChart && !scopeSheetOpen}}" class="chart-card">
         <view class="chart-head chart-head-line">
           <text class="chart-title">金额占比</text>
           <view class="trend-kind-seg">
@@ -151,5 +142,65 @@
         </view>
       </block>
     </block>
+  </block>
+  <block wx:if="{{scopeSheetOpen}}">
+    <view class="scope-sheet-mask" catchtap="onScopePickerClose"></view>
+    <view class="scope-sheet-panel">
+      <view class="scope-sheet-grabber"></view>
+      <view class="scope-sheet-head">
+        <view class="scope-sheet-title">选择统计范围</view>
+        <view class="scope-sheet-sub">可合并多个账本统计，或保存为常用组合</view>
+      </view>
+      <scroll-view class="scope-sheet-body" scroll-y="{{true}}">
+        <view class="scope-section">
+          <view class="scope-section-title">快捷</view>
+          <view
+            class="scope-quick-row {{scopeMode === 'all' ? 'scope-quick-row--active' : ''}}"
+            hover-class="scope-row--hover"
+            bindtap="onScopeQuickAll"
+          >
+            全部账本
+          </view>
+        </view>
+        <view wx:if="{{statGroups.length}}" class="scope-section">
+          <view class="scope-section-title">已保存组合</view>
+          <view
+            wx:for="{{statGroups}}"
+            wx:key="id"
+            class="scope-group-row {{activeGroupId === item.id ? 'scope-group-row--active' : ''}}"
+          >
+            <view class="scope-group-main" data-id="{{item.id}}" bindtap="onScopeGroupTap">
+              <text class="scope-group-name">{{item.name}}</text>
+              <text class="scope-group-meta">{{item.ledgerCount}} 个账本</text>
+            </view>
+            <view class="scope-group-actions">
+              <text class="scope-group-action" data-id="{{item.id}}" catchtap="onScopeGroupRename">编辑</text>
+              <text class="scope-group-action scope-group-action--danger" data-id="{{item.id}}" catchtap="onScopeGroupDelete">删除</text>
+            </view>
+          </view>
+        </view>
+        <view class="scope-section">
+          <view class="scope-section-title">勾选账本</view>
+          <view
+            wx:for="{{scopeLedgerRows}}"
+            wx:key="_id"
+            class="scope-ledger-row"
+            hover-class="scope-row--hover"
+            data-id="{{item._id}}"
+            bindtap="onScopeLedgerToggle"
+          >
+            <text class="scope-ledger-check {{item.checked ? 'scope-ledger-check--on' : ''}}">{{item.checked ? '✓' : ''}}</text>
+            <text class="scope-ledger-name">{{item.name}}</text>
+          </view>
+        </view>
+      </scroll-view>
+      <view class="scope-sheet-foot">
+        <button class="scope-btn scope-btn--ghost" bindtap="onScopeSaveGroup">保存为组合</button>
+        <button class="scope-btn scope-btn--primary" bindtap="onScopeApplyMulti">应用所选</button>
+      </view>
+      <view class="scope-sheet-cancel-wrap">
+        <view class="scope-sheet-cancel" hover-class="scope-row--hover" bindtap="onScopePickerClose">取消</view>
+      </view>
+    </view>
   </block>
 </view>

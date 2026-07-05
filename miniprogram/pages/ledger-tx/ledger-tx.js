@@ -28,6 +28,13 @@ const DEFAULT_INCOME_CATEGORIES = [
   "其他收入",
 ];
 
+function readLedgerDefaultAssetId(ledger) {
+  if (!ledger || ledger.defaultAssetAccountId == null) {
+    return "";
+  }
+  return String(ledger.defaultAssetAccountId).trim();
+}
+
 Page({
   data: {
     loading: true,
@@ -42,6 +49,7 @@ Page({
     expenseCategories: DEFAULT_CATEGORIES,
     incomeCategories: DEFAULT_INCOME_CATEGORIES,
     assetAccounts: [],
+    defaultAssetAccountId: "",
   },
 
   onLoad(options) {
@@ -95,18 +103,27 @@ Page({
           }
         }
         const ledgerId = ledgers[ledgerIndex]._id;
-        this.setData({ ledgers, ledgerNames, ledgerIndex, ledgerId }, () => {
-          if (isEdit) {
-            if (!initialLedgerId) {
-              wx.showToast({ title: "缺少账本参数", icon: "none" });
-              this.setData({ loading: false });
-              return;
+        this.setData(
+          {
+            ledgers,
+            ledgerNames,
+            ledgerIndex,
+            ledgerId,
+            defaultAssetAccountId: readLedgerDefaultAssetId(ledgers[ledgerIndex]),
+          },
+          () => {
+            if (isEdit) {
+              if (!initialLedgerId) {
+                wx.showToast({ title: "缺少账本参数", icon: "none" });
+                this.setData({ loading: false });
+                return;
+              }
+              this.loadEdit(txId);
+            } else {
+              this.loadAdd(ledgerId);
             }
-            this.loadEdit(txId);
-          } else {
-            this.loadAdd(ledgerId);
           }
-        });
+        );
       })
       .catch(() => {
         wx.showToast({ title: "云函数调用失败", icon: "none" });
@@ -165,6 +182,7 @@ Page({
             expenseCategories: exp,
             incomeCategories: inc,
             assetAccounts,
+            defaultAssetAccountId: readLedgerDefaultAssetId(ledgers[idx]),
           },
           () => {
             const comp = this.selectComponent("#txUnifiedForm");
@@ -198,6 +216,7 @@ Page({
     this.setData({
       ledgerIndex: safe,
       ledgerId: ledgers[safe]._id,
+      defaultAssetAccountId: readLedgerDefaultAssetId(ledgers[safe]),
     });
     this.applyLedgerIndex(safe, preferred).catch(() => {
       if (ledgers[prevIdx]) {
@@ -248,12 +267,16 @@ Page({
             createdAt: row && row.createdAt,
           }))
           .filter((a) => a._id);
+        const { ledgers, ledgerId: curLedgerId } = this.data;
+        const ledger = ledgers.find((l) => l && l._id === ledgerId) ||
+          ledgers.find((l) => l && l._id === curLedgerId);
         this.setData({
           loading: false,
           categories: full,
           expenseCategories: exp,
           incomeCategories: inc,
           assetAccounts,
+          defaultAssetAccountId: readLedgerDefaultAssetId(ledger),
         });
       })
       .catch(() => {

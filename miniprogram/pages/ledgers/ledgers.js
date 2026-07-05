@@ -183,6 +183,10 @@ Page({
     this.refresh();
   },
 
+  onEmbeddedPinnedChange() {
+    this.refresh();
+  },
+
   createLedger() {
     this.setCustomTabBarHidden(true);
     wx.showModal({
@@ -347,9 +351,9 @@ Page({
     });
   },
 
-  onSheetDeleteLedger() {
+  onSheetArchiveLedger() {
     if (!this.data.sheetIsCreator) {
-      wx.showToast({ title: "仅创建者可删除账本", icon: "none" });
+      wx.showToast({ title: "仅创建者可归档账本", icon: "none" });
       return;
     }
     const ledgerId = String(this.data.sheetLedgerId || "").trim();
@@ -360,12 +364,11 @@ Page({
     this.closeLedgerSheet();
     this.setCustomTabBarHidden(true);
     wx.showModal({
-      title: "删除账本",
-      content: `将永久删除「${
+      title: "归档账本",
+      content: `归档后「${
         ledgerName || "该账本"
-      }」及全部流水、分类设置，协作者也将无法访问。此操作不可恢复。`,
-      confirmText: "删除",
-      confirmColor: "#e54545",
+      }」将不再出现在日常列表，协作者也无法继续记账。你可稍后在「已归档账本」中恢复或删除。`,
+      confirmText: "归档",
       success: (res) => {
         if (!res.confirm) {
           return;
@@ -374,22 +377,22 @@ Page({
         wx.cloud
           .callFunction({
             name: "ledgerFunctions",
-            data: { type: "deleteLedger", ledgerId },
+            data: { type: "archiveLedger", ledgerId, archived: true },
           })
           .then((resp) => {
             const r = resp.result || {};
             if (!r.success) {
-              wx.showToast({ title: r.errMsg || "删除失败", icon: "none" });
+              wx.showToast({ title: r.errMsg || "归档失败", icon: "none" });
               return;
             }
-            wx.showToast({ title: "已删除" });
-            getApp().globalData.showBillLedgerListOnce = false;
+            wx.showToast({ title: "已归档" });
+            getApp().globalData.showBillLedgerListOnce = true;
             setTimeout(() => {
               this.refresh();
             }, 400);
           })
           .catch(() => {
-            wx.showToast({ title: "删除失败", icon: "none" });
+            wx.showToast({ title: "归档失败", icon: "none" });
           })
           .finally(() => {
             this.setData({ sheetDeleting: false });
@@ -399,6 +402,10 @@ Page({
         this.setCustomTabBarHidden(false);
       },
     });
+  },
+
+  openArchivedList() {
+    wx.navigateTo({ url: "/pages/ledger-archived-list/ledger-archived-list" });
   },
 
   openDetail(e) {

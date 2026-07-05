@@ -165,12 +165,25 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  gap: 12rpx;
+  flex-wrap: wrap;
 }
 
 .card-title {
   font-size: 36rpx;
   color: #1a1a1a;
   font-weight: 700;
+}
+
+.card-pin-badge {
+  flex-shrink: 0;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  font-size: 20rpx;
+  font-weight: 600;
+  color: #0066ff;
+  background: rgba(0, 102, 255, 0.1);
+  line-height: 1.3;
 }
 
 .card-month-line {
@@ -397,4 +410,26 @@
   text-align: center;
   font-size: 28rpx;
   color: #666666;
+}
+
+.archived-entry {
+  margin-top: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 24rpx;
+  font-size: 26rpx;
+  color: #666666;
+  font-weight: 500;
+}
+
+.archived-entry--hover {
+  opacity: 0.75;
+}
+
+.archived-entry__arrow {
+  font-size: 32rpx;
+  color: #cccccc;
+  line-height: 1;
 }

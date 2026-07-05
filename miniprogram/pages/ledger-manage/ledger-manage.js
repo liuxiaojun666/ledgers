@@ -34,7 +34,9 @@ Page({
     ledgerName: "",
     loading: true,
     isCreator: false,
+    ledgerArchived: false,
     deletingLedger: false,
+    archivingLedger: false,
   },
 
   onLoad(options) {
@@ -74,7 +76,8 @@ Page({
       }
       const ledgerName = detail.ledger && detail.ledger.name ? detail.ledger.name : "";
       const isCreator = !!(detail.ledger && detail.ledger.isCreator);
-      this.setData({ ledgerName, isCreator, loading: false });
+      const ledgerArchived = !!(detail.ledger && detail.ledger.archived);
+      this.setData({ ledgerName, isCreator, ledgerArchived, loading: false });
     } catch (e) {
       this.setData({ loading: false });
       wx.showToast({ title: "加载失败", icon: "none" });
@@ -94,10 +97,58 @@ Page({
     });
   },
 
+  onArchiveLedger() {
+    const ledgerId = String(this.data.ledgerId || "").trim();
+    const ledgerName = String(this.data.ledgerName || "").trim();
+    if (!ledgerId || this.data.archivingLedger || this.data.ledgerArchived) {
+      return;
+    }
+    wx.showModal({
+      title: "归档账本",
+      content: `归档后「${
+        ledgerName || "该账本"
+      }」将不再出现在日常列表。你可稍后在「已归档账本」中恢复或删除。`,
+      confirmText: "归档",
+      success: (res) => {
+        if (!res.confirm) {
+          return;
+        }
+        this.setData({ archivingLedger: true });
+        wx.cloud
+          .callFunction({
+            name: "ledgerFunctions",
+            data: { type: "archiveLedger", ledgerId, archived: true },
+          })
+          .then((resp) => {
+            const r = resp.result || {};
+            if (!r.success) {
+              wx.showToast({ title: r.errMsg || "归档失败", icon: "none" });
+              return;
+            }
+            wx.showToast({ title: "已归档" });
+            getApp().globalData.showBillLedgerListOnce = true;
+            setTimeout(() => {
+              wx.switchTab({ url: "/pages/ledgers/ledgers" });
+            }, 400);
+          })
+          .catch(() => {
+            wx.showToast({ title: "归档失败", icon: "none" });
+          })
+          .finally(() => {
+            this.setData({ archivingLedger: false });
+          });
+      },
+    });
+  },
+
   onDeleteLedger() {
     const ledgerId = String(this.data.ledgerId || "").trim();
     const ledgerName = String(this.data.ledgerName || "").trim();
     if (!ledgerId || this.data.deletingLedger) {
+      return;
+    }
+    if (!this.data.ledgerArchived) {
+      wx.showToast({ title: "请先归档账本后再删除", icon: "none" });
       return;
     }
     wx.showModal({

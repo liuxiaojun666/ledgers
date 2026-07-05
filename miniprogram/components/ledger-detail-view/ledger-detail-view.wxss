@@ -606,6 +606,49 @@
   border: none;
 }
 
+.archived-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(120deg, #fff7e8, #ffe4bf);
+  border: 1rpx solid #ffd08a;
+  box-sizing: border-box;
+}
+
+.archived-strip-mark {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #8a5400;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 8rpx 14rpx;
+  border-radius: 999rpx;
+}
+
+.archived-strip-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.archived-strip-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #4d2e00;
+  line-height: 1.35;
+}
+
+.archived-strip-desc {
+  font-size: 24rpx;
+  color: #855300;
+  line-height: 1.5;
+}
+
 /* 标题「⋯」底部抽屉（与 pages/ledgers 列表抽屉视觉一致） */
 .detail-sheet-mask {
   position: fixed;

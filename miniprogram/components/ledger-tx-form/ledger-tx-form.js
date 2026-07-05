@@ -74,6 +74,11 @@ Component({
       type: Array,
       value: [],
     },
+    /** 账本默认关联资产账户 id；记一笔新增时默认选中 */
+    defaultAssetAccountId: {
+      type: String,
+      value: "",
+    },
   },
 
   lifetimes: {
@@ -98,6 +103,11 @@ Component({
     },
     "selectedAssetId, assetAccounts"() {
       this.applyAssetBookDateConstraints();
+    },
+    "defaultAssetAccountId, assetAccounts, mode"() {
+      if (this.properties.mode === "add") {
+        this.applyDefaultAssetSelection(false);
+      }
     },
   },
 
@@ -198,6 +208,37 @@ Component({
         assetPickerAccountIds: accounts.map((a) => a._id),
       });
     },
+    applyDefaultAssetSelection(force) {
+      if (this.properties.mode !== "add") {
+        return;
+      }
+      const cur = String(this.data.selectedAssetId || "").trim();
+      const defId = String(this.properties.defaultAssetAccountId || "").trim();
+      if (!force && cur) {
+        return;
+      }
+      const applyId = (id) => {
+        this.setData(
+          {
+            selectedAssetId: id || "",
+            assetPickerOrphan: null,
+          },
+          () => {
+            this.buildAssetPickerState();
+            this.applyAssetBookDateConstraints();
+          }
+        );
+      };
+      if (!defId) {
+        applyId("");
+        return;
+      }
+      const accounts = (this.properties.assetAccounts || []).filter(
+        (a) => a && a._id
+      );
+      const found = accounts.some((a) => String(a._id) === defId);
+      applyId(found ? defId : "");
+    },
     /** 编辑页在拉取 getTransaction 后调用，categories 需已由父页面合并「孤儿分类」 */
     fillForEdit({
       amountInput,
@@ -268,8 +309,7 @@ Component({
         },
         () => {
           this.rebuildActiveCategoryList();
-          this.buildAssetPickerState();
-          this.applyAssetBookDateConstraints();
+          this.applyDefaultAssetSelection(true);
         }
       );
     },
@@ -345,8 +385,7 @@ Component({
       this.rebuildActiveCategoryList(
         typeof preferredName === "string" ? preferredName : ""
       );
-      this.buildAssetPickerState();
-      this.applyAssetBookDateConstraints();
+      this.applyDefaultAssetSelection(true);
     },
 
     onLedgerPickerChange(e) {

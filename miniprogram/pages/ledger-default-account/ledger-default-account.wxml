@@ -1,0 +1,52 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:else>
+    <view class="header">
+      <view class="title">{{ledgerName || "当前账本"}}</view>
+    </view>
+    <view class="card">
+      <view class="label">默认资产账户</view>
+      <view class="value value--name">{{defaultAccountLabel}}</view>
+      <view class="tip">记一笔与新建定时任务时，支出和收入将默认关联此账户；仍可手动改为不关联或其它账户。</view>
+    </view>
+    <view wx:if="{{isCreator && assetPickerRange.length > 1}}" class="card card-picker">
+      <view class="label">选择账户</view>
+      <picker
+        mode="selector"
+        range="{{assetPickerRange}}"
+        value="{{assetPickerIndex}}"
+        bindchange="onAssetAccountPickerChange"
+        disabled="{{updatingDefaultAccount}}"
+      >
+        <view class="picker-row">
+          <text class="picker-value">{{assetPickerRange[assetPickerIndex] || "不关联"}}</text>
+          <text class="picker-arrow">›</text>
+        </view>
+      </picker>
+    </view>
+    <view wx:elif="{{isCreator && assetPickerRange.length <= 1}}" class="card card-lite">
+      <view class="tip">暂无可用资产账户，请先在资产页新建个人账户。</view>
+    </view>
+    <view wx:if="{{isCreator}}" class="actions">
+      <button
+        class="btn-primary"
+        bindtap="onSaveDefaultAccount"
+        loading="{{updatingDefaultAccount}}"
+        disabled="{{assetPickerRange.length <= 1}}"
+      >
+        {{defaultAssetAccountId ? "保存修改" : "设置默认账户"}}
+      </button>
+      <button
+        wx:if="{{defaultAssetAccountId}}"
+        class="btn-secondary"
+        bindtap="onClearDefaultAccount"
+        loading="{{updatingDefaultAccount}}"
+      >
+        清除默认账户
+      </button>
+    </view>
+    <view wx:else class="card card-lite">
+      <view class="tip">仅账本创建者可设置默认账户。</view>
+    </view>
+  </block>
+</view>

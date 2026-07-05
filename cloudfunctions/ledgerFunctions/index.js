@@ -2,10 +2,13 @@
  * 协同记账云函数。
  *
  * 集合（本云函数会在首次调用时尝试 createCollection；也可在云开发控制台手动创建）：
- * - ledgers: { name, creatorOpenid, memberOpenids[], categories[], categoryByFlow?: object, createdAt, monthlyBudgetCents? }
+ * - ledgers: { name, creatorOpenid, memberOpenids[], categories[], categoryByFlow?: object, createdAt, monthlyBudgetCents?, defaultAssetAccountId?, defaultAssetAccountName?, archived?: boolean }
+ *   archived：可选，为 true 时表示账本已归档；默认列表与统计「全部账本」不含已归档；创建者可归档/恢复，**仅已归档账本可物理删除**。
  *   categoryByFlow：可选，{ [分类名]: "income"|"expense" }，仅用于**非**预置名自定义分类的收支归属；记一笔/定时等按收入与支出只展示各自分类，并与流水 flow 一致校验。
  *   monthlyBudgetCents：可选，正整数（分），表示「自然月」支出预算上限，由创建者在账本管理中设置。
- * - ledger_members: 文档 _id = `${openid}_${ledgerId}`，{ ledgerId, openid, role, joinedAt }
+ *   defaultAssetAccountId / defaultAssetAccountName：可选，账本默认关联资产账户（仅创建者可设置；须为本人非归档户主账户）；记一笔/新建定时在新增时默认选中，用户仍可改为不关联或其它账户。
+ * - ledger_members: 文档 _id = `${openid}_${ledgerId}`，{ ledgerId, openid, role, joinedAt, pinned?: boolean, pinnedAt?: Date }
+ *   pinned：可选，当前用户对该账本的置顶偏好（仅影响本人 listLedgers 排序）；pinnedAt 为最近一次置顶时刻。
  * - transactions: { ledgerId, amountCents, flow, category, note, createdByOpenid, createdAt, bookedAt? }
  *   可选：assetAccountId、assetAccountName（记一笔选资产时写入；名称为快照）；sourceAssetEffectCents（有符号分，该条流水对所选资产账户余额的净影响）、primaryAssetRecordId（首笔联动资产记录）。
  *   关联资产时记一笔成功会写 assets 侧 `asset_records` 并更新余额；编辑/删除流水时会再追加一条带 `sourceLedger*` 的变动（不删改历史资产行，用新行表达冲销/调整）。
@@ -24,14 +27,17 @@
  *
  * ledger_members 可保持「所有用户不可读写」，仅云函数访问。
  *
- * analyzeLedger（统计页数据）：按周/月/年；groups / groupsByPerson 为分类与成员的「支出排行」（仅支出流水）；汇总区净额等仍含收支；另返回 trendPoints、饼图 pieGroups* 等。入参可传 `scope: "all"`（或 `allLedgers: true`）以汇总当前用户**全部**可访问账本，不传 `ledgerId`；分账本时仍传 `ledgerId`。
- * listGroupTransactions：`scope: "all"` 时同范围汇总，明细行带 `ledgerId` 以便跳转记一笔；分账本时仍带 `ledgerId`。
+ * analyzeLedger（统计页数据）：按周/月/年；groups / groupsByPerson 为分类与成员的「支出排行」（仅支出流水）；汇总区净额等仍含收支；另返回 trendPoints、饼图 pieGroups* 等。入参可传 `scope: "all"`（或 `allLedgers: true`）以汇总当前用户**全部**可访问未归档账本；可传 `ledgerIds: string[]` 自定义合并多个账本（成员校验、剔除已归档；月预算为所选账本预算之和）；分账本时仍传 `ledgerId`。
+ * listGroupTransactions：`scope: "all"` 或 `ledgerIds` 时与统计范围一致汇总，明细行带 `ledgerId` 以便跳转记一笔；分账本时仍带 `ledgerId`。
  * getTransaction / updateTransaction / deleteTransaction：仅流水记录人可读取（编辑页）/修改/删除；无 createdByOpenid 的历史记录仅账本创建者可改删。
- * deleteLedger：仅创建者可删账本，并删除该账本下全部流水与成员关联。
+ * archiveLedger：仅创建者可归档/恢复账本（`archived` 默认 true 表归档，false 表恢复）。
+ * deleteLedger：仅创建者可删账本，且须**已归档**；删除该账本下全部流水与成员关联。
  * exitLedger：非创建者可主动退出账本，会清理该成员在账本内的成员关系与定时任务。
- * listLedgers：若当前用户无任何账本，会自动创建默认账本「我的账本」后再返回列表。
+ * listLedgers：默认仅返回未归档账本（库查询 `archived: _.neq(true)`，**无 archived 字段的旧账本视为未归档**）；`archivedOnly: true` 仅返回 `archived: true`。若当前用户作为成员**完全无账本**，会自动创建默认账本「我的账本」后再返回列表（仅非 archivedOnly 查询）。
  *   每条含当月（北京时间自然月）收入/支出分汇总 monthIncomeCents/monthExpenseCents、monthSummaryLabel，
  *   口径与统计一致（bookedAt ?? createdAt；每账本最多拉取 1000 条流水参与汇总，与 analyzeLedger 一致）。
+ *   列表按当前用户置顶偏好排序：pinned 为真者在前（同组内按 pinnedAt 新在前），其余按 createdAt 新在前。
+ * setLedgerPinned：成员可设置本人对该账本的置顶/取消置顶（写入 ledger_members.pinned / pinnedAt）。
  * addLedgerCategory / removeLedgerCategory：会同步到当前用户参与的全部账本（不仅是传入的 ledgerId）。
  * addLedgerCategory / removeLedgerCategory：在当前用户参与的全部账本上同步增删分类（入口需带任一账本 ledgerId 做权限校验）。
  * deleteLedger：仅创建者可删；删除该账本下全部流水与 ledger_members 记录。
@@ -227,6 +233,22 @@ function readMonthlyBudgetCents(ledger) {
     return null;
   }
   return n;
+}
+
+function readLedgerDefaultAssetAccountId(ledger) {
+  if (!ledger || ledger.defaultAssetAccountId == null) {
+    return null;
+  }
+  const id = String(ledger.defaultAssetAccountId).trim();
+  return id || null;
+}
+
+function readLedgerDefaultAssetAccountName(ledger) {
+  if (!ledger || ledger.defaultAssetAccountName == null) {
+    return null;
+  }
+  const name = String(ledger.defaultAssetAccountName).trim();
+  return name || null;
 }
 
 function normalizeLedgerName(raw) {
@@ -2433,15 +2455,23 @@ function formatChinaTimeText(ms) {
   )}:${p(d.getMinutes())}`;
 }
 
-/** 当前用户作为成员所在的所有账本 _id（与 listLedgers 范围一致） */
-async function fetchLedgerIdsForMemberOpenid(openid) {
+/** 当前用户作为成员所在账本 _id；默认仅未归档（与活跃 listLedgers / 全部账本统计一致） */
+async function fetchLedgerIdsForMemberOpenid(openid, opts) {
+  const activeOnly = !opts || opts.activeOnly !== false;
+  const where = { memberOpenids: openid };
+  if (activeOnly) {
+    where.archived = _.neq(true);
+  }
   const res = await db
     .collection("ledgers")
-    .where({ memberOpenids: openid })
-    .field({ _id: true })
+    .where(where)
+    .field({ _id: true, archived: true })
     .get();
   const rows = res.data || [];
-  return rows.map((r) => r._id).filter(Boolean);
+  const filtered = activeOnly
+    ? rows.filter((r) => !isLedgerArchived(r))
+    : rows;
+  return filtered.map((r) => r._id).filter(Boolean);
 }
 
 /** 避免 doc().get() 在记录不存在时抛 document.get:fail（该错误会原样传到小程序 Toast） */
@@ -2493,6 +2523,53 @@ async function removeDocumentsWhere(collectionName, whereObj, batchSize) {
   }
 }
 
+function isLedgerMemberPinned(memberRow) {
+  if (!memberRow) {
+    return false;
+  }
+  const v = memberRow.pinned;
+  return v === true || v === 1 || v === "1" || String(v).toLowerCase() === "true";
+}
+
+function readLedgerMemberPinnedAtMs(memberRow) {
+  if (!isLedgerMemberPinned(memberRow)) {
+    return 0;
+  }
+  const ms = readDateMs(memberRow.pinnedAt);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+async function fetchLedgerMemberPinMap(openid, ledgerIds) {
+  const map = Object.create(null);
+  const ids = (Array.isArray(ledgerIds) ? ledgerIds : [])
+    .map((id) => normalizeLedgerId(id))
+    .filter(Boolean);
+  if (!ids.length || !openid) {
+    return map;
+  }
+  const docIds = ids.map((ledgerId) => memberDocId(openid, ledgerId));
+  for (let i = 0; i < docIds.length; i += 20) {
+    const chunk = docIds.slice(i, i + 20);
+    const res = await db
+      .collection("ledger_members")
+      .where({ _id: _.in(chunk) })
+      .field({ ledgerId: true, pinned: true, pinnedAt: true })
+      .limit(20)
+      .get();
+    (res.data || []).forEach((row) => {
+      const ledgerId = normalizeLedgerId(row && row.ledgerId);
+      if (!ledgerId) {
+        return;
+      }
+      map[ledgerId] = {
+        pinned: isLedgerMemberPinned(row),
+        pinnedAtMs: readLedgerMemberPinnedAtMs(row),
+      };
+    });
+  }
+  return map;
+}
+
 async function ledgerMemberRowExists(openid, rawLedgerId) {
   const ledgerId = normalizeLedgerId(rawLedgerId);
   if (!ledgerId) {
@@ -2521,6 +2598,27 @@ function isLedgerCreator(ledger, openid) {
       Array.isArray(ledger.memberOpenids) &&
       ledger.memberOpenids[0] === openid)
   );
+}
+
+function isLedgerArchived(ledger) {
+  if (!ledger) {
+    return false;
+  }
+  const v = ledger.archived;
+  // 旧数据无 archived 字段视为未归档；仅显式 true 才算已归档
+  return v === true;
+}
+
+function parseLedgerArchivedOnlyFlag(ev) {
+  const raw = ev && ev.archivedOnly;
+  return raw === true || raw === 1 || raw === "1" || String(raw).toLowerCase() === "true";
+}
+
+function assertLedgerNotArchived(ledger) {
+  if (isLedgerArchived(ledger)) {
+    return { ok: false, errMsg: "账本已归档，请先恢复后再操作" };
+  }
+  return { ok: true };
 }
 
 /** 是否允许当前用户编辑/删除该条流水（协作者不可改删他人记录）。 */
@@ -2635,8 +2733,14 @@ exports.main = async (event) => {
         return await updateLedgerName(openid, event);
       case "updateLedgerMonthlyBudget":
         return await updateLedgerMonthlyBudget(openid, event);
+      case "updateLedgerDefaultAssetAccount":
+        return await updateLedgerDefaultAssetAccount(openid, event);
       case "listLedgers":
-        return await listLedgers(openid);
+        return await listLedgers(openid, event);
+      case "setLedgerPinned":
+        return await setLedgerPinned(openid, event);
+      case "archiveLedger":
+        return await archiveLedger(openid, event);
       case "enterLedger":
         return await enterLedger(openid, event);
       case "joinLedger":
@@ -2770,6 +2874,7 @@ async function createLedger(openid, event) {
       creatorOpenid: openid,
       memberOpenids: [openid],
       categories: mergeDefaultCategorySeed().slice(),
+      archived: false,
       createdAt: db.serverDate(),
     },
   });
@@ -2793,6 +2898,10 @@ async function updateLedgerName(openid, event) {
   if (!gate.ok) {
     return { success: false, errMsg: gate.errMsg };
   }
+  const active = assertLedgerNotArchived(gate.ledger);
+  if (!active.ok) {
+    return { success: false, errMsg: active.errMsg };
+  }
   const ledgerName = normalizeLedgerName(event.name);
   if (!ledgerName) {
     return { success: false, errMsg: "请输入账本名称" };
@@ -2810,6 +2919,10 @@ async function updateLedgerMonthlyBudget(openid, event) {
   const gate = await assertCreator(openid, event.ledgerId);
   if (!gate.ok) {
     return { success: false, errMsg: gate.errMsg };
+  }
+  const active = assertLedgerNotArchived(gate.ledger);
+  if (!active.ok) {
+    return { success: false, errMsg: active.errMsg };
   }
   const clear =
     event.clearBudget === true ||
@@ -2838,6 +2951,51 @@ async function updateLedgerMonthlyBudget(openid, event) {
     },
   });
   return { success: true, monthlyBudgetCents: cents };
+}
+
+async function updateLedgerDefaultAssetAccount(openid, event) {
+  const gate = await assertCreator(openid, event.ledgerId);
+  if (!gate.ok) {
+    return { success: false, errMsg: gate.errMsg };
+  }
+  const active = assertLedgerNotArchived(gate.ledger);
+  if (!active.ok) {
+    return { success: false, errMsg: active.errMsg };
+  }
+  const clear =
+    event.clearDefault === true ||
+    event.assetAccountId === null ||
+    event.assetAccountId === "";
+  if (clear) {
+    await db.collection("ledgers").doc(gate.ledgerId).update({
+      data: {
+        defaultAssetAccountId: _.remove(),
+        defaultAssetAccountName: _.remove(),
+        updatedAt: db.serverDate(),
+      },
+    });
+    return {
+      success: true,
+      defaultAssetAccountId: null,
+      defaultAssetAccountName: null,
+    };
+  }
+  const link = await normalizeOptionalAssetLink(openid, event.assetAccountId);
+  if (!link.ok) {
+    return { success: false, errMsg: link.errMsg || "资产账户无效" };
+  }
+  await db.collection("ledgers").doc(gate.ledgerId).update({
+    data: {
+      defaultAssetAccountId: link.assetAccountId,
+      defaultAssetAccountName: link.assetAccountName,
+      updatedAt: db.serverDate(),
+    },
+  });
+  return {
+    success: true,
+    defaultAssetAccountId: link.assetAccountId,
+    defaultAssetAccountName: link.assetAccountName,
+  };
 }
 
 function getChinaMonthWindowForList(now = new Date()) {
@@ -2900,20 +3058,32 @@ async function sumLedgerTransactionsInTimeRange(ledgerId, startMs, endMs) {
   return { incomeCents, expenseCents };
 }
 
-async function listLedgers(openid) {
+async function listLedgers(openid, event) {
+  const ev = event && typeof event === "object" ? event : {};
+  const archivedOnly = parseLedgerArchivedOnlyFlag(ev);
+  const ledgerFields = {
+    name: true,
+    createdAt: true,
+    memberOpenids: true,
+    creatorOpenid: true,
+    monthlyBudgetCents: true,
+    defaultAssetAccountId: true,
+    archived: true,
+  };
+  const where = { memberOpenids: openid };
+  if (archivedOnly) {
+    where.archived = true;
+  } else {
+    // 与 listAssetAccounts 一致：无 archived 字段的旧账本归入「未归档」
+    where.archived = _.neq(true);
+  }
   let res = await db
     .collection("ledgers")
-    .where({ memberOpenids: openid })
-    .field({
-      name: true,
-      createdAt: true,
-      memberOpenids: true,
-      creatorOpenid: true,
-      monthlyBudgetCents: true,
-    })
+    .where(where)
+    .field(ledgerFields)
     .get();
   let rows = res.data || [];
-  if (rows.length === 0) {
+  if (!archivedOnly && rows.length === 0) {
     const created = await createLedger(openid, { name: "我的账本" });
     if (!created.success) {
       return {
@@ -2924,18 +3094,33 @@ async function listLedgers(openid) {
     }
     res = await db
       .collection("ledgers")
-      .where({ memberOpenids: openid })
-      .field({
-        name: true,
-        createdAt: true,
-        memberOpenids: true,
-        creatorOpenid: true,
-        monthlyBudgetCents: true,
-      })
+      .where(where)
+      .field(ledgerFields)
       .get();
     rows = res.data || [];
   }
+  if (archivedOnly) {
+    rows = rows.filter((doc) => isLedgerArchived(doc));
+  } else {
+    rows = rows.filter((doc) => !isLedgerArchived(doc));
+  }
+  const pinMap = await fetchLedgerMemberPinMap(
+    openid,
+    rows.map((doc) => doc && doc._id)
+  );
   rows.sort((a, b) => {
+    const pa = pinMap[a._id] && pinMap[a._id].pinned ? 1 : 0;
+    const pb = pinMap[b._id] && pinMap[b._id].pinned ? 1 : 0;
+    if (pa !== pb) {
+      return pb - pa;
+    }
+    if (pa && pb) {
+      const pta = (pinMap[a._id] && pinMap[a._id].pinnedAtMs) || 0;
+      const ptb = (pinMap[b._id] && pinMap[b._id].pinnedAtMs) || 0;
+      if (pta !== ptb) {
+        return ptb - pta;
+      }
+    }
     const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return tb - ta;
@@ -2987,9 +3172,11 @@ async function listLedgers(openid) {
   const list = rows.map((doc, idx) => {
     const sums = monthSums[idx] || { incomeCents: 0, expenseCents: 0 };
     const budget = readMonthlyBudgetCents(doc);
+    const pinInfo = pinMap[doc._id] || { pinned: false, pinnedAtMs: 0 };
     return {
       _id: doc._id,
       name: doc.name,
+      pinned: !!pinInfo.pinned,
       memberCount: (doc.memberOpenids || []).length,
       /** 毫秒时间戳，供统计页按账本创建日生成可选周期 */
       createdAtMs: (() => {
@@ -3006,9 +3193,41 @@ async function listLedgers(openid) {
       monthExpenseCents: sums.expenseCents,
       monthSummaryLabel: monthWin.label,
       monthlyBudgetCents: budget,
+      defaultAssetAccountId: readLedgerDefaultAssetAccountId(doc),
+      archived: isLedgerArchived(doc),
     };
   });
   return { success: true, list };
+}
+
+async function setLedgerPinned(openid, event) {
+  const ev = event && typeof event === "object" ? event : {};
+  const ledgerId = normalizeLedgerId(ev.ledgerId);
+  if (!ledgerId) {
+    return { success: false, errMsg: "缺少 ledgerId" };
+  }
+  const gate = await assertMember(openid, ledgerId);
+  if (!gate.ok) {
+    return { success: false, errMsg: gate.errMsg };
+  }
+  const pinned = !(
+    ev.pinned === false ||
+    ev.pinned === 0 ||
+    String(ev.pinned || "").toLowerCase() === "false"
+  );
+  await ensureLedgerMemberRow(
+    openid,
+    ledgerId,
+    isLedgerCreator(gate.ledger, openid) ? "owner" : "member"
+  );
+  const patch = pinned
+    ? { pinned: true, pinnedAt: db.serverDate() }
+    : { pinned: false, pinnedAt: null };
+  await db
+    .collection("ledger_members")
+    .doc(memberDocId(openid, ledgerId))
+    .update({ data: patch });
+  return { success: true, pinned };
 }
 
 /**
@@ -3063,6 +3282,10 @@ async function createLedgerInvite(openid, event) {
   const gate = await assertCreator(openid, event.ledgerId);
   if (!gate.ok) {
     return { success: false, errMsg: gate.errMsg };
+  }
+  const active = assertLedgerNotArchived(gate.ledger);
+  if (!active.ok) {
+    return { success: false, errMsg: active.errMsg };
   }
   const ledgerId = gate.ledgerId;
   const hoursRaw = Number(event.expireHours);
@@ -3123,6 +3346,12 @@ async function enterLedger(openid, event) {
   }
 
   if (!ledger.memberOpenids.includes(openid)) {
+    if (isLedgerArchived(ledger)) {
+      return {
+        success: false,
+        errMsg: "账本已归档，暂不接受新成员加入",
+      };
+    }
     const inviteCheck = await verifyLedgerInviteForJoin(
       ledgerId,
       event && event.inviteCode
@@ -3156,6 +3385,8 @@ async function enterLedger(openid, event) {
 
   const categories = await buildCategoryListForLedger(ledgerId);
   const le = await fetchLedgerById(ledgerId);
+  const pinMap = await fetchLedgerMemberPinMap(openid, [ledgerId]);
+  const pinInfo = pinMap[ledgerId] || { pinned: false };
 
   return {
     success: true,
@@ -3167,7 +3398,11 @@ async function enterLedger(openid, event) {
       expenseList: filterCategoriesByKind(categories, le, "expense"),
       incomeList: filterCategoriesByKind(categories, le, "income"),
       monthlyBudgetCents: readMonthlyBudgetCents(fresh),
+      defaultAssetAccountId: readLedgerDefaultAssetAccountId(fresh),
+      defaultAssetAccountName: readLedgerDefaultAssetAccountName(fresh),
       isCreator: isLedgerCreator(fresh, openid),
+      archived: isLedgerArchived(fresh),
+      pinned: !!pinInfo.pinned,
     },
   };
 }
@@ -3180,6 +3415,9 @@ async function joinLedger(openid, event) {
   const ledger = await fetchLedgerById(ledgerId);
   if (!ledger || !Array.isArray(ledger.memberOpenids)) {
     return { success: false, errMsg: "账本不存在" };
+  }
+  if (isLedgerArchived(ledger)) {
+    return { success: false, errMsg: "账本已归档，暂不接受新成员加入" };
   }
 
   if (ledger.memberOpenids.includes(openid)) {
@@ -3280,6 +3518,10 @@ async function reviewJoinRequest(openid, event) {
   if (!gate.ok) {
     return { success: false, errMsg: gate.errMsg };
   }
+  const active = assertLedgerNotArchived(gate.ledger);
+  if (!active.ok) {
+    return { success: false, errMsg: active.errMsg };
+  }
   const { ledgerId } = gate;
   const applicantOpenid = String(event.applicantOpenid || "").trim();
   if (!applicantOpenid) {
@@ -3319,6 +3561,10 @@ async function removeCollaborator(openid, event) {
   const gate = await assertCreator(openid, event.ledgerId);
   if (!gate.ok) {
     return { success: false, errMsg: gate.errMsg };
+  }
+  const active = assertLedgerNotArchived(gate.ledger);
+  if (!active.ok) {
+    return { success: false, errMsg: active.errMsg };
   }
   const { ledger, ledgerId } = gate;
   const targetOpenid = String(event.targetOpenid || "").trim();
@@ -3417,6 +3663,8 @@ async function getLedger(openid, rawLedgerId) {
   const categories = await buildCategoryListForLedger(ledgerId);
   const ledger = await fetchLedgerById(ledgerId);
   const row = ledger || gate.ledger;
+  const pinMap = await fetchLedgerMemberPinMap(openid, [ledgerId]);
+  const pinInfo = pinMap[ledgerId] || { pinned: false };
   return {
     success: true,
     ledger: {
@@ -3428,13 +3676,32 @@ async function getLedger(openid, rawLedgerId) {
       expenseList: filterCategoriesByKind(categories, row, "expense"),
       incomeList: filterCategoriesByKind(categories, row, "income"),
       monthlyBudgetCents: readMonthlyBudgetCents(row),
+      defaultAssetAccountId: readLedgerDefaultAssetAccountId(row),
+      defaultAssetAccountName: readLedgerDefaultAssetAccountName(row),
       isCreator:
         row.creatorOpenid === openid ||
         (!row.creatorOpenid &&
           row.memberOpenids &&
           row.memberOpenids[0] === openid),
+      archived: isLedgerArchived(row),
+      pinned: !!pinInfo.pinned,
     },
   };
+}
+
+async function archiveLedger(openid, event) {
+  const gate = await assertCreator(openid, event.ledgerId);
+  if (!gate.ok) {
+    return { success: false, errMsg: gate.errMsg };
+  }
+  const archived = event.archived !== false;
+  await db.collection("ledgers").doc(gate.ledgerId).update({
+    data: {
+      archived,
+      updatedAt: db.serverDate(),
+    },
+  });
+  return { success: true, archived };
 }
 
 async function deleteLedger(openid, event) {
@@ -3452,6 +3719,9 @@ async function deleteLedger(openid, event) {
     "";
   if (creator !== openid) {
     return { success: false, errMsg: "仅创建者可删除账本" };
+  }
+  if (!isLedgerArchived(ledger)) {
+    return { success: false, errMsg: "请先归档账本后再删除" };
   }
   try {
     await removeDocumentsWhere("transactions", { ledgerId }, 100);
@@ -3666,7 +3936,9 @@ async function listTransactions(openid, rawLedgerId) {
             ? maskOpenidForDisplay(oid)
             : "未知",
       payerAvatarUrl: oid && profile ? profile.avatarUrl || "" : "",
-      canEdit: transactionEditableByCaller(openid, tx, ledger),
+      canEdit:
+        !isLedgerArchived(ledger) &&
+        transactionEditableByCaller(openid, tx, ledger),
     };
   });
   return { success: true, list };
@@ -3682,6 +3954,10 @@ async function insertLedgerTransaction(openid, ledgerId, payload) {
   const gate = await assertMember(openid, ledgerId);
   if (!gate.ok) {
     return { ok: false, errMsg: gate.errMsg };
+  }
+  const active = assertLedgerNotArchived(gate.ledger);
+  if (!active.ok) {
+    return { ok: false, errMsg: active.errMsg };
   }
   const catCheck = await assertCategoryAllowedForLedgerWithFlow(
     ledgerId,
@@ -3979,6 +4255,10 @@ async function createSchedule(openid, event) {
   if (!gate.ok) {
     return { success: false, errMsg: gate.errMsg };
   }
+  const active = assertLedgerNotArchived(gate.ledger);
+  if (!active.ok) {
+    return { success: false, errMsg: active.errMsg };
+  }
   const recurrence = scheduleLib.normalizeRecurrence(event.recurrence);
   const flow = event.flow === "income" ? "income" : "expense";
   const catCheck = await assertCategoryAllowedForLedgerWithFlow(
@@ -4109,6 +4389,14 @@ async function updateSchedule(openid, event) {
   if (!doc || doc.ownerOpenid !== openid) {
     return { success: false, errMsg: "记录不存在或无权访问" };
   }
+  const ledgerGate = await assertMember(openid, doc.ledgerId);
+  if (!ledgerGate.ok) {
+    return { success: false, errMsg: ledgerGate.errMsg };
+  }
+  const activeLedger = assertLedgerNotArchived(ledgerGate.ledger);
+  if (!activeLedger.ok) {
+    return { success: false, errMsg: activeLedger.errMsg };
+  }
   const patch = {};
   let effectiveLedgerId = doc.ledgerId;
   if (event.ledgerId != null && String(event.ledgerId).trim()) {
@@ -4117,6 +4405,10 @@ async function updateSchedule(openid, event) {
       const g2 = await assertMember(openid, nl);
       if (!g2.ok) {
         return { success: false, errMsg: g2.errMsg };
+      }
+      const activeTarget = assertLedgerNotArchived(g2.ledger);
+      if (!activeTarget.ok) {
+        return { success: false, errMsg: activeTarget.errMsg };
       }
       patch.ledgerId = nl;
       patch.ledgerNameSnapshot = g2.ledger.name || "";
@@ -4329,6 +4621,20 @@ async function executeScheduleDoc(doc) {
         data: {
           enabled: false,
           lastError: gate.errMsg,
+          lastAttemptAt: db.serverDate(),
+        },
+      });
+    return false;
+  }
+  const active = assertLedgerNotArchived(gate.ledger);
+  if (!active.ok) {
+    await db
+      .collection("ledger_schedules")
+      .doc(String(id))
+      .update({
+        data: {
+          enabled: false,
+          lastError: active.errMsg,
           lastAttemptAt: db.serverDate(),
         },
       });
@@ -5082,16 +5388,89 @@ async function collectTransactionsForLedgerIds(ledgerIdList) {
   return all;
 }
 
+function normalizeLedgerIdsFromEvent(event) {
+  const raw = event && event.ledgerIds;
+  if (!raw) {
+    return [];
+  }
+  const arr = Array.isArray(raw) ? raw : [raw];
+  const seen = Object.create(null);
+  const out = [];
+  for (let i = 0; i < arr.length; i += 1) {
+    const id = normalizeLedgerId(arr[i]);
+    if (!id || seen[id]) {
+      continue;
+    }
+    seen[id] = true;
+    out.push(id);
+  }
+  return out;
+}
+
+function buildAnalyzeScopeLabel(ledgers) {
+  const names = (ledgers || [])
+    .map((l) => String((l && l.name) || "未命名账本").trim())
+    .filter(Boolean);
+  if (!names.length) {
+    return "";
+  }
+  if (names.length === 1) {
+    return names[0];
+  }
+  if (names.length === 2) {
+    const joined = `${names[0]} + ${names[1]}`;
+    return joined.length > 24 ? "已选 2 个账本" : joined;
+  }
+  return `已选 ${names.length} 个账本`;
+}
+
+function sumMonthlyBudgetCentsForLedgers(ledgers) {
+  let sum = 0;
+  let any = false;
+  for (let i = 0; i < (ledgers || []).length; i += 1) {
+    const b = readMonthlyBudgetCents(ledgers[i]);
+    if (b && b > 0) {
+      sum += b;
+      any = true;
+    }
+  }
+  return any ? sum : null;
+}
+
+async function resolveAccessibleLedgersForOpenid(openid, ledgerIdList) {
+  const list = (ledgerIdList || []).map((x) => normalizeLedgerId(x)).filter(Boolean);
+  if (!list.length) {
+    return { ok: false, errMsg: "缺少账本" };
+  }
+  const ledgers = [];
+  const ledgerIds = [];
+  for (let i = 0; i < list.length; i += 1) {
+    const gate = await assertMember(openid, list[i]);
+    if (!gate.ok || !gate.ledger) {
+      continue;
+    }
+    if (isLedgerArchived(gate.ledger)) {
+      continue;
+    }
+    ledgers.push(gate.ledger);
+    ledgerIds.push(String(gate.ledger._id));
+  }
+  if (!ledgerIds.length) {
+    return { ok: false, errMsg: "暂无可统计账本" };
+  }
+  return { ok: true, ledgers, ledgerIds };
+}
+
 async function buildLedgerIdToDocMapForOpenid(openid) {
   const res = await db
     .collection("ledgers")
-    .where({ memberOpenids: openid })
+    .where({ memberOpenids: openid, archived: _.neq(true) })
     .get();
   const map = Object.create(null);
   const rows = res.data || [];
   for (let i = 0; i < rows.length; i += 1) {
     const d = rows[i];
-    if (d && d._id) {
+    if (d && d._id && !isLedgerArchived(d)) {
       map[String(d._id)] = d;
     }
   }
@@ -5255,29 +5634,24 @@ async function buildAnalyzeLedgerResultPayload(
   };
 }
 
-async function analyzeLedgerAllOpen(openid, event) {
+async function analyzeLedgerForIds(openid, event, ledgerIdList, opts) {
+  const options = opts || {};
   const range = event.range === "month" || event.range === "year" ? event.range : "week";
   const baseRange = getAnalyzeRange(range, event);
-  const { start, end, selectedYear, selectedMonth, weekAnchorDate } = baseRange;
   const compareRange = getAnalyzeCompareRange(range, baseRange);
+  const { start, end } = baseRange;
   const startMs = start.getTime();
   const endMs = end.getTime();
   const compareStartMs = compareRange.start.getTime();
   const compareEndMs = compareRange.end.getTime();
 
-  const ledgerIdList = await fetchLedgerIdsForMemberOpenid(openid);
-  if (!ledgerIdList.length) {
-    return { success: false, errMsg: "暂无可统计账本" };
+  const resolved = await resolveAccessibleLedgersForOpenid(openid, ledgerIdList);
+  if (!resolved.ok) {
+    return { success: false, errMsg: resolved.errMsg };
   }
+  const { ledgers, ledgerIds } = resolved;
 
-  const ledgersRes = await db
-    .collection("ledgers")
-    .where({ memberOpenids: openid })
-    .field({ createdAt: true })
-    .get();
-  const minCreated = minCreatedMsForLedgerDocs(ledgersRes.data || []);
-
-  const all = await collectTransactionsForLedgerIds(ledgerIdList);
+  const all = await collectTransactionsForLedgerIds(ledgerIds);
   const rows = all.filter((tx) => {
     const t = txTimeMs(tx);
     return t >= startMs && t <= endMs;
@@ -5287,21 +5661,44 @@ async function analyzeLedgerAllOpen(openid, event) {
     return t >= compareStartMs && t <= compareEndMs;
   });
 
+  const ledgerName =
+    options.ledgerName != null ? options.ledgerName : buildAnalyzeScopeLabel(ledgers);
+  const monthlyBudgetCents =
+    options.monthlyBudgetCents !== undefined
+      ? options.monthlyBudgetCents
+      : sumMonthlyBudgetCentsForLedgers(ledgers);
+  const trendLedgerMs = minCreatedMsForLedgerDocs(ledgers);
+
   return buildAnalyzeLedgerResultPayload(openid, {
     range,
     baseRange,
     compareRange,
     rows,
     compareRows,
+    ledgerName,
+    monthlyBudgetCents,
+    trendLedgerMs,
+  });
+}
+
+async function analyzeLedgerAllOpen(openid, event) {
+  const ledgerIdList = await fetchLedgerIdsForMemberOpenid(openid);
+  if (!ledgerIdList.length) {
+    return { success: false, errMsg: "暂无可统计账本" };
+  }
+  return analyzeLedgerForIds(openid, event, ledgerIdList, {
     ledgerName: "全部账本",
     monthlyBudgetCents: null,
-    trendLedgerMs: minCreated,
   });
 }
 
 async function analyzeLedger(openid, event) {
   if (event.scope === "all" || event.allLedgers === true) {
     return await analyzeLedgerAllOpen(openid, event);
+  }
+  const customIds = normalizeLedgerIdsFromEvent(event);
+  if (customIds.length > 0) {
+    return analyzeLedgerForIds(openid, event, customIds);
   }
   const ledgerId = normalizeLedgerId(event.ledgerId);
   const range = event.range === "month" || event.range === "year" ? event.range : "week";
@@ -5364,6 +5761,8 @@ function formatTxLineTime(d) {
 
 async function listGroupTransactions(openid, event) {
   const scopeAll = event.scope === "all" || event.allLedgers === true;
+  const customIds = normalizeLedgerIdsFromEvent(event);
+  const scopeCustom = !scopeAll && customIds.length > 0;
   const ledgerId = normalizeLedgerId(event.ledgerId);
   const range = event.range === "month" || event.range === "year" ? event.range : "week";
   const groupBy =
@@ -5382,18 +5781,32 @@ async function listGroupTransactions(openid, event) {
   if (groupKey == null || groupKey === "") {
     return { success: false, errMsg: "参数不完整" };
   }
-  if (!scopeAll && !ledgerId) {
+  if (!scopeAll && !scopeCustom && !ledgerId) {
     return { success: false, errMsg: "参数不完整" };
   }
 
   let gate = null;
   let ledgerIdToDoc = null;
+  let targetLedgerIds = [];
   if (scopeAll) {
     ledgerIdToDoc = await buildLedgerIdToDocMapForOpenid(openid);
-    const k = Object.keys(ledgerIdToDoc);
-    if (!k.length) {
+    targetLedgerIds = Object.keys(ledgerIdToDoc);
+    if (!targetLedgerIds.length) {
       return { success: false, errMsg: "暂无可统计账本" };
     }
+  } else if (scopeCustom) {
+    const resolved = await resolveAccessibleLedgersForOpenid(openid, customIds);
+    if (!resolved.ok) {
+      return { success: false, errMsg: resolved.errMsg };
+    }
+    ledgerIdToDoc = Object.create(null);
+    for (let i = 0; i < resolved.ledgers.length; i += 1) {
+      const d = resolved.ledgers[i];
+      if (d && d._id) {
+        ledgerIdToDoc[String(d._id)] = d;
+      }
+    }
+    targetLedgerIds = resolved.ledgerIds;
   } else {
     const g = await assertMember(openid, ledgerId);
     if (!g.ok) {
@@ -5402,7 +5815,15 @@ async function listGroupTransactions(openid, event) {
     gate = g;
   }
 
-  const displayLedgerName = scopeAll ? "全部账本" : gate.ledger && gate.ledger.name ? String(gate.ledger.name) : "";
+  const displayLedgerName = scopeAll
+    ? "全部账本"
+    : scopeCustom
+      ? buildAnalyzeScopeLabel(
+          targetLedgerIds.map((id) => ledgerIdToDoc[id]).filter(Boolean)
+        )
+      : gate.ledger && gate.ledger.name
+        ? String(gate.ledger.name)
+        : "";
 
   const { start, end, label, selectedYear, selectedMonth, weekAnchorDate } = getAnalyzeRange(
     range,
@@ -5412,8 +5833,8 @@ async function listGroupTransactions(openid, event) {
   const endMs = end.getTime();
 
   let all;
-  if (scopeAll) {
-    all = await collectTransactionsForLedgerIds(Object.keys(ledgerIdToDoc));
+  if (scopeAll || scopeCustom) {
+    all = await collectTransactionsForLedgerIds(targetLedgerIds);
   } else {
     const res = await db
       .collection("transactions")
@@ -5532,11 +5953,14 @@ async function listGroupTransactions(openid, event) {
           ? maskOpenidForDisplay(oid)
           : "未知";
     const txLid = String(tx.ledgerId || "").trim();
-    const resLedger = scopeAll
-      ? (ledgerIdToDoc && txLid ? ledgerIdToDoc[txLid] : null)
-      : gate && gate.ledger
-        ? gate.ledger
-        : null;
+    const resLedger =
+      scopeAll || scopeCustom
+        ? ledgerIdToDoc && txLid
+          ? ledgerIdToDoc[txLid]
+          : null
+        : gate && gate.ledger
+          ? gate.ledger
+          : null;
     return {
       _id: tx._id,
       ledgerId: txLid,
@@ -5547,7 +5971,10 @@ async function listGroupTransactions(openid, event) {
       timeText: formatTxLineTime(txOccurredDate(tx)),
       payerName,
       payerAvatarUrl: oid && profile ? profile.avatarUrl || "" : "",
-      canEdit: resLedger ? transactionEditableByCaller(openid, tx, resLedger) : false,
+      canEdit:
+        resLedger &&
+        !isLedgerArchived(resLedger) &&
+        transactionEditableByCaller(openid, tx, resLedger),
     };
   });
 
@@ -5657,6 +6084,10 @@ async function updateTransaction(openid, event) {
   if (!transactionEditableByCaller(openid, g.tx, g.ledger)) {
     return { success: false, errMsg: "只能编辑或删除本人记录的流水" };
   }
+  const sourceActive = assertLedgerNotArchived(g.ledger);
+  if (!sourceActive.ok) {
+    return { success: false, errMsg: sourceActive.errMsg };
+  }
   const newLedgerIdRaw =
     event.newLedgerId != null ? normalizeLedgerId(event.newLedgerId) : "";
   const targetLedgerId =
@@ -5665,6 +6096,10 @@ async function updateTransaction(openid, event) {
     const targetGate = await assertMember(openid, targetLedgerId);
     if (!targetGate.ok) {
       return { success: false, errMsg: targetGate.errMsg || "无权访问目标账本" };
+    }
+    const targetActive = assertLedgerNotArchived(targetGate.ledger);
+    if (!targetActive.ok) {
+      return { success: false, errMsg: targetActive.errMsg };
     }
   }
   const catCheck = await assertCategoryAllowedForLedgerWithFlow(
@@ -5788,6 +6223,10 @@ async function deleteTransaction(openid, event) {
   }
   if (!transactionEditableByCaller(openid, g.tx, g.ledger)) {
     return { success: false, errMsg: "只能编辑或删除本人记录的流水" };
+  }
+  const active = assertLedgerNotArchived(g.ledger);
+  if (!active.ok) {
+    return { success: false, errMsg: active.errMsg };
   }
   const delA = await applyLedgerDeleteAssetLink(openid, ledgerId, g.tx);
   if (!delA.ok) {

@@ -10,33 +10,6 @@ function safeEnterQuery(syncFn) {
   }
 }
 
-function pickLedgerId(...queryObjs) {
-  for (let i = 0; i < queryObjs.length; i += 1) {
-    const q = queryObjs[i];
-    if (!q || typeof q !== "object") {
-      continue;
-    }
-    const raw = q.id ?? q.ledgerId ?? q.lid;
-    if (raw == null) {
-      continue;
-    }
-    let id = String(raw).trim();
-    if (!id) {
-      continue;
-    }
-    try {
-      id = decodeURIComponent(id);
-    } catch (e) {
-      // ignore
-    }
-    id = id.trim();
-    if (id) {
-      return id;
-    }
-  }
-  return "";
-}
-
 function decodeKey(raw) {
   if (raw == null || raw === "") {
     return "";
@@ -133,11 +106,13 @@ function parseWeekAnchor(raw) {
   return m ? s : "";
 }
 
+const analyzeScope = require("../../utils/analyze-scope");
+
 Page({
   data: {
     loading: true,
-    /** 与统计页「全部账本」一致，为 true 时云函数传 scope: all */
-    analyzeAll: false,
+    scopeMode: "single",
+    selectedLedgerIds: [],
     ledgerId: "",
     ledgerName: "",
     range: "week",
@@ -161,8 +136,8 @@ Page({
 
   onLoad(options) {
     const launchQ = safeEnterQuery(wx.getLaunchOptionsSync);
-    const analyzeAll = options.scope === "all" || options.all === "1";
-    const ledgerId = pickLedgerId(options, launchQ);
+    const parsedScope = analyzeScope.parseScopeFromPageOptions(options)
+      || analyzeScope.parseScopeFromPageOptions(launchQ);
     const range =
       options.range === "month" || options.range === "year"
         ? options.range
@@ -180,14 +155,16 @@ Page({
     const month = toInt(options.month) || now.getMonth() + 1;
     const weekAnchorDate = parseWeekAnchor(options.weekAnchorDate);
     const groupKey = decodeKey(options.key);
-    if (!groupKey || (!analyzeAll && !ledgerId)) {
+    if (!groupKey || !parsedScope || !analyzeScope.isScopeLoadable(parsedScope)) {
       wx.showToast({ title: "参数不完整", icon: "none" });
       this.setData({ loading: false });
       return;
     }
+    const ledgerIds = parsedScope.ledgerIds || [];
     this.setData({
-      analyzeAll,
-      ledgerId: analyzeAll ? "" : ledgerId,
+      scopeMode: parsedScope.mode,
+      selectedLedgerIds: ledgerIds,
+      ledgerId: ledgerIds.length === 1 ? ledgerIds[0] : "",
       range,
       selectedYear: year,
       selectedMonth: month,
@@ -212,6 +189,14 @@ Page({
     return `${first} > 明细`;
   },
 
+  getScopeStateFromData() {
+    return {
+      mode: this.data.scopeMode,
+      ledgerIds: (this.data.selectedLedgerIds || []).slice(),
+      groupId: "",
+    };
+  },
+
   load() {
     const app = getApp();
     if (!app.globalData.env) {
@@ -223,8 +208,6 @@ Page({
       return;
     }
     const {
-      analyzeAll,
-      ledgerId,
       range,
       groupBy,
       groupKey,
@@ -234,6 +217,7 @@ Page({
       subGroupBy,
       subGroupKey,
     } = this.data;
+    const scopeState = this.getScopeStateFromData();
     const payload = {
       type: "listGroupTransactions",
       range,
@@ -244,12 +228,8 @@ Page({
       groupKey,
       subGroupBy,
       subGroupKey,
+      ...analyzeScope.buildAnalyzeCallScope(scopeState),
     };
-    if (analyzeAll) {
-      payload.scope = "all";
-    } else {
-      payload.ledgerId = ledgerId;
-    }
     this.setData({ loading: true });
     wx.cloud
       .callFunction({
@@ -371,8 +351,6 @@ Page({
   onSubGroupTap(e) {
     const subGroupKey = e.currentTarget.dataset.key;
     const {
-      analyzeAll,
-      ledgerId,
       range,
       groupBy,
       groupKey,
@@ -381,14 +359,19 @@ Page({
       weekAnchorDate,
       subGroupBy,
     } = this.data;
-    if ((!analyzeAll && !ledgerId) || !groupKey || !subGroupKey || groupBy !== "person" || subGroupBy !== "category") {
+    const scopeState = this.getScopeStateFromData();
+    if (
+      !analyzeScope.isScopeLoadable(scopeState) ||
+      !groupKey ||
+      !subGroupKey ||
+      groupBy !== "person" ||
+      subGroupBy !== "category"
+    ) {
       return;
     }
-    const idPart = analyzeAll
-      ? "scope=all"
-      : `id=${encodeURIComponent(ledgerId)}`;
+    const scopeParam = analyzeScope.buildAnalyzeScopeUrlParam(scopeState);
     wx.navigateTo({
-      url: `/pages/ledger-analytics-drill/ledger-analytics-drill?${idPart}&range=${range}&groupBy=${groupBy}&year=${selectedYear}&month=${selectedMonth}&weekAnchorDate=${encodeURIComponent(
+      url: `/pages/ledger-analytics-drill/ledger-analytics-drill?${scopeParam}&range=${range}&groupBy=${groupBy}&year=${selectedYear}&month=${selectedMonth}&weekAnchorDate=${encodeURIComponent(
         weekAnchorDate
       )}&key=${encodeURIComponent(String(groupKey))}&subGroupBy=category&subGroupKey=${encodeURIComponent(
         String(subGroupKey)

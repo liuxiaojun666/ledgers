@@ -46,6 +46,12 @@
       ]
     },
     {
+      "root": "pages/ledger-default-account",
+      "pages": [
+        "ledger-default-account"
+      ]
+    },
+    {
       "root": "pages/ledger-categories",
       "pages": [
         "ledger-categories"
@@ -73,6 +79,12 @@
       "root": "pages/ledger-schedule-edit",
       "pages": [
         "ledger-schedule-edit"
+      ]
+    },
+    {
+      "root": "pages/ledger-archived-list",
+      "pages": [
+        "ledger-archived-list"
       ]
     }
   ],
@@ -125,11 +137,13 @@
         "pages/ledger-collaborators",
         "pages/ledger-pending",
         "pages/ledger-budget",
+        "pages/ledger-default-account",
         "pages/ledger-categories",
         "pages/ledger-analytics-drill",
         "pages/ledger-tx",
         "pages/ledger-schedules",
-        "pages/ledger-schedule-edit"
+        "pages/ledger-schedule-edit",
+        "pages/ledger-archived-list"
       ]
     },
     "pages/ledger-analytics/ledger-analytics": {
@@ -140,11 +154,13 @@
         "pages/ledger-collaborators",
         "pages/ledger-pending",
         "pages/ledger-budget",
+        "pages/ledger-default-account",
         "pages/ledger-categories",
         "pages/ledger-analytics-drill",
         "pages/ledger-tx",
         "pages/ledger-schedules",
-        "pages/ledger-schedule-edit"
+        "pages/ledger-schedule-edit",
+        "pages/ledger-archived-list"
       ]
     },
     "pages/mine/mine": {
@@ -155,11 +171,13 @@
         "pages/ledger-collaborators",
         "pages/ledger-pending",
         "pages/ledger-budget",
+        "pages/ledger-default-account",
         "pages/ledger-categories",
         "pages/ledger-analytics-drill",
         "pages/ledger-tx",
         "pages/ledger-schedules",
-        "pages/ledger-schedule-edit"
+        "pages/ledger-schedule-edit",
+        "pages/ledger-archived-list"
       ]
     }
   },

@@ -28,10 +28,8 @@ const INSIGHT_POLICY = {
     default: "较上期",
   },
 };
-const LAST_ANALYZE_LEDGER_STORAGE_KEY = "lastAnalyzeLedgerId";
+const analyzeScope = require("../../utils/analyze-scope");
 const LAST_ANALYZE_FILTERS_STORAGE_KEY = "lastAnalyzeFilters";
-/** 与本地存储中「全部账本」统计范围对应，勿与普通账本 _id 冲突 */
-const LAST_ANALYZE_ALL_SENTINEL = "__ALL__";
 
 function readLastAnalyzeFilters() {
   try {
@@ -744,16 +742,16 @@ Page({
     loading: true,
     ledgersLoading: false,
     listLoading: false,
-    /** true：汇总全部可访问账本；false：仅当前 ledgerId 所属账本 */
-    analyzeAll: true,
-    ledgerId: "",
-    ledgerName: "",
+    /** all | single | multi | group */
+    scopeMode: "all",
+    selectedLedgerIds: [],
+    activeGroupId: "",
+    scopeLabel: "全部账本",
+    scopeSheetOpen: false,
+    scopeDraftIds: [],
+    scopeLedgerRows: [],
+    statGroups: [],
     ledgers: [],
-    ledgerNameList: [],
-    /** 与 picker 的「全部 + 各账本」项一致，下标 0 为全部 */
-    ledgerDisplayNames: [],
-    ledgerPickerIndex: 0,
-    ledgerIndex: -1,
     range: "month",
     selectedYear: 0,
     selectedMonth: 0,
@@ -812,7 +810,7 @@ Page({
     const launchQ = safeEnterQuery(wx.getLaunchOptionsSync);
     const ledgerId = pickLedgerId(options, launchQ);
     this._preferredLedgerId = ledgerId || "";
-    this._lastAnalyzeLedgerId = this.readLastAnalyzeLedgerId();
+    this._savedScopeState = null;
   },
 
   onShow() {
@@ -875,8 +873,6 @@ Page({
           return;
         }
         const ledgers = r.list || [];
-        const ledgerNameList = ledgers.map((x) => x.name || "未命名账本");
-        const ledgerDisplayNames = ["全部账本"].concat(ledgerNameList);
         if (!ledgers.length) {
           this._rebuildWithCurrentMonth = false;
           this.destroyF2Charts();
@@ -884,13 +880,12 @@ Page({
             loading: false,
             listLoading: false,
             ledgers,
-            ledgerNameList,
-            ledgerDisplayNames: [],
-            analyzeAll: true,
-            ledgerId: "",
-            ledgerName: "",
-            ledgerIndex: -1,
-            ledgerPickerIndex: 0,
+            scopeMode: "all",
+            selectedLedgerIds: [],
+            activeGroupId: "",
+            scopeLabel: "",
+            statGroups: [],
+            scopeLedgerRows: [],
             groupsCategory: [],
             groupsPerson: [],
             showLineChart: false,
@@ -906,52 +901,41 @@ Page({
           return;
         }
         const preferredId = String(this._preferredLedgerId || "").trim();
-        const lastPicked = String(this._lastAnalyzeLedgerId || "").trim();
-        const lastWasAll = !lastPicked || lastPicked === LAST_ANALYZE_ALL_SENTINEL;
-        const lastIdValid = lastPicked && lastPicked !== LAST_ANALYZE_ALL_SENTINEL
-          && ledgers.some((x) => x._id === lastPicked);
-
-        let analyzeAll = true;
-        let nextLedgerId = "";
-        let nextLedgerName = "全部账本";
-        let ledgerPickerIndex = 0;
-
-        if (preferredId && ledgers.some((x) => x._id === preferredId)) {
-          analyzeAll = false;
-          nextLedgerId = preferredId;
-          const idx = ledgers.findIndex((x) => x._id === preferredId);
-          const picked = idx >= 0 ? ledgers[idx] : ledgers[0];
-          nextLedgerName = String((picked && picked.name) || "");
-          ledgerPickerIndex = 1 + (idx >= 0 ? idx : 0);
-        } else if (!preferredId && !lastWasAll && lastIdValid) {
-          analyzeAll = false;
-          nextLedgerId = lastPicked;
-          const idx = ledgers.findIndex((x) => x._id === lastPicked);
-          const picked = idx >= 0 ? ledgers[idx] : ledgers[0];
-          nextLedgerName = String((picked && picked.name) || "");
-          ledgerPickerIndex = 1 + (idx >= 0 ? idx : 0);
-        } else {
-          analyzeAll = true;
-          nextLedgerId = "";
-          nextLedgerName = "全部账本";
-          ledgerPickerIndex = 0;
+        const statGroups = analyzeScope.enrichStatGroupsForDisplay(
+          analyzeScope.readAnalyzeStatGroups(),
+          ledgers
+        );
+        const resolved = analyzeScope.resolveScopeFromLedgers(ledgers, {
+          preferredId,
+          statGroups,
+        });
+        if (resolved.pruned || resolved.prunedFromGroup) {
+          wx.showToast({ title: "部分账本已不可用，已自动更新范围", icon: "none" });
         }
-
-        const ledgerIndex = analyzeAll
-          ? -1
-          : ledgers.findIndex((x) => x._id === nextLedgerId);
+        const scopeState = {
+          mode: resolved.mode,
+          ledgerIds: resolved.ledgerIds,
+          groupId: resolved.groupId || "",
+        };
+        analyzeScope.writeLastAnalyzeScope(scopeState);
+        this._savedScopeState = scopeState;
         this._preferredLedgerId = "";
-        this.writeLastAnalyzeScope(analyzeAll, nextLedgerId);
+        const scopeLedgerRows = analyzeScope.buildLedgerPickerRows(
+          ledgers,
+          resolved.ledgerIds
+        );
         this.setData(
           {
             ledgers,
-            ledgerNameList,
-            ledgerDisplayNames,
-            analyzeAll,
-            ledgerId: nextLedgerId,
-            ledgerName: nextLedgerName,
-            ledgerIndex: ledgerIndex >= 0 ? ledgerIndex : 0,
-            ledgerPickerIndex,
+            statGroups,
+            scopeMode: resolved.mode,
+            selectedLedgerIds: resolved.ledgerIds,
+            activeGroupId: resolved.groupId || "",
+            scopeLabel: resolved.scopeLabel,
+            scopeLedgerRows,
+            scopeDraftIds: resolved.ledgerIds.length
+              ? resolved.ledgerIds.slice()
+              : ledgers.map((x) => String(x._id || "")).filter(Boolean),
           },
           () => {
             if (this._rebuildWithCurrentMonth) {
@@ -992,60 +976,242 @@ Page({
     this.setTabBarState({ hidden: !!hidden });
   },
 
-  onLedgerPickerOpen() {
+  getScopeStateFromData() {
+    return {
+      mode: this.data.scopeMode,
+      ledgerIds: (this.data.selectedLedgerIds || []).slice(),
+      groupId: String(this.data.activeGroupId || "").trim(),
+    };
+  },
+
+  applyScopeState(scopeState, options) {
+    const opts = options || {};
+    const ledgers = this.data.ledgers || [];
+    const mode = scopeState.mode;
+    let ledgerIds = analyzeScope.pruneLedgerIds(ledgers, scopeState.ledgerIds || []);
+    if (mode !== "all" && !ledgerIds.length) {
+      wx.showToast({ title: "请至少选择一个账本", icon: "none" });
+      return false;
+    }
+    let nextMode = "all";
+    if (mode === "all") {
+      nextMode = "all";
+    } else if (mode === "group") {
+      nextMode = "group";
+    } else if (ledgerIds.length === 1) {
+      nextMode = "single";
+    } else {
+      nextMode = "multi";
+    }
+    const groupId = nextMode === "group" ? String(scopeState.groupId || "").trim() : "";
+    let scopeLabel = "全部账本";
+    if (nextMode === "group" && groupId) {
+      const g = (this.data.statGroups || []).find((x) => x.id === groupId);
+      scopeLabel = g && g.name ? g.name : analyzeScope.buildScopeLabel(ledgers, ledgerIds);
+    } else if (nextMode !== "all") {
+      scopeLabel = analyzeScope.buildScopeLabel(ledgers, ledgerIds);
+    }
+    const persisted = {
+      mode: nextMode,
+      ledgerIds: nextMode === "all" ? [] : ledgerIds,
+      groupId,
+    };
+    analyzeScope.writeLastAnalyzeScope(persisted);
+    this._savedScopeState = persisted;
+    this.setData(
+      {
+        scopeMode: nextMode,
+        selectedLedgerIds: persisted.ledgerIds,
+        activeGroupId: groupId,
+        scopeLabel,
+        scopeLedgerRows: analyzeScope.buildLedgerPickerRows(ledgers, persisted.ledgerIds),
+        scopeDraftIds: persisted.ledgerIds.length
+          ? persisted.ledgerIds.slice()
+          : ledgers.map((x) => String(x._id || "")).filter(Boolean),
+        scopeSheetOpen: false,
+      },
+      () => {
+        this.setCustomTabBarHidden(false);
+        if (opts.reload !== false) {
+          this.rebuildPeriodChips();
+        }
+      }
+    );
+    return true;
+  },
+
+  onScopePickerOpen() {
+    this.destroyF2Charts();
+    const ledgers = this.data.ledgers || [];
+    const draft =
+      this.data.selectedLedgerIds && this.data.selectedLedgerIds.length
+        ? this.data.selectedLedgerIds.slice()
+        : ledgers.map((x) => String(x._id || "")).filter(Boolean);
+    this.setData({
+      scopeSheetOpen: true,
+      scopeDraftIds: draft,
+      scopeLedgerRows: analyzeScope.buildLedgerPickerRows(ledgers, draft),
+      statGroups: analyzeScope.enrichStatGroupsForDisplay(
+        analyzeScope.readAnalyzeStatGroups(),
+        ledgers
+      ),
+    });
     this.setCustomTabBarHidden(true);
   },
 
-  onLedgerPickerClose() {
+  onScopePickerClose() {
+    this.setData({ scopeSheetOpen: false }, () => {
+      wx.nextTick(() => {
+        setTimeout(() => {
+          this.refreshF2Charts();
+        }, 32);
+      });
+    });
     this.setCustomTabBarHidden(false);
   },
 
-  onLedgerChange(e) {
-    this.setCustomTabBarHidden(false);
-    const nextIndex = Number(e && e.detail ? e.detail.value : -1);
-    if (!Number.isFinite(nextIndex) || nextIndex < 0) {
+  onScopeQuickAll() {
+    this.applyScopeState({ mode: "all", ledgerIds: [], groupId: "" });
+  },
+
+  onScopeGroupTap(e) {
+    const groupId = String((e.currentTarget.dataset && e.currentTarget.dataset.id) || "").trim();
+    const group = (this.data.statGroups || []).find((g) => g.id === groupId);
+    if (!group || !group.validLedgerIds || !group.validLedgerIds.length) {
+      wx.showToast({ title: "该组合暂无可用账本", icon: "none" });
       return;
     }
-    if (nextIndex === 0) {
-      if (this.data.analyzeAll) {
-        return;
-      }
-      this.writeLastAnalyzeScope(true, "");
-      this.setData(
-        {
-          analyzeAll: true,
-          ledgerId: "",
-          ledgerName: "全部账本",
-          ledgerPickerIndex: 0,
-          ledgerIndex: -1,
-        },
-        () => this.rebuildPeriodChips()
-      );
+    this.applyScopeState({
+      mode: "group",
+      ledgerIds: group.validLedgerIds.slice(),
+      groupId: group.id,
+    });
+  },
+
+  onScopeGroupDelete(e) {
+    const groupId = String((e.currentTarget.dataset && e.currentTarget.dataset.id) || "").trim();
+    if (!groupId) {
       return;
     }
-    const li = nextIndex - 1;
-    const picked = this.data.ledgers[li];
-    if (!picked || !picked._id) {
-      return;
-    }
-    const nextLedgerId = String(picked._id || "");
-    if (!nextLedgerId) {
-      return;
-    }
-    if (!this.data.analyzeAll && nextLedgerId === this.data.ledgerId) {
-      return;
-    }
-    this.writeLastAnalyzeScope(false, nextLedgerId);
-    this.setData(
-      {
-        analyzeAll: false,
-        ledgerIndex: li,
-        ledgerId: nextLedgerId,
-        ledgerName: String(picked.name || ""),
-        ledgerPickerIndex: nextIndex,
+    wx.showModal({
+      title: "删除组合",
+      content: "确定删除该统计组合？",
+      success: (res) => {
+        if (!res.confirm) {
+          return;
+        }
+        const next = analyzeScope.readAnalyzeStatGroups().filter((g) => g.id !== groupId);
+        analyzeScope.writeAnalyzeStatGroups(next);
+        const statGroups = analyzeScope.enrichStatGroupsForDisplay(next, this.data.ledgers);
+        const patch = { statGroups };
+        if (this.data.activeGroupId === groupId) {
+          patch.activeGroupId = "";
+        }
+        this.setData(patch);
       },
-      () => this.rebuildPeriodChips()
-    );
+    });
+  },
+
+  onScopeGroupRename(e) {
+    const groupId = String((e.currentTarget.dataset && e.currentTarget.dataset.id) || "").trim();
+    const group = (this.data.statGroups || []).find((g) => g.id === groupId);
+    if (!group) {
+      return;
+    }
+    wx.showModal({
+      title: "重命名组合",
+      editable: true,
+      placeholderText: "组合名称",
+      content: group.name,
+      success: (res) => {
+        if (!res.confirm) {
+          return;
+        }
+        const name = String(res.content || "").trim();
+        if (!name) {
+          wx.showToast({ title: "名称不能为空", icon: "none" });
+          return;
+        }
+        const groups = analyzeScope.readAnalyzeStatGroups().map((g) =>
+          g.id === groupId ? { ...g, name, updatedAt: Date.now() } : g
+        );
+        analyzeScope.writeAnalyzeStatGroups(groups);
+        const statGroups = analyzeScope.enrichStatGroupsForDisplay(groups, this.data.ledgers);
+        const patch = { statGroups };
+        if (this.data.activeGroupId === groupId) {
+          patch.scopeLabel = name;
+        }
+        this.setData(patch);
+      },
+    });
+  },
+
+  onScopeLedgerToggle(e) {
+    const ledgerId = String((e.currentTarget.dataset && e.currentTarget.dataset.id) || "").trim();
+    if (!ledgerId) {
+      return;
+    }
+    const draft = (this.data.scopeDraftIds || []).slice();
+    const idx = draft.indexOf(ledgerId);
+    if (idx >= 0) {
+      draft.splice(idx, 1);
+    } else {
+      draft.push(ledgerId);
+    }
+    this.setData({
+      scopeDraftIds: draft,
+      scopeLedgerRows: analyzeScope.buildLedgerPickerRows(this.data.ledgers, draft),
+    });
+  },
+
+  onScopeApplyMulti() {
+    const draft = analyzeScope.pruneLedgerIds(this.data.ledgers, this.data.scopeDraftIds);
+    if (!draft.length) {
+      wx.showToast({ title: "请至少选择一个账本", icon: "none" });
+      return;
+    }
+    this.applyScopeState({ mode: "multi", ledgerIds: draft, groupId: "" });
+  },
+
+  onScopeSaveGroup() {
+    const draft = analyzeScope.pruneLedgerIds(this.data.ledgers, this.data.scopeDraftIds);
+    if (!draft.length) {
+      wx.showToast({ title: "请先勾选账本", icon: "none" });
+      return;
+    }
+    wx.showModal({
+      title: "保存统计组合",
+      editable: true,
+      placeholderText: "如：家庭开支组",
+      content: "",
+      success: (res) => {
+        if (!res.confirm) {
+          return;
+        }
+        const name = String(res.content || "").trim();
+        if (!name) {
+          wx.showToast({ title: "名称不能为空", icon: "none" });
+          return;
+        }
+        const groups = analyzeScope.readAnalyzeStatGroups();
+        const item = {
+          id: analyzeScope.genStatGroupId(),
+          name,
+          ledgerIds: draft.slice(),
+          updatedAt: Date.now(),
+        };
+        groups.push(item);
+        analyzeScope.writeAnalyzeStatGroups(groups);
+        const statGroups = analyzeScope.enrichStatGroupsForDisplay(groups, this.data.ledgers);
+        this.setData({ statGroups });
+        wx.showToast({ title: "已保存", icon: "success" });
+        this.applyScopeState({
+          mode: "group",
+          ledgerIds: draft.slice(),
+          groupId: item.id,
+        });
+      },
+    });
   },
 
   persistAnalyzeFilters() {
@@ -1054,14 +1220,16 @@ Page({
 
   rebuildPeriodChips(options) {
     const opts = options || {};
-    const { range, ledgerId, ledgers, todayYmd, analyzeAll } = this.data;
+    const { range, ledgers, todayYmd, scopeMode, selectedLedgerIds } = this.data;
     let createdMs;
-    if (analyzeAll) {
+    if (scopeMode === "all") {
       const list = (ledgers || []).map((x) => readLedgerCreatedMs(x));
       createdMs = list.length ? Math.min(...list) : Date.now();
     } else {
-      const ledger = (ledgers || []).find((x) => x._id === ledgerId);
-      createdMs = readLedgerCreatedMs(ledger);
+      const idSet = new Set(selectedLedgerIds || []);
+      const picked = (ledgers || []).filter((x) => idSet.has(String(x._id || "")));
+      const list = picked.map((x) => readLedgerCreatedMs(x));
+      createdMs = list.length ? Math.min(...list) : Date.now();
     }
     let chips = [];
     if (range === "month") {
@@ -1109,25 +1277,17 @@ Page({
       },
       () => {
         this.persistAnalyzeFilters();
-        if (this.data.analyzeAll) {
-          this.load();
-        } else {
-          this.load(this.data.ledgerId);
-        }
+        this.load();
       }
     );
   },
 
-  load(ledgerIdOverride) {
+  load() {
     if (!this.ensureEnv()) {
       return;
     }
-    const analyzeAll = this.data.analyzeAll;
-    const ledgerId =
-      ledgerIdOverride != null && ledgerIdOverride !== undefined
-        ? ledgerIdOverride
-        : this.data.ledgerId;
-    if (!analyzeAll && !ledgerId) {
+    const scopeState = this.getScopeStateFromData();
+    if (!analyzeScope.isScopeLoadable(scopeState)) {
       this.setData({ loading: false, listLoading: false });
       return;
     }
@@ -1144,12 +1304,8 @@ Page({
       year: selectedYear,
       month: selectedMonth,
       weekAnchorDate,
+      ...analyzeScope.buildAnalyzeCallScope(scopeState),
     };
-    if (analyzeAll) {
-      callPayload.scope = "all";
-    } else {
-      callPayload.ledgerId = ledgerId;
-    }
     wx.cloud
       .callFunction({
         name: "ledgerFunctions",
@@ -1235,7 +1391,7 @@ Page({
           {
             loading: false,
             listLoading: false,
-            ledgerName: r.ledgerName || this.data.ledgerName || "",
+            scopeLabel: r.ledgerName || this.data.scopeLabel || "",
             rangeLabel: r.rangeLabel || "",
             selectedYear: nextYear,
             selectedMonth: nextMonth,
@@ -1449,15 +1605,16 @@ Page({
     if (key == null || key === "") {
       return;
     }
-    const { analyzeAll, ledgerId, range, selectedYear, selectedMonth, weekAnchorDate } = this.data;
-    if (!analyzeAll && !ledgerId) {
+    const scopeState = this.getScopeStateFromData();
+    if (!analyzeScope.isScopeLoadable(scopeState)) {
       return;
     }
-    const scopeParam = analyzeAll ? "&scope=all" : `&id=${encodeURIComponent(ledgerId)}`;
+    const { range, selectedYear, selectedMonth, weekAnchorDate } = this.data;
+    const scopeParam = analyzeScope.buildAnalyzeScopeUrlParam(scopeState);
     wx.navigateTo({
       url: `/pages/ledger-analytics-drill/ledger-analytics-drill?range=${range}&groupBy=${groupBy}&year=${selectedYear}&month=${selectedMonth}&weekAnchorDate=${encodeURIComponent(
         weekAnchorDate
-      )}&key=${encodeURIComponent(String(key))}${scopeParam}`,
+      )}&key=${encodeURIComponent(String(key))}&${scopeParam}`,
     });
   },
 
@@ -1478,7 +1635,7 @@ Page({
   },
 
   refreshF2Charts() {
-    if (this.data.loading) {
+    if (this.data.loading || this.data.scopeSheetOpen) {
       return;
     }
     if (!this.data.showLineChart && !this.data.showPieChart) {
@@ -1564,36 +1721,5 @@ Page({
 
   onUnload() {
     this.destroyF2Charts();
-  },
-
-  readLastAnalyzeLedgerId() {
-    try {
-      return String(wx.getStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY) || "").trim();
-    } catch (e) {
-      return "";
-    }
-  },
-
-  /**
-   * 与统计范围同步写入本地；全部账本时存 LAST_ANALYZE_ALL_SENTINEL
-   * @param {boolean} isAll
-   * @param {string} ledgerId  单账本模式下的 _id
-   */
-  writeLastAnalyzeScope(isAll, ledgerId) {
-    this._lastAnalyzeLedgerId = isAll ? LAST_ANALYZE_ALL_SENTINEL : String(ledgerId || "").trim();
-    try {
-      if (isAll) {
-        wx.setStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY, LAST_ANALYZE_ALL_SENTINEL);
-      } else {
-        const id = String(ledgerId || "").trim();
-        if (id) {
-          wx.setStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY, id);
-        } else {
-          wx.setStorageSync(LAST_ANALYZE_LEDGER_STORAGE_KEY, LAST_ANALYZE_ALL_SENTINEL);
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
   },
 });

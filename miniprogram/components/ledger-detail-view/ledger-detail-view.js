@@ -255,6 +255,7 @@ Component({
             txSyncing: true,
             ledgerName: String(cacheHit.ledgerName || ""),
             isCreator: !!cacheHit.isCreator,
+            ledgerArchived: !!cacheHit.ledgerArchived,
             monthlyBudgetCents,
             pendingApproval: false,
             pendingApprovalMsg: "",
@@ -327,6 +328,9 @@ Component({
     txSyncing: false,
     sheetOpen: false,
     sheetDeleting: false,
+    sheetPinning: false,
+    ledgerPinned: false,
+    ledgerArchived: false,
   },
 
   lifetimes: {
@@ -340,9 +344,10 @@ Component({
     show() {
       const id = (this.properties.ledgerId || "").trim();
       if (id && !this.data.loading && !this.data.pendingApproval) {
-        const refreshCollaborators = this.data.isCreator
-          ? this.fetchCollaboratorPanel().catch(() => {})
-          : Promise.resolve();
+        const refreshCollaborators =
+          this.data.isCreator && !this.data.ledgerArchived
+            ? this.fetchCollaboratorPanel().catch(() => {})
+            : Promise.resolve();
         this.refreshBudgetMeta()
           .catch(() => {})
           .then(() => this.fetchTransactionsOnce().catch(() => {}))
@@ -403,6 +408,7 @@ Component({
           savedAt: Date.now(),
           ledgerName: String(this.data.ledgerName || ""),
           isCreator: !!this.data.isCreator,
+          ledgerArchived: !!this.data.ledgerArchived,
           monthlyBudgetCents: this.data.monthlyBudgetCents,
           rawList: rawListSorted,
         });
@@ -599,6 +605,8 @@ Component({
         this.setData({
           ledgerName: r.ledger.name,
           isCreator: !!r.ledger.isCreator,
+          ledgerArchived: !!r.ledger.archived,
+          ledgerPinned: !!r.ledger.pinned,
           monthlyBudgetCents,
           pendingApproval: false,
           pendingApprovalMsg: "",
@@ -612,13 +620,13 @@ Component({
         let shareInviteCode = "";
         let shareInviteExpireText = "";
         let shareInviteExpireAtMs = 0;
-        if (r.ledger.isCreator) {
+        if (r.ledger.isCreator && !r.ledger.archived) {
           const invite = await this.refreshShareInvite(ledgerId);
           shareInviteCode = invite.inviteCode;
           shareInviteExpireText = invite.expiresAtText;
           shareInviteExpireAtMs = invite.expiresAtMs;
         }
-        if (r.ledger.isCreator) {
+        if (r.ledger.isCreator && !r.ledger.archived) {
           await this.fetchCollaboratorPanel();
         } else {
           this.setData({
@@ -647,6 +655,15 @@ Component({
     },
 
     refreshShareInvite(ledgerId) {
+      if (this.data.ledgerArchived) {
+        const next = { inviteCode: "", expiresAtText: "", expiresAtMs: 0 };
+        this.setData({
+          shareInviteCode: "",
+          shareInviteExpireText: "",
+          shareInviteExpireAtMs: 0,
+        });
+        return Promise.resolve(next);
+      }
       return wx.cloud
         .callFunction({
           name: "ledgerFunctions",
@@ -691,7 +708,7 @@ Component({
 
     fetchCollaboratorPanel() {
       const ledgerId = (this.properties.ledgerId || "").trim();
-      if (!ledgerId || !this.data.isCreator) {
+      if (!ledgerId || !this.data.isCreator || this.data.ledgerArchived) {
         this.setData({ collaborators: [], pendingRequests: [] });
         return Promise.resolve();
       }
@@ -838,7 +855,10 @@ Component({
 
     goRecordTx() {
       const ledgerId = (this.properties.ledgerId || "").trim();
-      if (!ledgerId) {
+      if (!ledgerId || this.data.ledgerArchived) {
+        if (this.data.ledgerArchived) {
+          wx.showToast({ title: "账本已归档，不可记账", icon: "none" });
+        }
         return;
       }
       wx.navigateTo({
@@ -875,6 +895,42 @@ Component({
       this.setData({ sheetOpen: false });
     },
 
+    onDetailSheetTogglePin() {
+      const ledgerId = (this.properties.ledgerId || "").trim();
+      if (!ledgerId || this.data.ledgerArchived || this.data.sheetPinning) {
+        return;
+      }
+      const nextPinned = !this.data.ledgerPinned;
+      this.closeDetailSheet();
+      this.setData({ sheetPinning: true });
+      wx.cloud
+        .callFunction({
+          name: "ledgerFunctions",
+          data: {
+            type: "setLedgerPinned",
+            ledgerId,
+            pinned: nextPinned,
+          },
+        })
+        .then((resp) => {
+          const r = resp.result || {};
+          if (!r.success) {
+            wx.showToast({ title: r.errMsg || "操作失败", icon: "none" });
+            return;
+          }
+          const pinned = !!r.pinned;
+          this.setData({ ledgerPinned: pinned });
+          this.triggerEvent("pinnedchange", { ledgerId, pinned });
+          wx.showToast({ title: pinned ? "已置顶" : "已取消置顶" });
+        })
+        .catch(() => {
+          wx.showToast({ title: "操作失败", icon: "none" });
+        })
+        .finally(() => {
+          this.setData({ sheetPinning: false });
+        });
+    },
+
     onDetailSheetBudget() {
       if (!this.data.isCreator) {
         wx.showToast({ title: "仅创建者可设置预算", icon: "none" });
@@ -882,6 +938,15 @@ Component({
       }
       this.closeDetailSheet();
       this.goLedgerBudget();
+    },
+
+    onDetailSheetDefaultAccount() {
+      if (!this.data.isCreator) {
+        wx.showToast({ title: "仅创建者可设置默认账户", icon: "none" });
+        return;
+      }
+      this.closeDetailSheet();
+      this.goLedgerDefaultAccount();
     },
 
     onDetailSheetRename() {
@@ -958,9 +1023,106 @@ Component({
       this.goLedgerManage();
     },
 
+    onDetailSheetArchiveLedger() {
+      if (!this.data.isCreator) {
+        wx.showToast({ title: "仅创建者可归档账本", icon: "none" });
+        return;
+      }
+      const ledgerId = (this.properties.ledgerId || "").trim();
+      const ledgerName = String(this.data.ledgerName || "").trim();
+      if (!ledgerId || this.data.sheetDeleting) {
+        return;
+      }
+      this.closeDetailSheet();
+      this._emitHostTabBarHidden(true);
+      wx.showModal({
+        title: "归档账本",
+        content: `归档后「${
+          ledgerName || "该账本"
+        }」将不再出现在日常列表，协作者也无法继续记账。你可稍后在「已归档账本」中恢复或删除。`,
+        confirmText: "归档",
+        success: (res) => {
+          if (!res.confirm) {
+            return;
+          }
+          this.setData({ sheetDeleting: true });
+          wx.cloud
+            .callFunction({
+              name: "ledgerFunctions",
+              data: { type: "archiveLedger", ledgerId, archived: true },
+            })
+            .then((resp) => {
+              const r = resp.result || {};
+              if (!r.success) {
+                wx.showToast({ title: r.errMsg || "归档失败", icon: "none" });
+                return;
+              }
+              wx.showToast({ title: "已归档" });
+              getApp().globalData.showBillLedgerListOnce = true;
+              this._clearLedgerDetailCache(ledgerId);
+              this.triggerEvent("deleted", { ledgerId });
+            })
+            .catch(() => {
+              wx.showToast({ title: "归档失败", icon: "none" });
+            })
+            .finally(() => {
+              this.setData({ sheetDeleting: false });
+            });
+        },
+        complete: () => {
+          this._emitHostTabBarHidden(false);
+        },
+      });
+    },
+
+    onDetailSheetRestoreLedger() {
+      if (!this.data.isCreator) {
+        wx.showToast({ title: "仅创建者可恢复账本", icon: "none" });
+        return;
+      }
+      const ledgerId = (this.properties.ledgerId || "").trim();
+      if (!ledgerId || this.data.sheetDeleting) {
+        return;
+      }
+      this.closeDetailSheet();
+      this.setData({ sheetDeleting: true });
+      wx.cloud
+        .callFunction({
+          name: "ledgerFunctions",
+          data: { type: "archiveLedger", ledgerId, archived: false },
+        })
+        .then((resp) => {
+          const r = resp.result || {};
+          if (!r.success) {
+            wx.showToast({ title: r.errMsg || "恢复失败", icon: "none" });
+            return;
+          }
+          wx.showToast({ title: "已恢复" });
+          getApp().globalData.showBillLedgerListOnce = true;
+          this._clearLedgerDetailCache(ledgerId);
+          if (this.properties.recordInline) {
+            this.triggerEvent("deleted", { ledgerId });
+            return;
+          }
+          setTimeout(() => {
+            wx.switchTab({ url: "/pages/ledgers/ledgers" });
+          }, 400);
+        })
+        .catch(() => {
+          wx.showToast({ title: "恢复失败", icon: "none" });
+        })
+        .finally(() => {
+          this.setData({ sheetDeleting: false });
+        });
+    },
+
     onDetailSheetDeleteLedger() {
       if (!this.data.isCreator) {
         wx.showToast({ title: "仅创建者可删除账本", icon: "none" });
+        return;
+      }
+      if (!this.data.ledgerArchived) {
+        wx.showToast({ title: "请先归档账本后再删除", icon: "none" });
         return;
       }
       const ledgerId = (this.properties.ledgerId || "").trim();
@@ -1089,6 +1251,19 @@ Component({
       });
     },
 
+    goLedgerDefaultAccount() {
+      const ledgerId = (this.properties.ledgerId || "").trim();
+      const ledgerName = String(this.data.ledgerName || "").trim();
+      if (!ledgerId) {
+        return;
+      }
+      wx.navigateTo({
+        url: `/pages/ledger-default-account/ledger-default-account?ledgerId=${encodeURIComponent(
+          ledgerId
+        )}&name=${encodeURIComponent(ledgerName)}`,
+      });
+    },
+
     goPendingPage() {
       const ledgerId = (this.properties.ledgerId || "").trim();
       const ledgerName = String(this.data.ledgerName || "").trim();
@@ -1103,6 +1278,9 @@ Component({
     },
 
     onTxTap(e) {
+      if (this.data.ledgerArchived) {
+        return;
+      }
       const { id: txId, editable } = e.currentTarget.dataset || {};
       const ledgerId = (this.properties.ledgerId || "").trim();
       if (!txId || !ledgerId) {

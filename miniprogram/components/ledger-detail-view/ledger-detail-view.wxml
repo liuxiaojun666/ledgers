@@ -10,6 +10,13 @@
       <button class="btn-secondary" bindtap="refreshAccessStatus">刷新状态</button>
     </view>
     <block wx:else>
+      <view wx:if="{{ledgerArchived}}" class="archived-strip">
+        <text class="archived-strip-mark">已归档</text>
+        <view class="archived-strip-body">
+          <text class="archived-strip-title">该账本已归档</text>
+          <text class="archived-strip-desc">恢复前不可记账、改预算或管理协作者；创建者可在菜单中恢复或删除。</text>
+        </view>
+      </view>
       <view class="header">
         <view class="title-row">
           <view class="title-main">
@@ -19,7 +26,7 @@
             </view>
           </view>
         </view>
-        <view wx:if="{{isCreator && pendingRequests.length > 0}}" class="pending-entry" bindtap="goPendingPage">
+        <view wx:if="{{isCreator && pendingRequests.length > 0 && !ledgerArchived}}" class="pending-entry" bindtap="goPendingPage">
           {{pendingRequests.length}} 条待审批申请，点击处理
         </view>
       </view>
@@ -39,7 +46,7 @@
           </view>
         </view>
       </view>
-      <view class="detail-analytics-entry" hover-class="detail-analytics-entry--hover" bindtap="goLedgerAnalytics">
+      <view wx:if="{{!ledgerArchived}}" class="detail-analytics-entry" hover-class="detail-analytics-entry--hover" bindtap="goLedgerAnalytics">
         <view class="detail-analytics-entry__main">
           <text class="detail-analytics-entry__title">统计分析</text>
           <text class="detail-analytics-entry__sub">收支趋势、分类占比与本账本预算</text>
@@ -58,7 +65,7 @@
         </view>
         <view class="detail-budget-foot">{{budgetFootText}}</view>
       </view>
-      <view wx:elif="{{showBudgetUnsetHint}}" class="detail-budget-hint card">
+      <view wx:elif="{{isCreator && showBudgetUnsetHint && !ledgerArchived}}" class="detail-budget-hint card">
         <image class="detail-budget-hint-illu" src="../../images/budget-unset-hint.jpg" mode="aspectFill" />
         <button wx:if="{{isCreator}}" class="detail-budget-hint-btn" bindtap="goLedgerBudget">
           去设置预算
@@ -66,7 +73,7 @@
       </view>
       <view class="section-head">
         <view class="section-title">最近流水</view>
-        <button wx:if="{{recordInline}}" class="btn-inline-record" bindtap="goRecordTx">
+        <button wx:if="{{recordInline && !ledgerArchived}}" class="btn-inline-record" bindtap="goRecordTx">
           + 记一笔
         </button>
       </view>
@@ -75,9 +82,9 @@
         <view class="tx-loading-text">加载流水中…</view>
       </view>
       <view wx:elif="{{!transactions.length}}" class="empty-wrap">
-        <image class="empty-illu" src="../../images/LmtpX.png" mode="widthFix" bindtap="goRecordTx" />
+        <image wx:if="{{!ledgerArchived}}" class="empty-illu" src="../../images/LmtpX.png" mode="widthFix" bindtap="goRecordTx" />
         <view class="empty-title">暂无记录</view>
-        <view class="empty-desc">快去记一笔吧。</view>
+        <view class="empty-desc">{{ledgerArchived ? '归档账本仅可查看历史流水。' : '快去记一笔吧。'}}</view>
       </view>
       <view wx:else class="tx-list">
         <view class="tx-group" wx:for="{{txGroups}}" wx:key="key">
@@ -103,7 +110,7 @@
           </view>
         </view>
       </view>
-      <button wx:if="{{!recordInline}}" class="btn-primary-record" bindtap="goRecordTx">
+      <button wx:if="{{!recordInline && !ledgerArchived}}" class="btn-primary-record" bindtap="goRecordTx">
         + 记一笔
       </button>
     </block>
@@ -116,19 +123,40 @@
         <view class="detail-sheet-title">{{ledgerName || "账本"}}</view>
       </view>
       <view class="detail-sheet-actions">
+        <view
+          wx:if="{{!ledgerArchived}}"
+          class="detail-sheet-row"
+          hover-class="detail-sheet-row--hover"
+          bindtap="onDetailSheetTogglePin"
+        >
+          {{ledgerPinned ? '取消置顶' : '置顶账本'}}
+        </view>
         <block wx:if="{{isCreator}}">
-          <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetBudget">
-            预算设置
-          </view>
-          <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetRename">
-            修改账本名称
-          </view>
-          <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetCollaborators">
-            协作者管理
-          </view>
-          <view class="detail-sheet-row detail-sheet-row--danger" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetDeleteLedger">
-            删除账本
-          </view>
+          <block wx:if="{{ledgerArchived}}">
+            <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetRestoreLedger">
+              恢复账本
+            </view>
+            <view class="detail-sheet-row detail-sheet-row--danger" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetDeleteLedger">
+              删除账本
+            </view>
+          </block>
+          <block wx:else>
+            <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetBudget">
+              预算设置
+            </view>
+            <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetDefaultAccount">
+              默认账户
+            </view>
+            <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetRename">
+              修改账本名称
+            </view>
+            <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetCollaborators">
+              协作者管理
+            </view>
+            <view class="detail-sheet-row" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetArchiveLedger">
+              归档账本
+            </view>
+          </block>
         </block>
         <view wx:else class="detail-sheet-row detail-sheet-row--danger" hover-class="detail-sheet-row--hover" bindtap="onDetailSheetExitLedger">
           退出账本

@@ -1,0 +1,54 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+  <block wx:else>
+    <view class="head">
+      <view class="head-title">已归档账本</view>
+      <view class="head-sub">归档后不可记账与协作变更；创建者可恢复或删除</view>
+    </view>
+    <view class="section">
+      <view class="section-title">我创建的</view>
+      <view wx:if="{{!createdList.length}}" class="hint">暂无已归档账本</view>
+      <view wx:else class="list">
+        <view
+          class="row row-tap"
+          wx:for="{{createdList}}"
+          wx:key="_id"
+          bindtap="openLedgerDetail"
+          data-id="{{item._id}}"
+          data-name="{{item.name}}"
+        >
+          <view>
+            <view class="name">{{item.name}}</view>
+            <view class="meta">
+              成员 {{item.memberCount}} 人 · {{item.monthSummaryLabel}}支出 ¥{{item.monthExpenseYuan}}
+            </view>
+          </view>
+          <text class="arrow">›</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">我加入的</view>
+      <view wx:if="{{!joinedList.length}}" class="hint">暂无已归档账本</view>
+      <view wx:else class="list">
+        <view
+          class="row row-tap"
+          wx:for="{{joinedList}}"
+          wx:key="_id"
+          bindtap="openLedgerDetail"
+          data-id="{{item._id}}"
+          data-name="{{item.name}}"
+        >
+          <view>
+            <view class="name">{{item.name}}</view>
+            <view class="meta">
+              成员 {{item.memberCount}} 人 · {{item.monthSummaryLabel}}支出 ¥{{item.monthExpenseYuan}}
+            </view>
+          </view>
+          <text class="arrow">›</text>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

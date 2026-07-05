@@ -14,6 +14,7 @@
       expense-categories="{{expenseCategories}}"
       income-categories="{{incomeCategories}}"
       asset-accounts="{{assetAccounts}}"
+      default-asset-account-id="{{defaultAssetAccountId}}"
       bind:added="onAdded"
       bind:saved="onSaved"
       bind:deleted="onDeleted"

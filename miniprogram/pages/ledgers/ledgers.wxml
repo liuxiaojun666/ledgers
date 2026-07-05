@@ -13,7 +13,7 @@
       </view>
       <view class="multi-ledger-banner__cta">+ 新建</view>
     </view>
-    <ledger-detail-view ledger-id="{{embeddedLedgerId}}" record-inline="{{true}}" bind:deleted="onEmbeddedDetailDeleted" bind:ready="onEmbeddedDetailReady" bind:hosttabbar="onEmbeddedHostTabBar" />
+    <ledger-detail-view ledger-id="{{embeddedLedgerId}}" record-inline="{{true}}" bind:deleted="onEmbeddedDetailDeleted" bind:ready="onEmbeddedDetailReady" bind:hosttabbar="onEmbeddedHostTabBar" bind:pinnedchange="onEmbeddedPinnedChange" />
   </block>
   <block wx:elif="{{!list.length}}">
     <view class="multi-ledger-banner" hover-class="multi-ledger-banner--hover" bindtap="createLedger">
@@ -65,6 +65,7 @@
           <view class="card-main" data-id="{{item._id}}" bindtap="openDetail">
             <view class="card-title-row">
               <view class="card-title">{{item.name}}</view>
+              <view wx:if="{{item.pinned}}" class="card-pin-badge">置顶</view>
             </view>
             <view class="card-month-line">
               <text class="card-month-income">
@@ -89,6 +90,15 @@
         </view>
       </view>
     </view>
+    <view
+      wx:if="{{!showDetailView}}"
+      class="archived-entry"
+      hover-class="archived-entry--hover"
+      bindtap="openArchivedList"
+    >
+      <text>查看已归档账本</text>
+      <text class="archived-entry__arrow">›</text>
+    </view>
   </view>
 
   <block wx:if="{{sheetOpen}}">
@@ -103,7 +113,7 @@
         <view class="sheet-row" hover-class="sheet-row--hover" bindtap="onSheetBudget">预算设置</view>
         <view class="sheet-row" hover-class="sheet-row--hover" bindtap="onSheetRename">修改账本名称</view>
         <view class="sheet-row" hover-class="sheet-row--hover" bindtap="onSheetCollaborators">协作者管理</view>
-        <view class="sheet-row sheet-row--danger" hover-class="sheet-row--hover" bindtap="onSheetDeleteLedger">删除账本</view>
+        <view class="sheet-row" hover-class="sheet-row--hover" bindtap="onSheetArchiveLedger">归档账本</view>
       </view>
       <view class="sheet-cancel-wrap">
         <view class="sheet-cancel" hover-class="sheet-row--hover" bindtap="closeLedgerSheet">取消</view>

@@ -9,7 +9,11 @@
       <view class="tip">仅账本创建者可管理协作者。</view>
     </view>
     <block wx:else>
-      <view class="section">
+      <view wx:if="{{ledgerArchived}}" class="archived-tip card">
+        <view class="archived-tip-title">该账本已归档</view>
+        <view class="tip">恢复前不可邀请协作者；删除须在本页或详情菜单中操作。</view>
+      </view>
+      <view class="section" wx:if="{{!ledgerArchived}}">
         <view class="section-title">协作者管理</view>
         <view class="card">
           <view class="entry-title">微信邀请 + 协作者列表</view>
@@ -21,10 +25,25 @@
       </view>
       <view class="section section-danger">
         <view class="section-title danger-title">危险操作</view>
-        <button class="btn-delete-ledger" bindtap="onDeleteLedger" loading="{{deletingLedger}}">
+        <button
+          wx:if="{{!ledgerArchived}}"
+          class="btn-archive-ledger"
+          bindtap="onArchiveLedger"
+          loading="{{archivingLedger}}"
+        >
+          归档账本
+        </button>
+        <button
+          wx:if="{{ledgerArchived}}"
+          class="btn-delete-ledger"
+          bindtap="onDeleteLedger"
+          loading="{{deletingLedger}}"
+        >
           删除账本
         </button>
-        <view class="tip danger-tip">仅创建人可见。删除后全部流水不可恢复。</view>
+        <view class="tip danger-tip">
+          {{ledgerArchived ? '仅已归档账本可永久删除，删除后全部流水不可恢复。' : '归档后可从「已归档账本」恢复或删除。'}}
+        </view>
       </view>
     </block>
   </block>

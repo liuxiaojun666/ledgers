@@ -250,7 +250,7 @@ Page({
           },
           () => {
             this.refreshCategoryView();
-            this.buildAssetPickerState();
+            this.applyLedgerDefaultAsset(idx);
           }
         );
       })
@@ -266,7 +266,7 @@ Page({
           },
           () => {
             this.refreshCategoryView();
-            this.buildAssetPickerState();
+            this.applyLedgerDefaultAsset(idx);
           }
         );
       });
@@ -303,6 +303,36 @@ Page({
       assetPickerIndex: idx,
       assetPickerAccountIds: accounts.map((a) => a._id),
     });
+  },
+
+  applyLedgerDefaultAsset(ledgerIndex) {
+    if (this.data.mode !== "create") {
+      return;
+    }
+    const { ledgers } = this.data;
+    const idx = Math.min(Math.max(0, ledgerIndex), ledgers.length - 1);
+    const ledger = ledgers[idx];
+    const defId =
+      ledger && ledger.defaultAssetAccountId != null
+        ? String(ledger.defaultAssetAccountId).trim()
+        : "";
+    if (!defId) {
+      this.setData({ selectedAssetId: "", assetPickerOrphan: null }, () => {
+        this.buildAssetPickerState();
+      });
+      return;
+    }
+    const accounts = this.data.assetAccounts || [];
+    const found = accounts.some((a) => a && String(a._id) === defId);
+    this.setData(
+      {
+        selectedAssetId: found ? defId : "",
+        assetPickerOrphan: null,
+      },
+      () => {
+        this.buildAssetPickerState();
+      }
+    );
   },
 
   onAssetAccountPickerChange(e) {
