@@ -20,6 +20,10 @@
       <view class="summary-value {{summaryTone}}">{{summaryAmountDisplay}}</view>
       <view class="summary-meta">{{summaryMetaText}}</view>
     </view>
+    <view wx:if="{{txDataTruncated && txDataTruncatedHint}}" class="tx-truncate-strip">
+      <text class="tx-truncate-strip-mark">提示</text>
+      <text class="tx-truncate-strip-text">{{txDataTruncatedHint}}</text>
+    </view>
     <view wx:if="{{viewMode === 'groups' && !groups.length}}" class="empty">该成员在此时段暂无流水。</view>
     <view wx:if="{{viewMode === 'groups' && groups.length}}" class="list">
       <view class="row row-tap" wx:for="{{groups}}" wx:key="key" data-key="{{item.key}}" bindtap="onSubGroupTap">
@@ -43,6 +47,20 @@
           </text>
         </view>
         <view wx:if="{{item.note}}" class="tx-note">{{item.note}}</view>
+        <view wx:if="{{item.attachmentThumbs.length}}" class="tx-thumbs">
+          <image
+            wx:for="{{item.attachmentThumbs}}"
+            wx:for-item="thumb"
+            wx:for-index="tIdx"
+            wx:key="*this"
+            class="tx-thumb"
+            src="{{thumb}}"
+            mode="aspectFill"
+            data-id="{{item._id}}"
+            data-index="{{tIdx}}"
+            catchtap="onTxThumbPreview"
+          />
+        </view>
         <view class="tx-meta">
           <image wx:if="{{item.payerAvatarUrl}}" class="tx-meta-avatar" src="{{item.payerAvatarUrl}}" mode="aspectFill" />
           <text class="tx-meta-text">{{item.timeText}} · 记账 {{item.payerName}}</text>

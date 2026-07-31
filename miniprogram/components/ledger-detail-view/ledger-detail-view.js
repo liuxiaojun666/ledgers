@@ -214,6 +214,8 @@ Component({
             ledgerName: "",
             transactions: [],
             txGroups: [],
+            txListTruncated: false,
+            txListTruncatedHint: "",
             monthIncomeYuan: "0.00",
             monthExpenseYuan: "0.00",
             monthlyBudgetCents: null,
@@ -257,6 +259,8 @@ Component({
             isCreator: !!cacheHit.isCreator,
             ledgerArchived: !!cacheHit.ledgerArchived,
             monthlyBudgetCents,
+            txListTruncated: !!cacheHit.txListTruncated,
+            txListTruncatedHint: String(cacheHit.txListTruncatedHint || ""),
             pendingApproval: false,
             pendingApprovalMsg: "",
             collaborators: [],
@@ -274,6 +278,8 @@ Component({
             ledgerName: "",
             transactions: [],
             txGroups: [],
+            txListTruncated: false,
+            txListTruncatedHint: "",
             monthIncomeYuan: "0.00",
             monthExpenseYuan: "0.00",
             monthlyBudgetCents: null,
@@ -326,6 +332,8 @@ Component({
     shareInviteExpireAtMs: 0,
     /** 最近流水与云端对齐中；无缓存且列表为空时不展示「暂无记录」插图 */
     txSyncing: false,
+    txListTruncated: false,
+    txListTruncatedHint: "",
     sheetOpen: false,
     sheetDeleting: false,
     sheetPinning: false,
@@ -410,6 +418,8 @@ Component({
           isCreator: !!this.data.isCreator,
           ledgerArchived: !!this.data.ledgerArchived,
           monthlyBudgetCents: this.data.monthlyBudgetCents,
+          txListTruncated: !!this.data.txListTruncated,
+          txListTruncatedHint: String(this.data.txListTruncatedHint || ""),
           rawList: rawListSorted,
         });
       } catch (e) {
@@ -521,6 +531,18 @@ Component({
       const assetTag = String(doc.assetAccountName || "").trim();
       const base = note ? `${note} · ${cat}` : cat;
       const lineLeft = assetTag ? `${base} · ${assetTag}` : base;
+      const attachmentThumbs = [];
+      const att = Array.isArray(doc.attachments) ? doc.attachments : [];
+      for (let i = 0; i < att.length; i += 1) {
+        const id = String((att[i] && (att[i].fileID || att[i].fileId)) || "").trim();
+        if (!id) {
+          continue;
+        }
+        attachmentThumbs.push(id);
+        if (attachmentThumbs.length >= 9) {
+          break;
+        }
+      }
       return {
         _id: doc._id,
         category: doc.category,
@@ -532,6 +554,7 @@ Component({
         payerName: doc.payerName || "未知",
         payerAvatarUrl: doc.payerAvatarUrl || "",
         lineLeft,
+        attachmentThumbs,
         canEdit: !!doc.canEdit,
         dayKey: at ? formatDateOnly(at) : "unknown",
         dayText: at ? formatDateOnly(at) : "",
@@ -782,6 +805,10 @@ Component({
             throw new Error(r.errMsg || "加载流水失败");
           }
           const docs = sortTx(r.list || []);
+          this.setData({
+            txListTruncated: !!r.txListTruncated,
+            txListTruncatedHint: String(r.txListTruncatedHint || ""),
+          });
           this._applyTransactionsFromServerDocs(docs);
           this._writeLedgerDetailCache(ledgerId, docs);
         })
@@ -1297,6 +1324,28 @@ Component({
       }
       wx.navigateTo({
         url: `/pages/ledger-tx/ledger-tx?ledgerId=${ledgerId}&txId=${txId}`,
+      });
+    },
+
+    onTxThumbPreview(e) {
+      const ds = e.currentTarget.dataset || {};
+      const txId = String(ds.id || "").trim();
+      const idx = Number(ds.index);
+      const tx = (this.data.transactions || []).find(
+        (t) => t && String(t._id) === txId
+      );
+      const urls = ((tx && tx.attachmentThumbs) || [])
+        .map((u) => String(u || "").trim())
+        .filter(Boolean);
+      if (!urls.length) {
+        return;
+      }
+      const safe = Number.isFinite(idx)
+        ? Math.min(Math.max(0, idx), urls.length - 1)
+        : 0;
+      wx.previewImage({
+        current: urls[safe],
+        urls,
       });
     },
 

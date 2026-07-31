@@ -14,6 +14,36 @@
   margin-top: 24rpx;
 }
 
+.tx-truncate-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: #fff7e8;
+  border: 1rpx solid #ffd08a;
+  box-sizing: border-box;
+}
+
+.tx-truncate-strip-mark {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #8a5400;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+}
+
+.tx-truncate-strip-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 24rpx;
+  color: #855300;
+  line-height: 1.5;
+}
+
 .head {
   margin-bottom: 16rpx;
 }
@@ -219,6 +249,21 @@
   margin-top: 10rpx;
   font-size: 26rpx;
   color: #334361;
+}
+
+.tx-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 12rpx;
+}
+
+.tx-thumb {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 12rpx;
+  background: #f2f4f7;
+  flex-shrink: 0;
 }
 
 .tx-meta {

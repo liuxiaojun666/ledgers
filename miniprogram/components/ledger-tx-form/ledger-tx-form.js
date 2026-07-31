@@ -28,6 +28,78 @@ function msToBookTime(ms) {
 }
 
 const CATEGORY_NAME_MAX_LEN = 16;
+const TX_ATTACHMENT_MAX = 9;
+
+function guessImageExt(path) {
+  const rawExt = String(path || "").split(".").pop();
+  const ext = /^[a-zA-Z0-9]{1,8}$/.test(rawExt) ? rawExt.toLowerCase() : "jpg";
+  if (ext === "jpeg") {
+    return "jpg";
+  }
+  if (["jpg", "png", "gif", "webp", "bmp", "heic"].indexOf(ext) >= 0) {
+    return ext;
+  }
+  return "jpg";
+}
+
+function buildTxAttachmentCloudPath(localPath) {
+  const ext = guessImageExt(localPath);
+  return `tx-attachments/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+}
+
+function contentTypeForExt(ext) {
+  const e = String(ext || "").toLowerCase();
+  if (e === "png") return "image/png";
+  if (e === "gif") return "image/gif";
+  if (e === "webp") return "image/webp";
+  if (e === "bmp") return "image/bmp";
+  if (e === "heic") return "image/heic";
+  return "image/jpeg";
+}
+
+function normalizeAttachmentList(raw) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out = [];
+  const seen = Object.create(null);
+  for (let i = 0; i < raw.length; i += 1) {
+    const item = raw[i] || {};
+    const fileID = String(item.fileID || item.fileId || "").trim();
+    if (!fileID || seen[fileID]) {
+      continue;
+    }
+    seen[fileID] = true;
+    out.push({
+      localKey: fileID,
+      fileID,
+      displayUrl: fileID,
+      name: String(item.name || "").trim(),
+      size: Number(item.size) || 0,
+      contentType: String(item.contentType || "").trim() || "image/jpeg",
+      uploading: false,
+    });
+    if (out.length >= TX_ATTACHMENT_MAX) {
+      break;
+    }
+  }
+  return out;
+}
+
+function attachmentsPayloadFromState(list) {
+  return (Array.isArray(list) ? list : [])
+    .filter((a) => a && a.fileID && !a.uploading)
+    .slice(0, TX_ATTACHMENT_MAX)
+    .map((a) => {
+      const row = { fileID: String(a.fileID) };
+      if (a.name) row.name = String(a.name).slice(0, 80);
+      if (Number.isFinite(Number(a.size)) && Number(a.size) > 0) {
+        row.size = Math.round(Number(a.size));
+      }
+      if (a.contentType) row.contentType = String(a.contentType).slice(0, 64);
+      return row;
+    });
+}
 
 Component({
   properties: {
@@ -136,6 +208,9 @@ Component({
     assetPickerRange: ["不关联"],
     assetPickerIndex: 0,
     assetPickerAccountIds: [],
+    attachments: [],
+    attachMax: TX_ATTACHMENT_MAX,
+    attaching: false,
   },
 
   methods: {
@@ -248,6 +323,7 @@ Component({
       bookedAtMs,
       assetAccountId,
       assetAccountName,
+      attachments,
     }) {
       const flowIndex = flow === "income" ? 1 : 0;
       const pick = String(category != null ? category : "");
@@ -257,6 +333,11 @@ Component({
       const bookDate = hasMs ? msToBookDate(ms) : msToBookDate(now);
       const bookTime = hasMs ? msToBookTime(ms) : msToBookTime(now);
       this._origBookedAtMs = hasMs ? ms : null;
+      const normalizedAtt = normalizeAttachmentList(attachments);
+      this._origAttachmentIds = Object.create(null);
+      for (let i = 0; i < normalizedAtt.length; i += 1) {
+        this._origAttachmentIds[normalizedAtt[i].fileID] = true;
+      }
       const rawAid =
         assetAccountId != null ? String(assetAccountId).trim() : "";
       const accList = (this.properties.assetAccounts || [])
@@ -279,6 +360,8 @@ Component({
           bookTime,
           selectedAssetId: rawAid,
           assetPickerOrphan,
+          attachments: normalizedAtt,
+          attaching: false,
         },
         () => {
           this.rebuildActiveCategoryList(pick);
@@ -291,6 +374,7 @@ Component({
     resetAddForm() {
       const now = Date.now();
       this._origBookedAtMs = null;
+      this._origAttachmentIds = Object.create(null);
       this.setData(
         {
           amountInput: "",
@@ -306,6 +390,8 @@ Component({
           categorySheetOpen: false,
           selectedAssetId: "",
           assetPickerOrphan: null,
+          attachments: [],
+          attaching: false,
         },
         () => {
           this.rebuildActiveCategoryList();
@@ -532,6 +618,166 @@ Component({
       });
     },
 
+    onAddAttachments() {
+      if (this.data.attaching || this.data.saving || this._submitting) {
+        return;
+      }
+      const cur = Array.isArray(this.data.attachments) ? this.data.attachments : [];
+      const remain = TX_ATTACHMENT_MAX - cur.length;
+      if (remain <= 0) {
+        wx.showToast({ title: `最多${TX_ATTACHMENT_MAX}张`, icon: "none" });
+        return;
+      }
+      wx.chooseMedia({
+        count: remain,
+        mediaType: ["image"],
+        sourceType: ["album", "camera"],
+        sizeType: ["compressed"],
+        success: (res) => {
+          const files = (res && res.tempFiles) || [];
+          if (!files.length) {
+            return;
+          }
+          this.uploadChosenImages(files);
+        },
+      });
+    },
+
+    uploadChosenImages(files) {
+      const list = Array.isArray(this.data.attachments)
+        ? this.data.attachments.slice()
+        : [];
+      const room = TX_ATTACHMENT_MAX - list.length;
+      const picked = (files || []).slice(0, Math.max(0, room));
+      if (!picked.length) {
+        return;
+      }
+      const placeholders = picked.map((f, i) => {
+        const path = String((f && f.tempFilePath) || "");
+        const ext = guessImageExt(path);
+        return {
+          localKey: `up-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+          fileID: "",
+          displayUrl: path,
+          name: `图片.${ext}`,
+          size: Number(f && f.size) || 0,
+          contentType: contentTypeForExt(ext),
+          uploading: true,
+          _localPath: path,
+        };
+      });
+      this.setData({
+        attachments: list.concat(placeholders),
+        attaching: true,
+      });
+      const uploadOne = (item) =>
+        new Promise((resolve) => {
+          const localPath = item._localPath;
+          if (!localPath) {
+            resolve({ ok: false, localKey: item.localKey });
+            return;
+          }
+          wx.cloud
+            .uploadFile({
+              cloudPath: buildTxAttachmentCloudPath(localPath),
+              filePath: localPath,
+            })
+            .then((uploadResp) => {
+              const fileID = String(
+                (uploadResp && uploadResp.fileID) || ""
+              ).trim();
+              if (!fileID) {
+                resolve({ ok: false, localKey: item.localKey });
+                return;
+              }
+              resolve({
+                ok: true,
+                localKey: item.localKey,
+                fileID,
+                displayUrl: fileID,
+                name: item.name,
+                size: item.size,
+                contentType: item.contentType,
+              });
+            })
+            .catch(() => {
+              resolve({ ok: false, localKey: item.localKey });
+            });
+        });
+
+      Promise.all(placeholders.map(uploadOne)).then((results) => {
+        const byKey = Object.create(null);
+        for (let i = 0; i < results.length; i += 1) {
+          byKey[results[i].localKey] = results[i];
+        }
+        const next = (this.data.attachments || [])
+          .map((a) => {
+            const r = byKey[a.localKey];
+            if (!r) {
+              return a;
+            }
+            if (!r.ok) {
+              return null;
+            }
+            return {
+              localKey: r.fileID,
+              fileID: r.fileID,
+              displayUrl: r.displayUrl,
+              name: r.name,
+              size: r.size,
+              contentType: r.contentType,
+              uploading: false,
+            };
+          })
+          .filter(Boolean)
+          .slice(0, TX_ATTACHMENT_MAX);
+        const failed = results.filter((r) => !r.ok).length;
+        this.setData({ attachments: next, attaching: false });
+        if (failed) {
+          wx.showToast({
+            title: failed === results.length ? "上传失败" : "部分图片上传失败",
+            icon: "none",
+          });
+        }
+      });
+    },
+
+    onPreviewAttachment(e) {
+      const idx = Number(e.currentTarget.dataset.index);
+      const list = this.data.attachments || [];
+      const urls = list
+        .map((a) => (a && (a.displayUrl || a.fileID)) || "")
+        .filter(Boolean);
+      if (!urls.length) {
+        return;
+      }
+      const safe = Number.isFinite(idx)
+        ? Math.min(Math.max(0, idx), urls.length - 1)
+        : 0;
+      wx.previewImage({
+        current: urls[safe],
+        urls,
+      });
+    },
+
+    onRemoveAttachment(e) {
+      const idx = Number(e.currentTarget.dataset.index);
+      const list = Array.isArray(this.data.attachments)
+        ? this.data.attachments.slice()
+        : [];
+      if (!Number.isFinite(idx) || idx < 0 || idx >= list.length) {
+        return;
+      }
+      const removed = list[idx];
+      list.splice(idx, 1);
+      this.setData({ attachments: list });
+      const fileID = removed && removed.fileID ? String(removed.fileID) : "";
+      const orig = this._origAttachmentIds || Object.create(null);
+      if (fileID && !orig[fileID]) {
+        wx.cloud.deleteFile({ fileList: [fileID] }).catch(() => {});
+      }
+    },
+
     readBookedAtMs() {
       const { bookDate, bookTime } = this.data;
       const { mode } = this.properties;
@@ -574,6 +820,18 @@ Component({
     },
 
     onSubmit() {
+      if (this._submitting || this.data.saving) {
+        return;
+      }
+      if (this.data.attaching) {
+        wx.showToast({ title: "图片上传中", icon: "none" });
+        return;
+      }
+      const pending = (this.data.attachments || []).some((a) => a && a.uploading);
+      if (pending) {
+        wx.showToast({ title: "图片上传中", icon: "none" });
+        return;
+      }
       const { mode, ledgerId, txId } = this.properties;
       const { amountInput, categoryIndex, note, flowIndex } = this.data;
       const list = this.getListForCurrentFlow();
@@ -612,6 +870,7 @@ Component({
           );
         }
       }
+      const attachments = attachmentsPayloadFromState(this.data.attachments);
 
       if (mode === "edit") {
         if (!txId) {
@@ -635,10 +894,12 @@ Component({
           note,
           bookedAtMs,
           assetAccountId: linkId,
+          attachments,
         };
         if (ledgerId && ledgerId !== sourceLedgerId) {
           payload.newLedgerId = ledgerId;
         }
+        this._submitting = true;
         this.setData({ saving: true });
         wx.cloud
           .callFunction({
@@ -658,11 +919,13 @@ Component({
             wx.showToast({ title: "保存失败", icon: "none" });
           })
           .finally(() => {
+            this._submitting = false;
             this.setData({ saving: false });
           });
         return;
       }
 
+      this._submitting = true;
       this.setData({ saving: true });
       wx.cloud
         .callFunction({
@@ -676,6 +939,7 @@ Component({
             note,
             bookedAtMs,
             assetAccountId: linkId,
+            attachments,
           },
         })
         .then((resp) => {
@@ -692,6 +956,7 @@ Component({
           wx.showToast({ title: "云函数调用失败", icon: "none" });
         })
         .finally(() => {
+          this._submitting = false;
           this.setData({ saving: false });
         });
     },

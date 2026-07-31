@@ -43,6 +43,10 @@
         </view>
         <view class="summary-meta">净额已含收支 · 共 {{txCount}} 笔 · 下方排行仅统计支出流水</view>
       </view>
+      <view wx:if="{{txDataTruncated && txDataTruncatedHint}}" class="tx-truncate-strip">
+        <text class="tx-truncate-strip-mark">提示</text>
+        <text class="tx-truncate-strip-text">{{txDataTruncatedHint}}</text>
+      </view>
       <view wx:if="{{showBudgetVs}}" class="budget-vs-card">
         <view class="budget-vs-head">
           <text class="budget-vs-title">本月支出 vs 预算</text>

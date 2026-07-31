@@ -11,12 +11,17 @@
  *   pinned：可选，当前用户对该账本的置顶偏好（仅影响本人 listLedgers 排序）；pinnedAt 为最近一次置顶时刻。
  * - transactions: { ledgerId, amountCents, flow, category, note, createdByOpenid, createdAt, bookedAt? }
  *   可选：assetAccountId、assetAccountName（记一笔选资产时写入；名称为快照）；sourceAssetEffectCents（有符号分，该条流水对所选资产账户余额的净影响）、primaryAssetRecordId（首笔联动资产记录）。
+ *   可选：attachments（图片附件数组，最多 9 项；每项 { fileID, name?, size?, contentType? }，fileID 为云存储 cloud://；仅图片）。
  *   关联资产时记一笔成功会写 assets 侧 `asset_records` 并更新余额；编辑/删除流水时会再追加一条带 `sourceLedger*` 的变动（不删改历史资产行，用新行表达冲销/调整）。
  *   bookedAt 为用户选择的「记账发生时间」至毫秒（记一笔为日期+时刻；新纪录在确认时用当前秒/毫秒以区分同一分钟内多条）；列表/统计按 bookedAt ?? createdAt。
  *   amountCents 为正整数（绝对值）；flow 为 expense | income，缺省按 expense。
+ *   编辑/删除流水时会对被移除或整单删除的附件 fileID 尽力调用 cloud.deleteFile（失败不影响主流程）。
  *
- * 小程序端流水列表已改为「云函数 listTransactions + 定时轮询」，不再使用客户端 watch，
+ * 小程序端流水列表已改为「云函数 listTransactions + 页面 onShow 刷新」，不再使用客户端 watch，
  * 因此一般无需为 transactions 配置小程序可读权限，也不会再触发规则里 get(ledgers) 的 document.get:fail。
+ * listTransactions：按 createdAt 倒序拉取至多 1000 条（与统计汇总上限一致），再按 bookedAt ?? createdAt 倒序返回；
+ * 返回 txTotalCount / txListTruncated / txListTruncatedHint（总数超 1000 时供详情页提示）；若库侧缺少组合索引则回退为分页扫全表后排序截取。
+ * analyzeLedger / listGroupTransactions：单账本每本最多 1000 条参与统计；超限时返回 txDataTruncated / txDataTruncatedHint。
  * 若你自行改为客户端直连读 transactions，才需要为 transactions / ledgers 配置自定义规则（见下）。
  *
  * transactions（仅在你客户端直连读时需要）：
@@ -80,6 +85,57 @@ const ASSET_SNAPSHOT_PERSIST_MAX = 200;
 const ASSET_RECORD_BOOKED_AT_MIN_MS = Date.UTC(2000, 0, 1);
 const ASSET_SNAPSHOT_WRITE_BATCH = 16;
 const DB_REMOVE_CONCURRENCY = 16;
+/** 与 analyzeLedger / listLedgers 月汇总一致：单账本流水列表与统计参与条数上限 */
+const LEDGER_TX_LIST_MAX = 1000;
+const LEDGER_TX_QUERY_BATCH = 100;
+
+async function countLedgerTransactions(ledgerId) {
+  const id = normalizeLedgerId(ledgerId);
+  if (!id) {
+    return 0;
+  }
+  try {
+    const res = await db.collection("transactions").where({ ledgerId: id }).count();
+    return Number(res && res.total) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function buildTxListTruncatedHint(totalCount) {
+  const n = Number(totalCount) || 0;
+  if (n <= LEDGER_TX_LIST_MAX) {
+    return "";
+  }
+  return `本账本共有 ${n} 条流水，已超过 ${LEDGER_TX_LIST_MAX} 条上限，此处仅展示最新 ${LEDGER_TX_LIST_MAX} 条。`;
+}
+
+function buildTxAnalyzeTruncatedHint(truncatedLedgerCount, totalLedgerCount) {
+  const truncated = Number(truncatedLedgerCount) || 0;
+  const total = Number(totalLedgerCount) || 0;
+  if (truncated <= 0) {
+    return "";
+  }
+  if (total <= 1) {
+    return `本账本流水已超过 ${LEDGER_TX_LIST_MAX} 条，当前统计仅基于部分流水，结果可能不完整。`;
+  }
+  return `所选范围内有 ${truncated} 个账本流水超过 ${LEDGER_TX_LIST_MAX} 条，统计结果可能不完整。`;
+}
+
+async function resolveTxTruncationForLedgers(ledgerIdList) {
+  const list = (ledgerIdList || []).map((x) => normalizeLedgerId(x)).filter(Boolean);
+  let truncatedLedgerCount = 0;
+  for (let i = 0; i < list.length; i += 1) {
+    const n = await countLedgerTransactions(list[i]);
+    if (n > LEDGER_TX_LIST_MAX) {
+      truncatedLedgerCount += 1;
+    }
+  }
+  return {
+    txDataTruncated: truncatedLedgerCount > 0,
+    txDataTruncatedHint: buildTxAnalyzeTruncatedHint(truncatedLedgerCount, list.length),
+  };
+}
 
 function txTimeMs(tx) {
   if (!tx) {
@@ -2448,11 +2504,11 @@ function formatChinaTimeText(ms) {
   if (!Number.isFinite(ms)) {
     return "";
   }
-  const d = new Date(ms);
+  const d = new Date(ms + CHINA_TZ_OFFSET_MS);
   const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(
-    d.getHours()
-  )}:${p(d.getMinutes())}`;
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(
+    d.getUTCHours()
+  )}:${p(d.getUTCMinutes())}`;
 }
 
 /** 当前用户作为成员所在账本 _id；默认仅未归档（与活跃 listLedgers / 全部账本统计一致） */
@@ -3908,6 +3964,51 @@ async function removeLedgerCategory(openid, event) {
   };
 }
 
+async function fetchLedgerTransactionsForList(ledgerId) {
+  const id = normalizeLedgerId(ledgerId);
+  if (!id) {
+    return [];
+  }
+  let rows = null;
+  try {
+    const res = await db
+      .collection("transactions")
+      .where({ ledgerId: id })
+      .orderBy("createdAt", "desc")
+      .limit(LEDGER_TX_LIST_MAX)
+      .get();
+    rows = res.data || [];
+  } catch (e) {
+    rows = null;
+  }
+  if (rows === null) {
+    rows = [];
+    let skip = 0;
+    while (true) {
+      const res = await db
+        .collection("transactions")
+        .where({ ledgerId: id })
+        .skip(skip)
+        .limit(LEDGER_TX_QUERY_BATCH)
+        .get();
+      const batch = res.data || [];
+      if (!batch.length) {
+        break;
+      }
+      rows.push(...batch);
+      if (batch.length < LEDGER_TX_QUERY_BATCH) {
+        break;
+      }
+      skip += batch.length;
+    }
+  }
+  rows.sort((a, b) => txTimeMs(b) - txTimeMs(a));
+  if (rows.length > LEDGER_TX_LIST_MAX) {
+    return rows.slice(0, LEDGER_TX_LIST_MAX);
+  }
+  return rows;
+}
+
 async function listTransactions(openid, rawLedgerId) {
   const ledgerId = normalizeLedgerId(rawLedgerId);
   if (!ledgerId) {
@@ -3918,12 +4019,10 @@ async function listTransactions(openid, rawLedgerId) {
     return { success: false, errMsg: gate.errMsg };
   }
   const ledger = gate.ledger;
-  const res = await db.collection("transactions").where({ ledgerId }).get();
-  const rows = res.data || [];
+  const rows = await fetchLedgerTransactionsForList(ledgerId);
   const profileMap = await fetchProfileMapByOpenids(
     rows.map((tx) => String(tx.createdByOpenid || "").trim()).filter(Boolean)
   );
-  rows.sort((a, b) => txTimeMs(b) - txTimeMs(a));
   const list = rows.map((tx) => {
     const oid = String(tx.createdByOpenid || "").trim();
     const profile = oid ? profileMap[oid] : null;
@@ -3941,7 +4040,15 @@ async function listTransactions(openid, rawLedgerId) {
         transactionEditableByCaller(openid, tx, ledger),
     };
   });
-  return { success: true, list };
+  const txTotalCount = await countLedgerTransactions(ledgerId);
+  const txListTruncated = txTotalCount > LEDGER_TX_LIST_MAX;
+  return {
+    success: true,
+    list,
+    txTotalCount,
+    txListTruncated,
+    txListTruncatedHint: txListTruncated ? buildTxListTruncatedHint(txTotalCount) : "",
+  };
 }
 
 async function insertLedgerTransaction(openid, ledgerId, payload) {
@@ -4012,6 +4119,15 @@ async function insertLedgerTransaction(openid, ledgerId, payload) {
       return { ok: false, errMsg: tChk.errMsg };
     }
   }
+  if (Object.prototype.hasOwnProperty.call(payload, "attachments")) {
+    const att = normalizeTxAttachments(payload.attachments);
+    if (!att.ok) {
+      return { ok: false, errMsg: att.errMsg };
+    }
+    if (att.list.length) {
+      row.attachments = att.list;
+    }
+  }
   const addRes = await db.collection("transactions").add({
     data: row,
   });
@@ -4032,14 +4148,18 @@ async function addTransaction(openid, event) {
   }
   const hasAssetInput =
     event.assetAccountId != null && String(event.assetAccountId).trim() !== "";
-  const ins = await insertLedgerTransaction(openid, ledgerId, {
+  const insPayload = {
     amountCents: event.amountCents,
     flow: event.flow,
     category: event.category,
     note: event.note,
     bookedAt,
     assetAccountId: event.assetAccountId,
-  });
+  };
+  if (Object.prototype.hasOwnProperty.call(event, "attachments")) {
+    insPayload.attachments = event.attachments;
+  }
+  const ins = await insertLedgerTransaction(openid, ledgerId, insPayload);
   if (!ins.ok) {
     return { success: false, errMsg: ins.errMsg };
   }
@@ -5090,6 +5210,95 @@ function maskOpenidForDisplay(oid) {
   return `…${oid.slice(-8)}`;
 }
 
+/** 流水图片附件上限 */
+const TX_ATTACHMENT_MAX = 9;
+const TX_ATTACHMENT_NAME_MAX = 80;
+
+function isCloudFileId(raw) {
+  const s = String(raw == null ? "" : raw).trim();
+  return s.startsWith("cloud://") && s.length >= 12 && s.length <= 512;
+}
+
+/**
+ * 规范化记一笔图片附件列表。
+ * @returns {{ ok: true, list: object[] } | { ok: false, errMsg: string }}
+ */
+function normalizeTxAttachments(raw) {
+  if (raw == null) {
+    return { ok: true, list: [] };
+  }
+  if (!Array.isArray(raw)) {
+    return { ok: false, errMsg: "附件格式不正确" };
+  }
+  if (raw.length > TX_ATTACHMENT_MAX) {
+    return { ok: false, errMsg: `最多上传${TX_ATTACHMENT_MAX}张图片` };
+  }
+  const out = [];
+  const seen = Object.create(null);
+  for (let i = 0; i < raw.length; i += 1) {
+    const item = raw[i] || {};
+    const fileID = String(item.fileID || item.fileId || "").trim();
+    if (!isCloudFileId(fileID)) {
+      return { ok: false, errMsg: "图片附件无效" };
+    }
+    if (seen[fileID]) {
+      continue;
+    }
+    seen[fileID] = true;
+    const contentType = String(item.contentType || "").trim().slice(0, 64);
+    if (contentType && !/^image\//i.test(contentType)) {
+      return { ok: false, errMsg: "仅支持图片附件" };
+    }
+    const name = String(item.name || "").trim().slice(0, TX_ATTACHMENT_NAME_MAX);
+    const sizeNum = Number(item.size);
+    const row = { fileID };
+    if (name) {
+      row.name = name;
+    }
+    if (Number.isFinite(sizeNum) && sizeNum >= 0) {
+      row.size = Math.min(Math.round(sizeNum), 50 * 1024 * 1024);
+    }
+    if (contentType) {
+      row.contentType = contentType;
+    }
+    out.push(row);
+  }
+  return { ok: true, list: out };
+}
+
+function collectAttachmentFileIds(txOrList) {
+  const list = Array.isArray(txOrList)
+    ? txOrList
+    : Array.isArray(txOrList && txOrList.attachments)
+      ? txOrList.attachments
+      : [];
+  const out = [];
+  const seen = Object.create(null);
+  for (let i = 0; i < list.length; i += 1) {
+    const id = String((list[i] && (list[i].fileID || list[i].fileId)) || "").trim();
+    if (!isCloudFileId(id) || seen[id]) {
+      continue;
+    }
+    seen[id] = true;
+    out.push(id);
+  }
+  return out;
+}
+
+/** 尽力删除云存储文件；失败忽略，不阻断流水主流程 */
+async function deleteCloudFilesBestEffort(fileIds) {
+  const ids = (fileIds || []).filter(isCloudFileId);
+  if (!ids.length) {
+    return;
+  }
+  const chunk = ids.slice(0, 50);
+  try {
+    await cloud.deleteFile({ fileList: chunk });
+  } catch (e) {
+    // ignore
+  }
+}
+
 function normalizeNickname(raw) {
   const nick = String(raw == null ? "" : raw).trim().slice(0, 32);
   if (!nick) {
@@ -5502,6 +5711,8 @@ async function buildAnalyzeLedgerResultPayload(
     ledgerName,
     monthlyBudgetCents,
     trendLedgerMs,
+    txDataTruncated,
+    txDataTruncatedHint,
   }
 ) {
   const { start, end, label, selectedYear, selectedMonth, weekAnchorDate } = baseRange;
@@ -5631,6 +5842,8 @@ async function buildAnalyzeLedgerResultPayload(
     pieGroupsExpense,
     pieGroupsIncome,
     trendPoints,
+    txDataTruncated: !!txDataTruncated,
+    txDataTruncatedHint: txDataTruncatedHint ? String(txDataTruncatedHint) : "",
   };
 }
 
@@ -5651,6 +5864,7 @@ async function analyzeLedgerForIds(openid, event, ledgerIdList, opts) {
   }
   const { ledgers, ledgerIds } = resolved;
 
+  const truncation = await resolveTxTruncationForLedgers(ledgerIds);
   const all = await collectTransactionsForLedgerIds(ledgerIds);
   const rows = all.filter((tx) => {
     const t = txTimeMs(tx);
@@ -5678,6 +5892,8 @@ async function analyzeLedgerForIds(openid, event, ledgerIdList, opts) {
     ledgerName,
     monthlyBudgetCents,
     trendLedgerMs,
+    txDataTruncated: truncation.txDataTruncated,
+    txDataTruncatedHint: truncation.txDataTruncatedHint,
   });
 }
 
@@ -5718,6 +5934,7 @@ async function analyzeLedger(openid, event) {
   const endMs = end.getTime();
   const compareStartMs = compareRange.start.getTime();
   const compareEndMs = compareRange.end.getTime();
+  const truncation = await resolveTxTruncationForLedgers([ledgerId]);
   const res = await db
     .collection("transactions")
     .where({ ledgerId })
@@ -5742,6 +5959,8 @@ async function analyzeLedger(openid, event) {
     ledgerName: gate.ledger && gate.ledger.name ? String(gate.ledger.name) : "",
     monthlyBudgetCents: readMonthlyBudgetCents(gate.ledger),
     trendLedgerMs: readDateMs(gate.ledger.createdAt),
+    txDataTruncated: truncation.txDataTruncated,
+    txDataTruncatedHint: truncation.txDataTruncatedHint,
   });
 }
 
@@ -5749,14 +5968,8 @@ function formatTxLineTime(d) {
   if (!d) {
     return "";
   }
-  const dt = d instanceof Date ? d : new Date(d);
-  if (Number.isNaN(dt.getTime())) {
-    return "";
-  }
-  const p = (n) => (n < 10 ? `0${n}` : `${n}`);
-  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())} ${p(
-    dt.getHours()
-  )}:${p(dt.getMinutes())}`;
+  const ms = d instanceof Date ? d.getTime() : new Date(d).getTime();
+  return formatChinaTimeText(ms);
 }
 
 async function listGroupTransactions(openid, event) {
@@ -5831,6 +6044,10 @@ async function listGroupTransactions(openid, event) {
   );
   const startMs = start.getTime();
   const endMs = end.getTime();
+
+  const idsForTruncation =
+    scopeAll || scopeCustom ? targetLedgerIds : [ledgerId];
+  const truncation = await resolveTxTruncationForLedgers(idsForTruncation);
 
   let all;
   if (scopeAll || scopeCustom) {
@@ -5940,6 +6157,8 @@ async function listGroupTransactions(openid, event) {
       groupTitle: primaryGroupTitle,
       subGroupBy,
       groups,
+      txDataTruncated: truncation.txDataTruncated,
+      txDataTruncatedHint: truncation.txDataTruncatedHint,
     };
   }
 
@@ -5961,6 +6180,7 @@ async function listGroupTransactions(openid, event) {
         : gate && gate.ledger
           ? gate.ledger
           : null;
+    const attNorm = normalizeTxAttachments(tx.attachments);
     return {
       _id: tx._id,
       ledgerId: txLid,
@@ -5971,6 +6191,7 @@ async function listGroupTransactions(openid, event) {
       timeText: formatTxLineTime(txOccurredDate(tx)),
       payerName,
       payerAvatarUrl: oid && profile ? profile.avatarUrl || "" : "",
+      attachments: attNorm.ok ? attNorm.list : [],
       canEdit:
         resLedger &&
         !isLedgerArchived(resLedger) &&
@@ -5996,6 +6217,8 @@ async function listGroupTransactions(openid, event) {
     subGroupBy,
     subGroupKey: subGroupKey || "",
     list,
+    txDataTruncated: truncation.txDataTruncated,
+    txDataTruncatedHint: truncation.txDataTruncatedHint,
   };
 }
 
@@ -6065,6 +6288,10 @@ async function getTransaction(openid, event) {
       bookedAtMs: txTimeMs(tx),
       assetAccountId: tx.assetAccountId ? String(tx.assetAccountId) : "",
       assetAccountName: tx.assetAccountName ? String(tx.assetAccountName) : "",
+      attachments: (() => {
+        const att = normalizeTxAttachments(tx.attachments);
+        return att.ok ? att.list : [];
+      })(),
     },
   };
 }
@@ -6147,6 +6374,25 @@ async function updateTransaction(openid, event) {
       updateData.assetAccountName = link.assetAccountName;
     }
   }
+  let removedAttachmentIds = [];
+  if (Object.prototype.hasOwnProperty.call(event, "attachments")) {
+    const att = normalizeTxAttachments(event.attachments);
+    if (!att.ok) {
+      return { success: false, errMsg: att.errMsg };
+    }
+    const oldIds = collectAttachmentFileIds(g.tx);
+    const newIds = collectAttachmentFileIds(att.list);
+    const newSet = Object.create(null);
+    for (let i = 0; i < newIds.length; i += 1) {
+      newSet[newIds[i]] = true;
+    }
+    removedAttachmentIds = oldIds.filter((id) => !newSet[id]);
+    if (att.list.length) {
+      updateData.attachments = att.list;
+    } else {
+      updateData.attachments = _.remove();
+    }
+  }
   const merged = {
     amountCents: n,
     flow,
@@ -6211,6 +6457,9 @@ async function updateTransaction(openid, event) {
   } catch (e) {
     return { success: false, errMsg: "更新失败，请重试" };
   }
+  if (removedAttachmentIds.length) {
+    await deleteCloudFilesBestEffort(removedAttachmentIds);
+  }
   return { success: true };
 }
 
@@ -6232,10 +6481,14 @@ async function deleteTransaction(openid, event) {
   if (!delA.ok) {
     return { success: false, errMsg: delA.errMsg || "资产侧冲销失败" };
   }
+  const attachmentIds = collectAttachmentFileIds(g.tx);
   try {
     await db.collection("transactions").doc(String(txId).trim()).remove();
   } catch (e) {
     return { success: false, errMsg: "删除失败，请重试" };
+  }
+  if (attachmentIds.length) {
+    await deleteCloudFilesBestEffort(attachmentIds);
   }
   return { success: true };
 }

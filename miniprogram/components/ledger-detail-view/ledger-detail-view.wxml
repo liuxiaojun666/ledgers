@@ -77,6 +77,10 @@
           + 记一笔
         </button>
       </view>
+      <view wx:if="{{txListTruncated && txListTruncatedHint}}" class="tx-truncate-strip">
+        <text class="tx-truncate-strip-mark">提示</text>
+        <text class="tx-truncate-strip-text">{{txListTruncatedHint}}</text>
+      </view>
       <view wx:if="{{txSyncing && !transactions.length}}" class="tx-loading-wrap">
         <image class="tx-loading-illu" src="../../images/ledger-detail-loading.png" mode="widthFix" />
         <view class="tx-loading-text">加载流水中…</view>
@@ -101,6 +105,20 @@
                     <image wx:if="{{tx.payerAvatarUrl}}" class="tx-meta-avatar" src="{{tx.payerAvatarUrl}}" mode="aspectFill" />
                     <text class="tx-meta-payer-name">{{tx.payerName}}</text>
                   </view>
+                </view>
+                <view wx:if="{{tx.attachmentThumbs.length}}" class="tx-thumbs">
+                  <image
+                    wx:for="{{tx.attachmentThumbs}}"
+                    wx:for-item="thumb"
+                    wx:for-index="tIdx"
+                    wx:key="*this"
+                    class="tx-thumb"
+                    src="{{thumb}}"
+                    mode="aspectFill"
+                    data-id="{{tx._id}}"
+                    data-index="{{tIdx}}"
+                    catchtap="onTxThumbPreview"
+                  />
                 </view>
               </view>
               <text class="tx-amt {{tx.flow === 'income' ? 'tx-amt-income' : 'tx-amt-expense'}}">

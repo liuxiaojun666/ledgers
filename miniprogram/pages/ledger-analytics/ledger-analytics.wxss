@@ -152,6 +152,36 @@
   box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.04);
 }
 
+.tx-truncate-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: #fff7e8;
+  border: 1rpx solid #ffd08a;
+  box-sizing: border-box;
+}
+
+.tx-truncate-strip-mark {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #8a5400;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+}
+
+.tx-truncate-strip-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 24rpx;
+  color: #855300;
+  line-height: 1.5;
+}
+
 .summary-range {
   font-size: 26rpx;
   color: #666666;

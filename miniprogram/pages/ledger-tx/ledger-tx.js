@@ -378,6 +378,7 @@ Page({
                 bookedAtMs,
                 assetAccountId,
                 assetAccountName,
+                attachments: Array.isArray(tx.attachments) ? tx.attachments : [],
               });
             }
           }

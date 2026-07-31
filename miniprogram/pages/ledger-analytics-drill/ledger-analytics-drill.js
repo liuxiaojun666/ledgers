@@ -132,6 +132,8 @@ Page({
     summaryTone: "summary-zero",
     summaryMetaText: "",
     breadcrumbText: "",
+    txDataTruncated: false,
+    txDataTruncatedHint: "",
   },
 
   onLoad(options) {
@@ -271,12 +273,18 @@ Page({
             summaryAmountDisplay: formatSignedYuanDisplay(signedYuan),
             summaryTone: toSummaryTone(signedYuan),
             summaryMetaText: `共 ${totalCount} 笔 · ${groups.length} 类`,
+            txDataTruncated: !!r.txDataTruncated,
+            txDataTruncatedHint: String(r.txDataTruncatedHint || ""),
           });
           return;
         }
         const list = (r.list || []).map((row) => ({
           ...row,
           amountDisplay: yuanWithCurrency(row.amountYuan),
+          attachmentThumbs: (Array.isArray(row.attachments) ? row.attachments : [])
+            .map((a) => String((a && (a.fileID || a.fileId)) || "").trim())
+            .filter(Boolean)
+            .slice(0, 9),
         }));
         const listSignedYuan = list.reduce(
           (sum, row) => sum + (Number(row.amountYuan) || 0),
@@ -293,6 +301,8 @@ Page({
           summaryAmountDisplay: formatSignedYuanDisplay(listSignedYuan),
           summaryTone: toSummaryTone(listSignedYuan),
           summaryMetaText: `共 ${list.length} 笔明细`,
+          txDataTruncated: !!r.txDataTruncated,
+          txDataTruncatedHint: String(r.txDataTruncatedHint || ""),
         });
         this._resolveListAvatarUrls(list).catch(() => {});
       })
@@ -401,6 +411,26 @@ Page({
     }
     wx.navigateTo({
       url: `/pages/ledger-tx/ledger-tx?ledgerId=${targetLedger}&txId=${txId}`,
+    });
+  },
+
+  onTxThumbPreview(e) {
+    const ds = e.currentTarget.dataset || {};
+    const txId = String(ds.id || "").trim();
+    const idx = Number(ds.index);
+    const tx = (this.data.list || []).find((t) => t && String(t._id) === txId);
+    const urls = ((tx && tx.attachmentThumbs) || [])
+      .map((u) => String(u || "").trim())
+      .filter(Boolean);
+    if (!urls.length) {
+      return;
+    }
+    const safe = Number.isFinite(idx)
+      ? Math.min(Math.max(0, idx), urls.length - 1)
+      : 0;
+    wx.previewImage({
+      current: urls[safe],
+      urls,
     });
   },
 

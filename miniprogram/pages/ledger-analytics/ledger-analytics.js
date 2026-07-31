@@ -789,6 +789,8 @@ Page({
     chartPieRowsExpense: [],
     chartPieRowsIncome: [],
     pieChartCurrentEmpty: false,
+    txDataTruncated: false,
+    txDataTruncatedHint: "",
   },
 
   onLoad(options) {
@@ -1415,6 +1417,8 @@ Page({
             pieChartCurrentEmpty,
             showLineChart: trendPoints.length > 0,
             showPieChart: chartPieRowsExpense.length > 0 || chartPieRowsIncome.length > 0,
+            txDataTruncated: !!r.txDataTruncated,
+            txDataTruncatedHint: String(r.txDataTruncatedHint || ""),
             ...budgetVs,
           },
           () => {
