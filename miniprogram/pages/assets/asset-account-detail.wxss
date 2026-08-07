@@ -397,6 +397,12 @@
   color: #1a1a1a;
 }
 
+.recent-head-links {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
 .recent-link {
   font-size: 24rpx;
   font-weight: 600;

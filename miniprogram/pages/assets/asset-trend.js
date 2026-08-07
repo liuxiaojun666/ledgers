@@ -13,10 +13,18 @@ function monthAxisLabel(month) {
   return s.length > 5 ? s.slice(-5) : s;
 }
 
-function buildTrendSeries(points) {
+// account 模式取 balanceCents，networth 模式取 netWorthCents。
+function pickValueCents(p, mode) {
+  if (mode === "account") {
+    return Number(p.balanceCents) || 0;
+  }
+  return Number(p.netWorthCents) || 0;
+}
+
+function buildTrendSeries(points, mode) {
   return points.slice(-12).map((p) => ({
     x: monthAxisLabel(p.month),
-    amt: (Number(p.netWorthCents) || 0) / 100,
+    amt: pickValueCents(p, mode) / 100,
     month: p.month,
   }));
 }
@@ -27,9 +35,16 @@ Page({
     loadState: "loading",
     errorText: "",
     scope: "personal",
+    // account 模式（单账户余额趋势）
+    mode: "networth", // "networth" | "account"
+    accountId: "",
+    accountName: "",
+    accountKind: "asset", // "asset" | "liability"
     points: [],
-    latestNetWorthYuan: "0.00",
-    latestDeltaYuan: "0.00",
+    // 当前值与环比（两种模式共用展示位，但语义不同）
+    latestValueYuan: "0.00",
+    latestDeltaDown: false,
+    latestDeltaAbsYuan: "0.00",
     chartOpts: { lazyLoad: true },
     showChart: false,
     firstMonth: "",
@@ -37,7 +52,31 @@ Page({
   },
 
   onLoad(options) {
-    const scope = String((options && options.scope) || "").trim();
+    const o = options || {};
+    const accountId = String(o.accountId || "").trim();
+    if (accountId) {
+      // 单账户余额趋势模式
+      let name = "";
+      try {
+        name = decodeURIComponent(String(o.name || "").trim());
+      } catch (e) {
+        name = String(o.name || "").trim();
+      }
+      const kindRaw = String(o.kind || "").trim();
+      const kind = kindRaw === "liability" ? "liability" : "asset";
+      const scope = String(o.scope || "").trim() === "shared" ? "shared" : "personal";
+      this.setData({
+        mode: "account",
+        accountId,
+        accountName: name,
+        accountKind: kind,
+        scope,
+      });
+      wx.setNavigationBarTitle({ title: "账户趋势" });
+      return;
+    }
+    // 净资产趋势模式（保持原逻辑）
+    const scope = String(o.scope || "").trim();
     if (scope === "shared") {
       this.setData({ scope: "shared" });
     }
@@ -68,7 +107,7 @@ Page({
       return;
     }
     this.destroyF2Chart();
-    const trend = buildTrendSeries(this.data.points || []);
+    const trend = buildTrendSeries(this.data.points || [], this.data.mode);
     if (!trend.length) {
       return;
     }
@@ -81,6 +120,9 @@ Page({
     const maxAmt = Math.max(...amts);
     const yMax = maxAmt === minAmt ? minAmt + 1 : maxAmt;
     const self = this;
+    const mode = this.data.mode;
+    const tipName = mode === "account" ? "账户余额(元)" : "净资产(元)";
+    const lineColor = mode === "account" && this.data.accountKind === "liability" ? "#B42318" : "#2a67ff";
     const sys = wx.getSystemInfoSync();
     const pr = sys.pixelRatio || 2;
     comp.init((canvas, width, height, F2) => {
@@ -117,7 +159,7 @@ Page({
         onShow(ev) {
           const items = ev.items || [];
           if (items[0]) {
-            items[0].name = "净资产(元)";
+            items[0].name = tipName;
             const n = Number(items[0].value);
             if (Number.isFinite(n)) {
               items[0].value = n.toFixed(2);
@@ -125,8 +167,8 @@ Page({
           }
         },
       });
-      chart.line().position("x*amt").color("#2a67ff").shape("smooth");
-      chart.point().position("x*amt").color("#2a67ff");
+      chart.line().position("x*amt").color(lineColor).shape("smooth");
+      chart.point().position("x*amt").color(lineColor);
       chart.render();
       self._f2Trend = chart;
       return chart;
@@ -135,11 +177,12 @@ Page({
 
   refresh() {
     this.setData({ loading: true, loadState: "loading", errorText: "" });
+    const callData =
+      this.data.mode === "account"
+        ? { type: "listAssetAccountTrend", accountId: this.data.accountId }
+        : { type: "listNetWorthTrend", scope: this.data.scope };
     wx.cloud
-      .callFunction({
-        name: "ledgerFunctions",
-        data: { type: "listNetWorthTrend", scope: this.data.scope },
-      })
+      .callFunction({ name: "ledgerFunctions", data: callData })
       .then((resp) => {
         const r = resp.result || {};
         if (!r.success) {
@@ -152,28 +195,50 @@ Page({
             showChart: false,
             firstMonth: "",
             lastMonth: "",
-            latestNetWorthYuan: "0.00",
-            latestDeltaYuan: "0.00",
+            latestValueYuan: "0.00",
+            latestDeltaDown: false,
+            latestDeltaAbsYuan: "0.00",
           });
           return;
         }
-        const points = (r.points || []).map((item) => ({
-          ...item,
-          netWorthYuan: formatYuan(item.netWorthCents),
-          assetsYuan: formatYuan(item.totalAssetsCents),
-          liabilitiesYuan: formatYuan(item.totalLiabilitiesCents),
-        }));
+        // account 模式优先用接口返回的账户名/kind 覆盖（避免 URL 解码误差）。
+        if (this.data.mode === "account" && r.account) {
+          const next = {};
+          if (r.account.name) {
+            next.accountName = String(r.account.name);
+          }
+          if (r.account.kind === "liability" || r.account.kind === "asset") {
+            next.accountKind = r.account.kind;
+          }
+          if (Object.keys(next).length) {
+            this.setData(next);
+          }
+        }
+        const mode = this.data.mode;
+        const points = (r.points || []).map((item) => {
+          if (mode === "account") {
+            const balanceCents = Number(item.balanceCents) || 0;
+            return { ...item, balanceCents, balanceYuan: formatYuan(balanceCents) };
+          }
+          return {
+            ...item,
+            netWorthYuan: formatYuan(item.netWorthCents),
+            assetsYuan: formatYuan(item.totalAssetsCents),
+            liabilitiesYuan: formatYuan(item.totalLiabilitiesCents),
+          };
+        });
         const chartPoints = points.slice(-12);
         const latest = points[points.length - 1] || null;
         const prev = points.length > 1 ? points[points.length - 2] : null;
-        const latestNetWorthCents = Number((latest && latest.netWorthCents) || 0);
-        const prevNetWorthCents = Number((prev && prev.netWorthCents) || 0);
-        const delta = latestNetWorthCents - prevNetWorthCents;
+        const latestCents = latest ? pickValueCents(latest, mode) : 0;
+        const prevCents = prev ? pickValueCents(prev, mode) : 0;
+        const delta = latestCents - prevCents;
         this.setData(
           {
             points,
-            latestNetWorthYuan: formatYuan(latestNetWorthCents),
-            latestDeltaYuan: formatYuan(delta),
+            latestValueYuan: formatYuan(latestCents),
+            latestDeltaDown: delta < 0,
+            latestDeltaAbsYuan: formatYuan(Math.abs(delta)),
             showChart: chartPoints.length > 0,
             firstMonth: chartPoints[0] ? chartPoints[0].month : "",
             lastMonth: chartPoints[chartPoints.length - 1] ? chartPoints[chartPoints.length - 1].month : "",
@@ -198,8 +263,9 @@ Page({
           showChart: false,
           firstMonth: "",
           lastMonth: "",
-          latestNetWorthYuan: "0.00",
-          latestDeltaYuan: "0.00",
+          latestValueYuan: "0.00",
+          latestDeltaDown: false,
+          latestDeltaAbsYuan: "0.00",
         });
       })
       .finally(() => this.setData({ loading: false }));

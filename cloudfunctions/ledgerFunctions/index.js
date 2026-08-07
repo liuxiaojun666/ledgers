@@ -1962,6 +1962,78 @@ async function listNetWorthTrend(openid, event) {
   return { success: true, points };
 }
 
+// 单账户余额趋势：从 asset_records 按自然月取月末余额。
+// 数据来源是 asset_records.afterBalanceCents（与 rebuildAssetAccountBalanceChain 维护的余额链同源），
+// 不复用 asset_snapshots（后者为用户级汇总，无 accountId 维度）。
+// 权限：复用 getAssetAccountAccess，户主与共享 viewer 均可只读；用 access.ownerOpenid（户主）查记录。
+// 归档账户亦可查看（趋势为只读历史，与变动记录同属只读查看类）。
+async function listAssetAccountTrend(openid, event) {
+  const ev = event || {};
+  const accountId = String(ev.accountId == null ? "" : ev.accountId).trim();
+  if (!accountId) {
+    return { success: false, errMsg: "缺少账户" };
+  }
+  const access = await getAssetAccountAccess(openid, accountId);
+  if (!access.ok) {
+    return { success: false, errMsg: access.errMsg || "资产账户不存在" };
+  }
+  const account = access.account || {};
+  const ownerOpenid = access.ownerOpenid || openid;
+  // 限制窗口大小，与图表展示一致；上限 24 避免回放过多记录。
+  const limitRaw = parseInt(ev.limit, 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 24) : 12;
+
+  // 拉取该账户全部记录（与 listAssetRecords 单账户模式同口径），按时间升序。
+  const res = await db
+    .collection("asset_records")
+    .where({ ownerOpenid, accountId })
+    .limit(1000)
+    .get();
+  const rows = (res.data || []).slice();
+  rows.sort((a, b) => {
+    const ta = assetRecordTimeMs(a);
+    const tb = assetRecordTimeMs(b);
+    if (ta !== tb) {
+      return ta - tb;
+    }
+    // 同时刻稳定序：createdAt 兜底，最后 _id 字典序。
+    const ca = readDateMs(a.createdAt) || 0;
+    const cb = readDateMs(b.createdAt) || 0;
+    if (ca !== cb) {
+      return ca - cb;
+    }
+    return String(a._id || "").localeCompare(String(b._id || ""));
+  });
+
+  // 按北京时间自然月分组，每月取最后一条记录的 afterBalanceCents 作为月末余额。
+  const monthMap = {}; // "YYYY-MM" -> afterBalanceCents
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const p = chinaDateParts(assetRecordTimeMs(row));
+    if (!p) {
+      continue;
+    }
+    const key = `${p.year}-${String(p.month).padStart(2, "0")}`;
+    monthMap[key] = Number(row.afterBalanceCents) || 0;
+  }
+
+  const months = Object.keys(monthMap).sort((a, b) => String(a).localeCompare(String(b)));
+  const sliced = months.slice(-limit);
+  const points = sliced.map((month) => ({
+    month,
+    balanceCents: monthMap[month],
+  }));
+
+  return {
+    success: true,
+    account: {
+      name: String(account.name || "").trim(),
+      kind: String(account.kind || "asset").trim(),
+    },
+    points,
+  };
+}
+
 async function assertAssetAccountOwner(openid, accountId) {
   const acc = await getAssetAccountById(openid, accountId);
   if (!acc) {
@@ -2877,6 +2949,8 @@ exports.main = async (event) => {
         return await createAssetTransfer(openid, event);
       case "listNetWorthTrend":
         return await listNetWorthTrend(openid, event);
+      case "listAssetAccountTrend":
+        return await listAssetAccountTrend(openid, event);
       case "createAssetAccountShareInvite":
         return await createAssetAccountShareInvite(openid, event);
       case "enterAssetAccountShare":

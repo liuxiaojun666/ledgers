@@ -110,7 +110,8 @@
   - `listAssetRecords` -> `pages/assets/asset-records`（未传 `accountId` 时支持 `scope: "personal"|"shared"|"all"`，按可访问账户聚合）
   - `getAssetRecord` / `updateAssetRecord` / `deleteAssetRecord`：云函数仍暴露 `type`，其中 `updateAssetRecord` / `deleteAssetRecord` 恒返回“仅可查看”类错误（与小程序只读策略一致；`getAssetRecord` 保留供扩展，当前小程序未调用）
   - `createAssetTransfer` -> `pages/assets/asset-transfer`
-  - `listNetWorthTrend` -> `pages/assets/asset-trend`
+  - `listNetWorthTrend` -> `pages/assets/asset-trend`（无 `accountId` 时为净资产趋势）
+  - `listAssetAccountTrend` -> `pages/assets/asset-trend`（带 `accountId` 时为单账户余额趋势；户主/共享 viewer/归档账户均可只读查看）
   - `createAssetAccountShareInvite` / `enterAssetAccountShare` / `listAssetAccountShareMembers` / `updateAssetAccountShareMemberRole` / `removeAssetAccountShareMember` / `exitAssetAccountShare` -> 资产账户共享（按 `accountId` 粒度；仅户主可分享/移除，**共享成员统一只读**；`updateAssetAccountShareMemberRole` 保留 `type` 但固定返回“无需修改角色”；户主可在 `asset-account-share` 通过微信分享携带邀请码的链接）
 
 ## 页面索引（页面 -> `type`）
@@ -170,8 +171,9 @@
   - 列表顺序与云函数 `listAssetAccounts` 一致：按**余额从高到低**。
 - `pages/assets/asset-account-detail`
   - `getAssetAccount`、`archiveAssetAccount`、**`listAssetRecords`**（仅**未归档**时拉取预览）：**无顶栏「账户」大字**；主卡片内含**账户名**（可编辑时名称旁 **✎ 小图标** 进 `asset-account-edit`）、类型副文案、右上角色徽标、余额；未归档时另有 **「记变动」** 主按钮。导航栏在账户已归档时为 **`账户名（已归档）`**。**已归档时**顶部 **琥珀色提示条**，卡片浅色琥珀边框；**隐藏**记变动、名称旁编辑、共享行与嵌入「最近变动」；**下方列表仅保留「恢复账户」**。**不再在本页提供转账按钮**（转账从资产总览等入口进 `asset-transfer`）。未归档时下方列表为（户主）「共享与成员」+「归档账户」。
-  - 正文**下方**「最近变动」展示嵌入列表（与同页 `asset-records` 行样式、`utils/asset-record-flat-rows` 格式化一致），「查看全部 ›」跳转整页变动记录。
-  - 页面会按 `scope` 与 `role` 控制可用操作：共享成员统一 `viewer` 只读（无名称旁编辑、无记变动、无归档、无「共享与成员」）；转账不在本页，走资产总览「账户转账」等入口。
+  - 正文**下方**「最近变动」展示嵌入列表（与同页 `asset-records` 行样式、`utils/asset-record-flat-rows` 格式化一致），头部含「趋势」与「查看全部 ›」两个入口：「趋势」带 `accountId` 进 `asset-trend` 查看该账户余额趋势，「查看全部 ›」跳转整页变动记录。
+  - **已归档账户**（户主）在归档提示条下方另有独立的「查看账户趋势 ›」入口，便于只读回看历史趋势。
+  - 页面会按 `scope` 与 `role` 控制可用操作：共享成员统一 `viewer` 只读（无名称旁编辑、无记变动、无归档、无「共享与成员」）；**趋势为只读查看，户主/共享 viewer/归档账户均可进入**。转账不在本页，走资产总览「账户转账」等入口。
   - 加载中单行文案；账户拉取失败时错误横幅；预览区失败一条短提示；共享成员时单独只读提示条；不常驻多块「演示态」并排。
 - `pages/assets/asset-account-edit`
   - `createAssetAccount`、`getAssetAccount`、`updateAssetAccount`；**账户分类**随 **账户属性**（资产/负债）切换：只展示与当前属性匹配的分类（如资产不含信用卡/借款等；负债不含现金/银行卡等），切换属性时若当前分类不适用则自动回退为「其他」。
@@ -186,8 +188,9 @@
 - `pages/assets/asset-transfer`
   - `listAssetAccounts`、`createAssetTransfer`；支持 URL `scope=all`（当前仅聚合个人账户；共享账户统一只读不进入候选）或默认 `personal`（仅个人账户），并支持携带 `fromAccountId` 预选转出账户（书签或其它入口直达时可生效）。日期的 `start` 为转出/转入两户创建时间的**较晚者**（公历日），`bookedAtMs` 在提交时 `clamp` 到不早于任一户；表单下方仅在出现 `statusHint`（账户加载失败或提交前校验失败等）时展示一条提示，不会在无错误时并排展示多块示例状态。
 - `pages/assets/asset-trend`
-  - `listNetWorthTrend`
-  - 页面采用「当前净资产 + 环比」与轻量柱状趋势展示近月走势；仅查询失败时用一条错误横幅提示，不设常驻多块「预览态」状态卡。
+  - `listNetWorthTrend`（无 `accountId`）/ `listAssetAccountTrend`（带 `accountId`）
+  - 两种模式：无 `accountId` 时为「净资产趋势」（当前净资产 + 环比），带 `accountId` 时为「单账户余额趋势」（当前余额 + 环比；户主/共享 viewer/归档账户均可只读查看），均用近 12 月轻量柱状/折线展示；仅查询失败时一条错误横幅，不设常驻多块「预览态」状态卡。
+  - 单账户趋势数据口径：从 `asset_records` 按北京时间自然月分组，取每月末最后一条记录的 `afterBalanceCents` 作为月末余额（与 `rebuildAssetAccountBalanceChain` 维护的余额链同源），不复用 `asset_snapshots`（后者为用户级汇总，无 `accountId` 维度）。
   - 资产转账口径：`createAssetTransfer` 采用云数据库事务写入双分录与双账户余额，失败会整体回滚。
   - 趋势性能口径：`listNetWorthTrend` 优先读取 `asset_snapshots` 月快照；`createAssetRecord` / 新建转账等变更后会自动重建当前用户快照。重建时**仅落库最近 200 个自然月**（与 `listNetWorthTrend` 的返回上限一致），避免月跨度过大时云函数超时（默认 20s）。
 - `pages/ledger-schedules/ledger-schedules`

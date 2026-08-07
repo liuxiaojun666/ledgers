@@ -298,6 +298,19 @@ Page({
     });
   },
 
+  // 查看该账户余额趋势（只读，户主/共享 viewer/归档账户均可进入）。
+  onTrend() {
+    const { accountId, accountName, scope, account } = this.data;
+    const kind = account && account.kind === "liability" ? "liability" : "asset";
+    wx.navigateTo({
+      url: `/pages/assets/asset-trend?accountId=${encodeURIComponent(
+        accountId
+      )}&name=${encodeURIComponent(accountName || "")}&kind=${kind}&scope=${
+        scope === "shared" ? "shared" : "personal"
+      }`,
+    });
+  },
+
   onArchive() {
     if (!this.data.canArchive || this.data.archiving || !this.data.account) {
       return;

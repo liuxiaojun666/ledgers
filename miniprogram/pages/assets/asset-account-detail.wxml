@@ -5,7 +5,7 @@
       <text class="archived-strip-mark">已归档</text>
       <view class="archived-strip-body">
         <text class="archived-strip-title">该账户已归档</text>
-        <text class="archived-strip-desc">恢复前不可记账、不可修改信息或管理共享；下方仅可使用「恢复账户」。</text>
+        <text class="archived-strip-desc">恢复前不可记账、不可修改信息或管理共享；下方仅可查看趋势或使用「恢复账户」。</text>
       </view>
     </view>
 
@@ -86,8 +86,11 @@
     <view wx:if="{{!account.archived || isShared}}" class="recent-section">
       <view class="recent-head">
         <text class="recent-title">最近变动</text>
-        <view wx:if="{{recordsLoadState !== 'loading'}}" class="recent-link" hover-class="recent-link--hover" bindtap="onRecords">
-          查看全部 ›
+        <view class="recent-head-links">
+          <view class="recent-link" hover-class="recent-link--hover" bindtap="onTrend">趋势</view>
+          <view wx:if="{{recordsLoadState !== 'loading'}}" class="recent-link" hover-class="recent-link--hover" bindtap="onRecords">
+            查看全部 ›
+          </view>
         </view>
       </view>
       <view wx:if="{{recordsLoading}}" class="recent-empty">同步中…</view>
@@ -126,6 +129,14 @@
       bindtap="onExitShare"
     >
       {{exitingShare ? "退出中…" : "退出共享账户"}}
+    </view>
+    <view
+      wx:if="{{scope === 'personal' && account.archived}}"
+      class="page-foot-link"
+      hover-class="page-foot-link--hover"
+      bindtap="onTrend"
+    >
+      查看账户趋势 ›
     </view>
     <view
       wx:if="{{scope === 'personal' && account.archived}}"

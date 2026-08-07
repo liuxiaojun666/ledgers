@@ -2,13 +2,15 @@
   <view wx:if="{{loading}}" class="hint">加载中…</view>
   <view wx:else>
     <view class="head-row">
-      <view class="title">净资产趋势</view>
+      <view class="title">{{mode === 'account' ? (accountName || '账户') + '趋势' : '净资产趋势'}}</view>
       <view class="range-badge">近 12 月</view>
     </view>
-    <view class="hero-card">
-      <view class="hero-label">当前净资产</view>
-      <view class="hero-value">¥{{latestNetWorthYuan}}</view>
-      <view class="hero-sub">较上月 +¥{{latestDeltaYuan}}</view>
+    <view class="hero-card {{mode === 'account' && accountKind === 'liability' ? 'hero-card--liability' : ''}}">
+      <view class="hero-label">{{mode === 'account' ? '当前余额' : '当前净资产'}}</view>
+      <view class="hero-value">¥{{latestValueYuan}}</view>
+      <view class="hero-sub {{latestDeltaDown ? 'hero-sub--down' : ''}}">
+        较上月 {{latestDeltaDown ? '-' : '+'}}¥{{latestDeltaAbsYuan}}
+      </view>
     </view>
     <view class="chart-card">
       <view class="chart-title">趋势图</view>
@@ -23,8 +25,14 @@
     </view>
     <view class="note-card">
       <view class="note-title">数据说明</view>
-      <view class="note-text">趋势按自然月汇总，优先读取快照，资产记录更新后自动重建。</view>
-      <view class="note-tip">⊱ 快照命中时，趋势查询更快</view>
+      <block wx:if="{{mode === 'account'}}">
+        <view class="note-text">趋势按自然月汇总，取每月末账户余额。</view>
+        <view class="note-tip">⊱ 数据来自该账户的变动记录</view>
+      </block>
+      <block wx:else>
+        <view class="note-text">趋势按自然月汇总，优先读取快照，资产记录更新后自动重建。</view>
+        <view class="note-tip">⊱ 快照命中时，趋势查询更快</view>
+      </block>
     </view>
     <view wx:if="{{loadState === 'error' && errorText}}" class="state-banner tone-danger-banner trend-status-banner">
       <text class="state-banner-icon">!</text>
