@@ -49,7 +49,7 @@
 - 分类显示层支持“分类名前 icon”映射（见 `miniprogram/category-icons.js`）：新增分类时可点选 icon 网格或输入自定义 emoji（emoji 优先）；保存值为“emoji + 分类名”文本，兼容历史流水与统计口径。
 - 记一笔页（`components/ledger-tx-form`）分类选择从系统 `picker` 改为底部弹窗：主表单仅展示当前分类与入口，弹窗内铺平双列网格（可滚动），长分类名与 emoji 分类可完整阅读。顶部「支出 / 收入」在分段上直接点选切换，不弹系统选单。日期与**时刻**用两个系统 `picker`（`date` + `time`）选择，`bookedAtMs` 带完整毫秒；确认记账时用当前秒/毫秒写入以区分同分钟内连续多条。「确认记账」/「保存修改」提交中用同步锁 + `saving` 禁用按钮，避免快速连点重复记账。可选「资产账户」关联当前用户 `listAssetAccounts` 中的非归档账户；**若账本已设置默认账户**（`ledgers.defaultAssetAccountId`），记一笔新增时支出与收入均默认选中该账户（切换账本时同步切换默认，仍可手动改为不关联或其它账户）；未设置时默认不关联。**若无任何非归档资产账户则不展示资产账户表单项**（编辑已关联但账户已删除的流水时仍会展示以便调整）。保存时 `addTransaction` 会写入 `transactions` 的资产快照字段，并在**成功**后追加一条 `asset_records` 并调整账户余额；编辑/删除流水时资产侧**再各记一条**变动（`sourceOperation` 为 `ledger_update` / `ledger_delete` 等，附账本 id/名称与流水 id），用于冲销或差额调整。资产变动记录列表中的「备注」会包含上述说明（与 `sourceChangeSummary` 等字段一致）。**图片附件**：备注下方可选上传最多 **9** 张图片（`wx.chooseMedia` → `wx.cloud.uploadFile`，落库 `transactions.attachments`：`[{ fileID, name?, size?, contentType? }]`）；编辑可增删；删流水或更新时移出的 `fileID` 会尽力 `cloud.deleteFile`。详情列表与统计下钻展示缩略图，点击可预览大图。
 - 定时记账页（`pages/ledger-schedule-edit`）分类选择同样为底部弹窗 + 铺平网格，沿用同一套「icon + 分类名」显示口径；一次性任务 `status=completed` 时不打开弹窗。重复规则支持一次性 / 每天 / 每周 / 每月 / **每年**（每年可选 1～12 月与 1～28 日，落库 `yearMonth`/`yearDay`，`scheduleLib` 计算 `nextRunAt`）。可选「资产账户」与记一笔同数据源（`listAssetAccounts` 非归档），**新建规则时**若账本有默认账户则同样预选；`createSchedule` / `updateSchedule` 写入规则上的 `assetAccountId` / `assetAccountName`；**无资产账户时不展示资产账户行**（编辑时规则仍关联已删除账户除外）。定时**执行入账**时按记一笔同口径写流水并联动 `asset_records`（资产行备注/摘要为「定时记账」相关文案）。
-- 定时记账列表页（`pages/ledger-schedules`）底部提供固定主按钮「新家定时记账」，列表态与空态都可直接发起新建。
+- 定时记账列表页（`pages/ledger-schedules`）底部提供固定主按钮「新建定时记账」，列表态与空态都可直接发起新建。任务跨多个账本或多个分类时，列表上方可用芯片按账本、按分类（或两者同时）在本地过滤当前列表；只剩一个账本或一个分类时对应行不展示。
 - 我的页资料采用手动设置：点击圆头像触发 `chooseAvatar` 后会先上传云存储并调用 `updateMyProfile` 持久化（可只更新头像），点击昵称触发输入弹窗并保存；不依赖 `getUserProfile` 返回真实微信昵称。未设置昵称时，昵称展示与流水一致，回退为匿名 openid（`…` + 后 8 位）。
 - 我的页的「分类管理」「定时记账」入口点击后直接跳转，不在 `pages/mine` 预加载；目标页内自行展示 loading/加载态。
 - 资产页（`pages/assets/assets`）底部功能入口为单行四宫格：白卡 + 分色图标底（蓝 / 青绿 / 琥珀 / 紫）与符号，与 Pencil 稿「10-资产总览」一致；入口为新建账户 / 记录 / 账户转账 / 趋势；已取消原先两行 fixed 按钮。
@@ -195,7 +195,8 @@
   - 趋势性能口径：`listNetWorthTrend` 优先读取 `asset_snapshots` 月快照；`createAssetRecord` / 新建转账等变更后会自动重建当前用户快照。重建时**仅落库最近 200 个自然月**（与 `listNetWorthTrend` 的返回上限一致），避免月跨度过大时云函数超时（默认 20s）。
 - `pages/ledger-schedules/ledger-schedules`
   - `listMySchedules`、`updateSchedule`（启停）
-  - 页面底部固定主按钮「新家定时记账」统一走 `onAdd` 跳转到新建页
+  - 页面底部固定主按钮「新建定时记账」统一走 `onAdd` 跳转到新建页
+  - 多账本或多分类时，列表上方芯片按账本 / 分类本地过滤（`miniprogram/utils/schedule-list-filter.js`）；可单选一维或两维同时生效。筛选条件在再次进入页面时保留，若账本或分类已不在当前列表中则自动取消该条件
 - `pages/ledger-schedule-edit/ledger-schedule-edit`
   - `listLedgers`、`getSchedule`、`listCategories`（`expenseList`/`incomeList` 与收支柱联动）、`listAssetAccounts`（与规则关联资产，非归档账户）、`createSchedule`、`updateSchedule`（可传 `assetAccountId`）、`deleteSchedule`
 - `pages/mine/mine`

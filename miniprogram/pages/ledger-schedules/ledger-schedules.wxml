@@ -6,12 +6,70 @@
       <view class="hero-sub">点击这里，新建定时任务</view>
       <view class="hero-icon">🗓</view>
     </view>
+    <view wx:if="{{list.length && (showLedgerFilter || showCategoryFilter)}}" class="filter-card">
+      <view class="filter-head">
+        <text class="filter-head-title">{{filterActive ? '已筛选 ' + displayList.length + ' 条' : '快速筛选'}}</text>
+        <text wx:if="{{filterActive}}" class="filter-clear" bindtap="onClearFilter">清除</text>
+      </view>
+      <scroll-view
+        wx:if="{{showLedgerFilter}}"
+        class="filter-scroll"
+        scroll-x
+        enhanced
+        show-scrollbar="{{false}}"
+      >
+        <view class="filter-inline">
+          <text class="filter-label">账本</text>
+          <view
+            class="chip {{filterLedgerId ? '' : 'chip-on'}}"
+            data-id="__all__"
+            bindtap="onPickLedger"
+          >全部</view>
+          <view
+            wx:for="{{ledgerOptions}}"
+            wx:key="id"
+            class="chip {{filterLedgerId === item.id ? 'chip-on' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="onPickLedger"
+          >{{item.name}}</view>
+        </view>
+      </scroll-view>
+      <scroll-view
+        wx:if="{{showCategoryFilter}}"
+        class="filter-scroll"
+        scroll-x
+        enhanced
+        show-scrollbar="{{false}}"
+      >
+        <view class="filter-inline">
+          <text class="filter-label">分类</text>
+          <view
+            class="chip {{filterCategory ? '' : 'chip-on'}}"
+            data-name="__all__"
+            bindtap="onPickCategory"
+          >全部</view>
+          <view
+            wx:for="{{categoryOptions}}"
+            wx:for-item="catName"
+            wx:key="*this"
+            class="chip {{filterCategory === catName ? 'chip-on' : ''}}"
+            data-name="{{catName}}"
+            bindtap="onPickCategory"
+          >{{catName}}</view>
+        </view>
+      </scroll-view>
+    </view>
     <view wx:if="{{!list.length}}" class="empty-wrap">
       <image class="empty-illu" src="../../images/LmtpX.png" mode="widthFix" bindtap="onAdd" />
       <view class="empty-title">暂无定时任务</view>
       <view class="empty-desc">还没有任务，先从上方图片进入新建吧</view>
     </view>
-    <view wx:for="{{list}}" wx:key="_id" class="card card-tap" data-id="{{item._id}}" bindtap="onEdit">
+    <view wx:elif="{{!displayList.length}}" class="empty-wrap empty-filter">
+      <view class="empty-title">当前筛选下暂无定时任务</view>
+      <view class="empty-desc">换一个账本或分类，或清除当前条件</view>
+      <view class="clear-btn" bindtap="onClearFilter">清除筛选</view>
+    </view>
+    <view wx:for="{{displayList}}" wx:key="_id" class="card card-tap" data-id="{{item._id}}" bindtap="onEdit">
       <view class="row-top">
         <view>
           <view class="item-title">{{item.ledgerName}} · {{item.category}}</view>

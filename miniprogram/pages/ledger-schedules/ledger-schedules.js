@@ -1,7 +1,34 @@
+const { buildScheduleFilters } = require("../../utils/schedule-list-filter");
+
+const FILTER_ALL = "__all__";
+
+function viewFromList(list, selection) {
+  const view = buildScheduleFilters(list, selection);
+  return {
+    list: list || [],
+    displayList: view.displayList,
+    ledgerOptions: view.ledgerOptions,
+    categoryOptions: view.categoryOptions,
+    showLedgerFilter: view.showLedgerFilter,
+    showCategoryFilter: view.showCategoryFilter,
+    filterLedgerId: view.filterLedgerId,
+    filterCategory: view.filterCategory,
+    filterActive: view.filterActive,
+  };
+}
+
 Page({
   data: {
     loading: true,
     list: [],
+    displayList: [],
+    ledgerOptions: [],
+    categoryOptions: [],
+    showLedgerFilter: false,
+    showCategoryFilter: false,
+    filterLedgerId: "",
+    filterCategory: "",
+    filterActive: false,
   },
 
   noop() {},
@@ -37,18 +64,52 @@ Page({
         const r = resp.result || {};
         if (!r.success) {
           wx.showToast({ title: r.errMsg || "加载失败", icon: "none" });
-          this.setData({ loading: false, list: [] });
+          this.setData({
+            loading: false,
+            ...viewFromList([], {}),
+          });
           return;
         }
         this.setData({
           loading: false,
-          list: r.list || [],
+          ...viewFromList(r.list || [], {
+            ledgerId: this.data.filterLedgerId,
+            category: this.data.filterCategory,
+          }),
         });
       })
       .catch(() => {
         wx.showToast({ title: "请部署云函数 ledgerFunctions", icon: "none" });
         this.setData({ loading: false });
       });
+  },
+
+  applyFilter(selection) {
+    this.setData(
+      viewFromList(this.data.list, {
+        ledgerId: this.data.filterLedgerId,
+        category: this.data.filterCategory,
+        ...selection,
+      })
+    );
+  },
+
+  onPickLedger(e) {
+    const id = e.currentTarget.dataset.id;
+    this.applyFilter({
+      ledgerId: !id || id === FILTER_ALL ? "" : id,
+    });
+  },
+
+  onPickCategory(e) {
+    const name = e.currentTarget.dataset.name;
+    this.applyFilter({
+      category: !name || name === FILTER_ALL ? "" : name,
+    });
+  },
+
+  onClearFilter() {
+    this.applyFilter({ ledgerId: "", category: "" });
   },
 
   onAdd() {
